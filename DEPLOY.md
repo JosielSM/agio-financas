@@ -17,14 +17,14 @@
 
 As políticas RLS do arquivo SQL fazem com que cada usuário autenticado só acesse linhas cujo `owner_id` é o seu próprio usuário.
 
-## 3. Publicar no Cloudflare Pages
+## 3. Publicar no Cloudflare Workers
 
-1. No painel Cloudflare, abra **Workers & Pages** > **Create application** > **Pages** > **Connect to Git**.
-2. Autorize o GitHub e escolha o repositório `JosielSM/agio-financas`.
-3. Selecione a branch de produção `main`.
-4. Use **Framework preset: None**, **Build command: `exit 0`** e **Build output directory: `.`**.
-5. Clique em **Save and Deploy**. A Cloudflare fornecerá uma URL `https://<nome>.pages.dev`.
-6. Volte à etapa 1.5 e cadastre exatamente essa URL no Supabase. A partir daí, todo push na branch `main` publica uma nova versão automaticamente.
+1. No painel Cloudflare, abra **Workers & Pages** e selecione o Worker `agio-financas` já criado.
+2. Abra **Settings** > **Builds** e confirme que o repositório GitHub está conectado à branch `main`.
+3. Mantenha o comando de deploy como `npx wrangler deploy`.
+4. A configuração `wrangler.jsonc` e `.assetsignore` deste repositório faz com que somente os arquivos do site sejam publicados; arquivos Git, SQL e documentação ficam fora do site público.
+5. Faça um novo deploy ou aguarde o próximo push para `main`. A URL seguirá o formato `https://agio-financas.<sua-conta>.workers.dev`.
+6. Volte à etapa 1.5 e cadastre exatamente essa URL no Supabase. A partir daí, todo push na branch `main` publicará a nova versão automaticamente.
 
 ## Checklist antes de uso real
 
