@@ -48,7 +48,7 @@
   <script src="supabase-config.js"></script>
   <script src="supabase-bridge.js"></script>
   <script src="app.js"></script>
-  <script>document.getElementById('modalBackdrop').onclick=requestClose;document.getElementById('pixBtn').onclick=openPix;document.getElementById('profileBtn').onclick=openPix;document.getElementById('pixForm').addEventListener('submit',savePix);document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;if(button.dataset.close){event.preventDefault();event.stopImmediatePropagation();requestClose()}if(button.dataset.keepEditing){event.preventDefault();event.stopImmediatePropagation();keepEditing()}if(button.dataset.discardChanges){event.preventDefault();event.stopImmediatePropagation();discardChanges()}},true);document.addEventListener('keydown',event=>{if(event.key==='Escape')requestClose()});</script>
+  <script>document.getElementById('modalBackdrop').onclick=requestClose;document.getElementById('pixBtn').onclick=openPix;document.getElementById('profileBtn').onclick=openPix;document.getElementById('pixForm').addEventListener('submit',savePix);document.querySelectorAll('[data-close]').forEach(button=>{button.onclick=event=>{event.preventDefault();event.stopPropagation();requestClose()}});document.querySelector('[data-keep-editing]').onclick=keepEditing;document.querySelector('[data-discard-changes]').onclick=discardChanges;document.addEventListener('keydown',event=>{if(event.key==='Escape')requestClose()});</script>
   <script>document.addEventListener('click',event=>{const button=event.target.closest('[data-toggle-installment]');if(button)toggleInstallment(button.dataset.toggleInstallment,Number(button.dataset.installment))});</script>
 </body>
 </html>
