@@ -2,7 +2,7 @@
   const config = window.CREDMAIS_SUPABASE || {};
   const enabled = Boolean(config.url && config.publishableKey && window.supabase);
   const client = enabled ? window.supabase.createClient(config.url, config.publishableKey) : null;
-  const userData = user => user ? { id: user.id, name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário', email: user.email } : null;
+  const userData = user => user ? { id: user.id, name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário', email: user.email, pixKey: user.user_metadata?.pix_key || '', pixType: user.user_metadata?.pix_key_type || 'Chave aleatória' } : null;
   const toLoanRow = (loan, ownerId) => ({
     id: loan.id, owner_id: ownerId, contract: loan.contract, client_id: loan.clientId,
     amount: loan.amount, rate: loan.rate, installments: loan.installments, frequency: loan.frequency,
@@ -21,6 +21,7 @@
     async currentUser() { if (!client) return null; const { data } = await client.auth.getUser(); return userData(data.user); },
     async signIn(email, password) { const { data, error } = await client.auth.signInWithPassword({ email, password }); if (error) throw error; return userData(data.user); },
     async signUp(name, email, password) { const { data, error } = await client.auth.signUp({ email, password, options: { data: { full_name: name } } }); if (error) throw error; return { user: userData(data.user), hasSession: Boolean(data.session) }; },
+    async updatePix(pixKey, pixType) { const { data, error } = await client.auth.updateUser({ data: { pix_key: pixKey, pix_key_type: pixType } }); if (error) throw error; return userData(data.user); },
     async signOut() { if (client) await client.auth.signOut(); },
     async load() {
       if (!client) return { clients: [], loans: [] };
