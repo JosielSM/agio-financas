@@ -535,6 +535,11 @@ textarea {
   background: var(--surface);
   border-radius: 18px;
   box-shadow: 0 20px 55px #0004;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 .modal h2 {
   font: 600 25px Outfit;
@@ -1422,6 +1427,19 @@ body.dark {
   background: #123d2e;
 }
 @media (max-width: 680px) {
+  .modal {
+    top: calc(12px + env(safe-area-inset-top));
+    bottom: auto;
+    transform: translateX(-50%) !important;
+    max-height: calc(
+      100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    ) !important;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom)) !important;
+    touch-action: pan-y;
+  }
+  .modal form {
+    padding-bottom: 2px;
+  }
   .modal-identity {
     margin-top: 3px;
   }
