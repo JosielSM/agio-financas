@@ -491,6 +491,59 @@ textarea {
   display: grid;
   gap: 10px;
 }
+.history-panel {
+  margin-bottom: 28px;
+}
+.history-archive > .panel-head {
+  margin-bottom: 14px;
+}
+.activity-history {
+  display: grid;
+  margin-top: 18px;
+}
+.activity-item {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.activity-item:last-child {
+  border-bottom: 0;
+}
+.activity-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 800;
+}
+.activity-item h4,
+.activity-item p {
+  margin: 0;
+}
+.activity-item h4 {
+  font: 600 14px Outfit;
+}
+.activity-item p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.activity-item time {
+  display: grid;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 11px;
+}
+.activity-item time small {
+  margin-top: 2px;
+}
 .loan-row {
   padding: 17px 20px;
   display: grid;

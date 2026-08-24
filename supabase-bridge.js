@@ -99,10 +99,14 @@
       if (client) await client.auth.signOut();
     },
     async load() {
-      if (!client) return { clients: [], loans: [] };
-      const [clientsResult, loansResult] = await Promise.all([
+      if (!client) return { clients: [], loans: [], history: [] };
+      const [clientsResult, loansResult, historyResult] = await Promise.all([
         client.from("clients").select("*").order("created_at"),
         client.from("loans").select("*").order("created_at"),
+        client
+          .from("activity_history")
+          .select("*")
+          .order("created_at"),
       ]);
       if (clientsResult.error) throw clientsResult.error;
       if (loansResult.error) throw loansResult.error;
@@ -117,6 +121,15 @@
           blacklisted: row.blacklisted,
         })),
         loans: loansResult.data.map(fromLoanRow),
+        history: historyResult.error
+          ? null
+          : historyResult.data.map((row) => ({
+              id: row.id,
+              category: row.category,
+              title: row.title,
+              description: row.description || "",
+              createdAt: row.created_at,
+            })),
       };
     },
     async deleteLoan(loanId) {
@@ -134,13 +147,21 @@
       const { error } = await client.from("clients").delete().eq("id", clientId);
       if (error) throw error;
     },
-    async sync(user, clients, loans) {
+    async sync(user, clients, loans, history = []) {
       if (!client || !user?.id) return;
       const clientRows = clients.map((item) => ({
         ...item,
         owner_id: user.id,
       }));
       const loanRows = loans.map((item) => toLoanRow(item, user.id));
+      const historyRows = history.map((item) => ({
+        id: item.id,
+        owner_id: user.id,
+        category: item.category,
+        title: item.title,
+        description: item.description || "",
+        created_at: item.createdAt,
+      }));
       if (clientRows.length) {
         const { error } = await client.from("clients").upsert(clientRows);
         if (error) throw error;
@@ -148,6 +169,13 @@
       if (loanRows.length) {
         const { error } = await client.from("loans").upsert(loanRows);
         if (error) throw error;
+      }
+      if (historyRows.length) {
+        const { error } = await client
+          .from("activity_history")
+          .upsert(historyRows);
+        if (error && error.code !== "PGRST205")
+          console.warn("Histórico ainda não configurado no Supabase:", error.message);
       }
     },
   };

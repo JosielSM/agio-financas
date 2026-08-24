@@ -30,8 +30,18 @@ create table if not exists public.loans (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.activity_history (
+  id uuid primary key,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  category text not null,
+  title text not null,
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
+
 alter table public.clients enable row level security;
 alter table public.loans enable row level security;
+alter table public.activity_history enable row level security;
 
 drop policy if exists "Clientes pertencem ao usuario" on public.clients;
 create policy "Clientes pertencem ao usuario" on public.clients
@@ -39,6 +49,10 @@ create policy "Clientes pertencem ao usuario" on public.clients
 drop policy if exists "Emprestimos pertencem ao usuario" on public.loans;
 create policy "Emprestimos pertencem ao usuario" on public.loans
   for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "Historico pertence ao usuario" on public.activity_history;
+create policy "Historico pertence ao usuario" on public.activity_history
+  for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 grant select, insert, update, delete on public.clients to authenticated;
 grant select, insert, update, delete on public.loans to authenticated;
+grant select, insert, update, delete on public.activity_history to authenticated;
