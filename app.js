@@ -971,8 +971,16 @@ function details(id) {
     return `<article class="installment-card ${expanded ? "expanded" : ""}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button>${index < loan.installments - 1 ? `<button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button>` : ""}<button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button>${loan.paymentStates?.[index] ? `<button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}">↶ Deixar em aberto</button>` : ""}</div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}">Editar</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><div class="details-tools"><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}">${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}">Editar cliente</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}">${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}">Excluir empréstimo</button></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
+}
+function toggleDetailsActions(button) {
+  const menu = $("[data-details-actions-menu]");
+  if (!menu) return;
+  const willOpen = menu.hidden;
+  menu.hidden = !willOpen;
+  button.setAttribute("aria-expanded", String(willOpen));
+  button.textContent = willOpen ? "Fechar ações ×" : "Ações ⋮";
 }
 async function updatePayment(loanId, installment, status) {
   const loan = state.loans.find((item) => item.id === loanId);
@@ -1049,7 +1057,7 @@ async function savePostpone(event) {
     () => restoreSnapshot(snapshot, null, loanId),
   );
 }
-async function toggleBlacklist(clientId) {
+async function toggleBlacklist(clientId, loanContext = null) {
   const client = state.clients.find((item) => item.id === clientId);
   if (!client) return;
   const snapshot = stateSnapshot();
@@ -1063,13 +1071,14 @@ async function toggleBlacklist(clientId) {
   );
   const synced = await save();
   render();
+  if (loanContext) details(loanContext);
   const message =
     !synced
       ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
       : client.blacklisted
       ? "Cliente adicionado à lista negra."
       : "Cliente removido da lista negra.";
-  toast(message, () => restoreSnapshot(snapshot));
+  toast(message, () => restoreSnapshot(snapshot, null, loanContext));
 }
 async function archiveLoan(loanId) {
   const loan = state.loans.find((item) => item.id === loanId);
@@ -1287,7 +1296,10 @@ document.addEventListener("click", (event) => {
   if (button.dataset.details) details(button.dataset.details);
   if (button.dataset.whatsapp)
     openWhatsApp(button.dataset.whatsapp, button.dataset.installment);
-  if (button.dataset.editClient) openClient(button.dataset.editClient);
+  if (button.dataset.editClient) {
+    closeModals();
+    openClient(button.dataset.editClient);
+  }
   if (button.dataset.deleteClient)
     requestDeleteClient(button.dataset.deleteClient);
   if (button.dataset.editLoan) {
@@ -1303,7 +1315,12 @@ document.addEventListener("click", (event) => {
   if (button.dataset.postpone)
     openPostpone(button.dataset.postpone, button.dataset.installment);
   if (button.dataset.toggleBlacklist)
-    toggleBlacklist(button.dataset.toggleBlacklist);
+    toggleBlacklist(
+      button.dataset.toggleBlacklist,
+      button.dataset.loanContext || null,
+    );
+  if (button.hasAttribute("data-toggle-details-actions"))
+    toggleDetailsActions(button);
   if (button.dataset.archiveLoan) archiveLoan(button.dataset.archiveLoan);
   if (button.dataset.deleteLoan) requestDeleteLoan(button.dataset.deleteLoan);
   if (button.hasAttribute("data-open-client")) openClient();
