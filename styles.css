@@ -1637,6 +1637,16 @@ body.dark {
   background: #123d2e;
 }
 @media (max-width: 680px) {
+  .sidebar {
+    z-index: 150 !important;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .sidebar-bottom {
+    flex: 0 0 auto;
+  }
+  .sidebar-bottom .nav-link {
+    width: 100%;
+  }
   .hero > .add-loan,
   #loansPage .page-heading > .add-loan {
     display: none;
