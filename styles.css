@@ -1480,6 +1480,11 @@ body.dark {
   background: #123d2e;
 }
 @media (max-width: 680px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
   .modal {
     top: calc(12px + env(safe-area-inset-top));
     bottom: auto;
