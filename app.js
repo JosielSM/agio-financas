@@ -995,7 +995,11 @@ function applyTheme(dark, persist = true) {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   const label = dark ? "Ativar modo claro" : "Ativar modo noturno";
   [$("#headerTheme"), $("#authTheme")].filter(Boolean).forEach((button) => {
-    button.textContent = dark ? "☀" : "☾";
+    const icon = button.querySelector(".theme-icon");
+    const text = button.querySelector(".theme-label");
+    if (icon) icon.textContent = dark ? "☀" : "☾";
+    else button.textContent = dark ? "☀" : "☾";
+    if (text) text.textContent = dark ? "Modo claro" : "Modo noturno";
     button.setAttribute("aria-label", label);
     button.title = label;
   });

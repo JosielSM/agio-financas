@@ -18,6 +18,7 @@
 body {
   margin: 0;
   background: var(--bg);
+  color: var(--text);
 }
 button,
 input,
@@ -256,6 +257,22 @@ textarea {
   width: 36px;
   height: 36px;
   border-radius: 9px;
+}
+.theme-button {
+  width: auto;
+  min-width: 124px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+}
+.theme-icon {
+  font-size: 17px;
+  line-height: 1;
 }
 .profile {
   background: transparent;
@@ -644,11 +661,29 @@ textarea {
 body.dark {
   --bg: #101714;
   --surface: #18211d;
-  --text: #eef6f1;
-  --muted: #9aaba2;
-  --line: #28352f;
-  --soft: #123d2e;
+  --text: #f4fbf7;
+  --muted: #b7c7be;
+  --line: #34473e;
+  --brand: #43d6a2;
+  --brand-dark: #28b984;
+  --soft: #163f31;
   --shadow: none;
+}
+.dark .stats strong,
+.dark .loan-value,
+.dark .loan-extra b,
+.dark .details-summary b,
+.dark .installment-side strong,
+.dark .chart-legend b,
+.dark .donut b,
+.dark .postpone-summary b,
+.dark .calculation b,
+.dark .due-item b,
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4 {
+  color: #f7fffa;
 }
 .dark .auth-brand {
   background: linear-gradient(145deg, #061f17, #067550);
@@ -714,8 +749,15 @@ body.dark {
   .topbar h1 {
     font-size: 19px;
   }
-  .profile b,
-  .top-actions .icon-button {
+  .profile b {
+    display: none;
+  }
+  .theme-button {
+    min-width: 36px;
+    width: 36px;
+    padding: 0;
+  }
+  .theme-label {
     display: none;
   }
   .hero {
