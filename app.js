@@ -11,6 +11,8 @@ let pendingModalId = null;
 let expandedInstallment = null;
 let pendingDelete = null;
 let toastTimer = null;
+let autoRefreshTimer = null;
+let refreshingFromCloud = false;
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
@@ -291,6 +293,57 @@ async function showApp() {
   $("#greetingName").textContent = state.user.name.split(" ")[0];
   $("#initials").textContent = initials(state.user.name);
   render();
+  startAutoRefresh();
+}
+function hasOpenModal() {
+  return Array.from(document.querySelectorAll(".modal")).some(
+    (modal) => !modal.hidden,
+  );
+}
+async function refreshFromCloud({ notify = false } = {}) {
+  if (
+    refreshingFromCloud ||
+    !window.credmaisBridge?.enabled ||
+    !state.user?.id ||
+    document.hidden ||
+    hasOpenModal() ||
+    localStorage.getItem("credmais_sync_pending") === state.user.id
+  )
+    return false;
+  refreshingFromCloud = true;
+  try {
+    const cloud = await window.credmaisBridge.load();
+    const nextHistory = cloud.history ?? state.history;
+    const changed =
+      JSON.stringify(state.clients) !== JSON.stringify(cloud.clients) ||
+      JSON.stringify(state.loans) !== JSON.stringify(cloud.loans) ||
+      JSON.stringify(state.history) !== JSON.stringify(nextHistory);
+    if (!changed) {
+      render();
+      return false;
+    }
+    state.clients = cloud.clients;
+    state.loans = cloud.loans;
+    state.history = nextHistory;
+    localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
+    localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
+    localStorage.setItem("credmais_history", JSON.stringify(state.history));
+    render();
+    if (notify) toast("Dados atualizados automaticamente.");
+    return true;
+  } catch (error) {
+    console.warn("Atualização automática indisponível:", error.message);
+    return false;
+  } finally {
+    refreshingFromCloud = false;
+  }
+}
+function startAutoRefresh() {
+  if (autoRefreshTimer || !window.credmaisBridge?.enabled) return;
+  autoRefreshTimer = setInterval(
+    () => refreshFromCloud({ notify: true }),
+    30000,
+  );
 }
 async function login(event) {
   event.preventDefault();
@@ -1195,6 +1248,22 @@ document.addEventListener("click", (event) => {
   if (button.dataset.archiveLoan) archiveLoan(button.dataset.archiveLoan);
   if (button.dataset.deleteLoan) requestDeleteLoan(button.dataset.deleteLoan);
   if (button.hasAttribute("data-open-client")) openClient();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshFromCloud({ notify: true });
+});
+window.addEventListener("online", () => refreshFromCloud({ notify: true }));
+window.addEventListener("storage", (event) => {
+  if (!state.user || hasOpenModal()) return;
+  if (event.key === "credmais_clients")
+    state.clients = JSON.parse(event.newValue || "[]");
+  else if (event.key === "credmais_loans")
+    state.loans = JSON.parse(event.newValue || "[]");
+  else if (event.key === "credmais_history")
+    state.history = JSON.parse(event.newValue || "[]");
+  else return;
+  render();
+  toast("Dados atualizados em outra aba.");
 });
 const savedTheme = localStorage.getItem("credmais_theme");
 applyTheme(
