@@ -208,15 +208,8 @@ function openSecurity() {
 async function changePassword(event) {
   event.preventDefault();
   const form = event.currentTarget,
-    currentPassword = $("#currentPassword").value,
     newPassword = $("#newPassword").value,
     confirmation = $("#confirmNewPassword").value;
-  if (currentPassword.length < 6)
-    return setFeedback(
-      "passwordChangeFeedback",
-      "Informe corretamente sua senha atual.",
-      "error",
-    );
   if (newPassword.length < 6)
     return setFeedback(
       "passwordChangeFeedback",
@@ -229,31 +222,16 @@ async function changePassword(event) {
       "A confirmação não corresponde à nova senha.",
       "error",
     );
-  if (currentPassword === newPassword)
-    return setFeedback(
-      "passwordChangeFeedback",
-      "A nova senha deve ser diferente da senha atual.",
-      "error",
-    );
   setFeedback("passwordChangeFeedback");
   setFormLoading(form, true);
   try {
     if (window.credmaisBridge?.enabled) {
-      await window.credmaisBridge.changePassword(
-        state.user.email,
-        currentPassword,
-        newPassword,
-      );
+      await window.credmaisBridge.changePassword(newPassword);
     } else {
       const account = JSON.parse(
         localStorage.getItem("credmais_account") || "null",
       );
       if (!account) throw new Error("Conta local não encontrada.");
-      const validPassword = account.passwordHash
-        ? (await hashLocalPassword(currentPassword, account.salt)).passwordHash ===
-          account.passwordHash
-        : account.password === currentPassword;
-      if (!validPassword) throw new Error("A senha atual está incorreta.");
       const credentials = await hashLocalPassword(newPassword);
       localStorage.setItem(
         "credmais_account",
