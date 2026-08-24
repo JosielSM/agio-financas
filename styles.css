@@ -1637,6 +1637,10 @@ body.dark {
   background: #123d2e;
 }
 @media (max-width: 680px) {
+  .hero > .add-loan,
+  #loansPage .page-heading > .add-loan {
+    display: none;
+  }
   input,
   select,
   textarea {
