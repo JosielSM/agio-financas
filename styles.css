@@ -291,6 +291,49 @@ textarea {
 .logout {
   color: #d75959;
 }
+.install-app {
+  color: var(--brand);
+}
+.install-instructions {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.install-instructions p {
+  margin: 0;
+}
+.install-steps {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: install-step;
+}
+.install-steps li {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 9px;
+  align-items: center;
+  counter-increment: install-step;
+}
+.install-steps li::before {
+  content: counter(install-step);
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--brand);
+  font-weight: 800;
+}
+.install-modal .primary {
+  width: 100%;
+}
 .topbar {
   height: 86px;
   margin-left: 245px;

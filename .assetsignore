@@ -4,3 +4,8 @@
 !app.js
 !supabase-config.js
 !supabase-bridge.js
+!manifest.webmanifest
+!sw.js
+!offline.html
+!icons/
+!icons/**

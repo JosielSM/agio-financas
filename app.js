@@ -13,6 +13,7 @@ let pendingDelete = null;
 let toastTimer = null;
 let autoRefreshTimer = null;
 let refreshingFromCloud = false;
+let deferredInstallPrompt = null;
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
@@ -344,6 +345,62 @@ function startAutoRefresh() {
     () => refreshFromCloud({ notify: true }),
     30000,
   );
+}
+const isStandalone = () =>
+  window.matchMedia?.("(display-mode: standalone)").matches ||
+  window.navigator.standalone === true;
+function openInstall() {
+  const instructions = $("#installInstructions"),
+    confirmButton = $("#confirmInstallBtn"),
+    isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (isStandalone()) return toast("O CredMais já está instalado.");
+  if (deferredInstallPrompt) {
+    instructions.innerHTML =
+      "<p>Instale o CredMais para abrir em tela cheia e acessar mais rapidamente pela tela inicial.</p>";
+    confirmButton.hidden = false;
+  } else if (isiOS) {
+    instructions.innerHTML =
+      '<p>No iPhone, a instalação é concluída pelo menu do navegador:</p><ol class="install-steps"><li>Toque no botão <b>Compartilhar</b>.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Confirme tocando em <b>Adicionar</b>.</li></ol>';
+    confirmButton.hidden = true;
+  } else {
+    instructions.innerHTML =
+      "<p>Abra o menu do navegador e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</p>";
+    confirmButton.hidden = true;
+  }
+  openModal("installModal");
+}
+async function installPWA() {
+  if (!deferredInstallPrompt) return openInstall();
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  closeModals();
+  toast(
+    choice.outcome === "accepted"
+      ? "Instalação iniciada."
+      : "Instalação cancelada.",
+  );
+}
+function setupPWA() {
+  if (isStandalone()) $("#installAppBtn").hidden = true;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    $("#installAppBtn").hidden = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    $("#installAppBtn").hidden = true;
+    toast("CredMais instalado com sucesso.");
+  });
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        setInterval(() => registration.update(), 60 * 60 * 1000);
+      })
+      .catch((error) => console.warn("PWA indisponível:", error.message));
+  }
 }
 async function login(event) {
   event.preventDefault();
@@ -1197,6 +1254,8 @@ $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;
+$("#installAppBtn").onclick = openInstall;
+$("#confirmInstallBtn").onclick = installPWA;
 $("#logoutBtn").onclick = async () => {
   if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
   localStorage.removeItem("credmais_user");
@@ -1272,6 +1331,7 @@ applyTheme(
     : window.matchMedia?.("(prefers-color-scheme: dark)").matches,
   false,
 );
+setupPWA();
 function finishInitialLoading() {
   const loader = $("#appLoader");
   if (!loader) return;
