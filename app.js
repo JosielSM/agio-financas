@@ -798,7 +798,7 @@ function details(id) {
         index < loan.installments - 1
           ? `Pagar somente ${money(info.interestOnlyValue)} agora. O saldo de ${money(info.deferred)} será somado à próxima parcela, que ficará em ${money(info.nextDue)}.`
           : "Só juros não está disponível na última parcela; use Adiar para negociar uma nova data.";
-    return `<article class="installment-card ${expanded ? "expanded" : ""}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button>${index < loan.installments - 1 ? `<button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button>` : ""}<button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button></div></div>` : ""}</article>`;
+    return `<article class="installment-card ${expanded ? "expanded" : ""}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button>${index < loan.installments - 1 ? `<button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button>` : ""}<button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button>${loan.paymentStates?.[index] ? `<button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}">↶ Deixar em aberto</button>` : ""}</div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
     `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}">Editar</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><div class="details-tools"><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}">${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}">Editar cliente</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}">${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}">Excluir empréstimo</button></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
@@ -812,7 +812,8 @@ async function updatePayment(loanId, installment, status) {
     );
   const snapshot = stateSnapshot();
   loan.paymentStates = loan.paymentStates || {};
-  loan.paymentStates[installment] = status;
+  if (status === "open") delete loan.paymentStates[installment];
+  else loan.paymentStates[installment] = status;
   const synced = await save();
   render();
   expandedInstallment = `${loanId}:${installment}`;
@@ -824,7 +825,9 @@ async function updatePayment(loanId, installment, status) {
       ? "Parcela marcada como quitada."
       : status === "interest"
         ? "Juros registrados; o saldo foi levado para a próxima parcela."
-        : "Parcela marcada como não paga.";
+        : status === "open"
+          ? "Parcela deixada em aberto novamente."
+          : "Parcela marcada como não paga.";
   toast(message, () => restoreSnapshot(snapshot, null, loanId));
 }
 function openPostpone(loanId, installment) {

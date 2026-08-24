@@ -1236,6 +1236,11 @@ body.dark {
   background: #fee1df;
   color: #ad2929;
 }
+.payment-actions .open-button {
+  grid-column: 1 / -1;
+  background: #e8eef5;
+  color: #38536d;
+}
 .whatsapp {
   border: 1px solid #a5dfbc;
   box-shadow: 0 2px 5px #087a4f1a;
@@ -1274,6 +1279,10 @@ body.dark {
 .dark .payment-actions .danger-button {
   background: #5b2626;
   color: #ffd3d0;
+}
+.dark .payment-actions .open-button {
+  background: #293b4a;
+  color: #d9edff;
 }
 .dark .badge.danger {
   background: #542827;
