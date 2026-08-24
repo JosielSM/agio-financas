@@ -1325,6 +1325,19 @@ document.addEventListener("click", (event) => {
   if (button.dataset.deleteLoan) requestDeleteLoan(button.dataset.deleteLoan);
   if (button.hasAttribute("data-open-client")) openClient();
 });
+document.addEventListener("click", (event) => {
+  const sidebar = $(".sidebar"),
+    menuButton = $("#menuBtn");
+  if (
+    sidebar.classList.contains("open") &&
+    !sidebar.contains(event.target) &&
+    !menuButton.contains(event.target)
+  )
+    sidebar.classList.remove("open");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") $(".sidebar").classList.remove("open");
+});
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshFromCloud({ notify: true });
 });
