@@ -598,6 +598,24 @@ textarea {
   padding: 12px 18px;
   transition: 0.25s;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 28px);
+  box-shadow: 0 10px 30px #071b1350;
+}
+.toast button {
+  flex: 0 0 auto;
+  color: #9df0cb;
+  background: transparent;
+  border-left: 1px solid #ffffff30;
+  padding: 2px 0 2px 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.toast button:disabled {
+  opacity: .55;
 }
 .toast.show {
   transform: translate(-50%, 0);
@@ -920,6 +938,20 @@ body.dark {
   background: var(--bg);
   color: var(--brand);
   font-weight: 700;
+}
+.card-actions {
+  display: flex;
+  gap: 6px;
+}
+.delete-button,
+.details-tools .delete-button {
+  color: #bc403d;
+  background: #fee7e4;
+}
+.dark .delete-button,
+.dark .details-tools .delete-button {
+  color: #ffaaa5;
+  background: #4b2424;
 }
 .small {
   padding: 8px 10px;

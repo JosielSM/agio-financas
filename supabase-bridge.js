@@ -59,7 +59,12 @@
     enabled,
     async currentUser() {
       if (!client) return null;
-      const { data } = await client.auth.getUser();
+      const { data: sessionData, error: sessionError } =
+        await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.user) return null;
+      const { data, error } = await client.auth.getUser();
+      if (error) throw error;
       return userData(data.user);
     },
     async signIn(email, password) {
@@ -113,6 +118,21 @@
         })),
         loans: loansResult.data.map(fromLoanRow),
       };
+    },
+    async deleteLoan(loanId) {
+      if (!client) return;
+      const { error } = await client.from("loans").delete().eq("id", loanId);
+      if (error) throw error;
+    },
+    async deleteClient(clientId) {
+      if (!client) return;
+      const { error: loanError } = await client
+        .from("loans")
+        .delete()
+        .eq("client_id", clientId);
+      if (loanError) throw loanError;
+      const { error } = await client.from("clients").delete().eq("id", clientId);
+      if (error) throw error;
     },
     async sync(user, clients, loans) {
       if (!client || !user?.id) return;

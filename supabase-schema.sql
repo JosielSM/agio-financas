@@ -33,8 +33,10 @@ create table if not exists public.loans (
 alter table public.clients enable row level security;
 alter table public.loans enable row level security;
 
+drop policy if exists "Clientes pertencem ao usuario" on public.clients;
 create policy "Clientes pertencem ao usuario" on public.clients
   for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "Emprestimos pertencem ao usuario" on public.loans;
 create policy "Emprestimos pertencem ao usuario" on public.loans
   for all to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 

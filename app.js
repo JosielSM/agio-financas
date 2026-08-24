@@ -4,14 +4,26 @@ const state = {
   clients: JSON.parse(localStorage.getItem("credmais_clients") || "[]"),
   loans: JSON.parse(localStorage.getItem("credmais_loans") || "[]"),
 };
+if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
+  localStorage.setItem("credmais_cache_owner", state.user.id);
 let pendingModalId = null;
 let expandedInstallment = null;
+let pendingDelete = null;
+let toastTimer = null;
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
 const digits = (value) => String(value || "").replace(/\D/g, "");
+const escapeHtml = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ],
+  );
 const initials = (name) =>
   name
     .split(" ")
@@ -19,16 +31,41 @@ const initials = (name) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-const save = () => {
+const save = async () => {
   localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
   localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
-  if (window.credmaisBridge?.enabled)
-    window.credmaisBridge
-      .sync(state.user, state.clients, state.loans)
-      .catch((error) =>
-        console.error("Falha ao sincronizar Supabase:", error.message),
-      );
+  if (state.user?.id) localStorage.setItem("credmais_cache_owner", state.user.id);
+  if (!window.credmaisBridge?.enabled) return true;
+  try {
+    await window.credmaisBridge.sync(state.user, state.clients, state.loans);
+    localStorage.removeItem("credmais_sync_pending");
+    return true;
+  } catch (error) {
+    localStorage.setItem("credmais_sync_pending", state.user.id);
+    console.error("Falha ao sincronizar Supabase:", error.message);
+    return false;
+  }
 };
+const bytesToBase64 = (bytes) =>
+  btoa(String.fromCharCode(...new Uint8Array(bytes)));
+async function hashLocalPassword(password, saltBase64) {
+  const salt = saltBase64
+    ? Uint8Array.from(atob(saltBase64), (character) => character.charCodeAt(0))
+    : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const hash = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" },
+    key,
+    256,
+  );
+  return { salt: bytesToBase64(salt), passwordHash: bytesToBase64(hash) };
+}
 const formatCpf = (value) =>
   digits(value)
     .slice(0, 11)
@@ -79,11 +116,47 @@ const lateCharge = (loan, date) => {
   );
   return { days, value: days * Number(loan.lateFee || 0) };
 };
-function toast(message) {
+function toast(message, undoAction = null) {
   const element = $("#toast");
-  element.textContent = message;
+  clearTimeout(toastTimer);
+  element.replaceChildren();
+  const text = document.createElement("span");
+  text.textContent = message;
+  element.append(text);
+  if (undoAction) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Desfazer";
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await undoAction();
+        toast("Ação desfeita com sucesso.");
+      } catch (error) {
+        toast(error.message || "Não foi possível desfazer a ação.");
+      }
+    };
+    element.append(button);
+  }
   element.classList.add("show");
-  setTimeout(() => element.classList.remove("show"), 2800);
+  toastTimer = setTimeout(
+    () => element.classList.remove("show"),
+    undoAction ? 8000 : 3200,
+  );
+}
+const stateSnapshot = () => ({
+  clients: structuredClone(state.clients),
+  loans: structuredClone(state.loans),
+});
+async function restoreSnapshot(snapshot, page = null, loanId = null) {
+  state.clients = structuredClone(snapshot.clients);
+  state.loans = structuredClone(snapshot.loans);
+  const synced = await save();
+  render();
+  if (page) setPage(page);
+  if (loanId && state.loans.some((loan) => loan.id === loanId)) details(loanId);
+  if (!synced)
+    throw new Error("A ação foi revertida neste dispositivo, mas falta sincronizar.");
 }
 function setFeedback(id, message = "", type = "") {
   const element = $(`#${id}`);
@@ -107,6 +180,7 @@ function openPix() {
 async function savePix(event) {
   event.preventDefault();
   const form = event.currentTarget,
+    previousUser = { ...state.user },
     pixRecipientName = $("#pixRecipientName").value.trim(),
     pixKey = $("#pixKey").value.trim(),
     pixType = $("#pixType").value;
@@ -123,7 +197,16 @@ async function savePix(event) {
     else state.user = { ...state.user, pixKey, pixType, pixRecipientName };
     localStorage.setItem("credmais_user", JSON.stringify(state.user));
     closeModals();
-    toast("Dados PIX salvos. Eles serão incluídos nas cobranças.");
+    toast("Nome e dados PIX atualizados nas mensagens.", async () => {
+      if (window.credmaisBridge?.enabled)
+        state.user = await window.credmaisBridge.updatePix(
+          previousUser.pixKey || "",
+          previousUser.pixType || "Chave aleatória",
+          previousUser.pixRecipientName || previousUser.name || "",
+        );
+      else state.user = previousUser;
+      localStorage.setItem("credmais_user", JSON.stringify(state.user));
+    });
   } catch (error) {
     toast(error.message || "Não foi possível salvar os dados PIX.");
   } finally {
@@ -149,16 +232,25 @@ function setAuth(view) {
 }
 async function showApp() {
   if (window.credmaisBridge?.enabled) {
+    const ownsCache =
+      localStorage.getItem("credmais_cache_owner") === state.user.id;
+    if (!ownsCache) {
+      state.clients = [];
+      state.loans = [];
+    }
     try {
+      if (localStorage.getItem("credmais_sync_pending") === state.user.id) {
+        await window.credmaisBridge.sync(state.user, state.clients, state.loans);
+        localStorage.removeItem("credmais_sync_pending");
+      }
       const cloud = await window.credmaisBridge.load();
       state.clients = cloud.clients;
       state.loans = cloud.loans;
       localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
       localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
+      localStorage.setItem("credmais_cache_owner", state.user.id);
     } catch (error) {
-      state.clients = [];
-      state.loans = [];
-      toast(`Não foi possível carregar o banco: ${error.message}`);
+      toast(`Usando os dados salvos neste dispositivo: ${error.message}`);
     }
   }
   $("#authView").hidden = true;
@@ -190,8 +282,20 @@ async function login(event) {
       const account = JSON.parse(
         localStorage.getItem("credmais_account") || "null",
       );
-      if (!account || account.email !== email || account.password !== password)
+      if (!account || account.email !== email)
         throw new Error("E-mail ou senha incorretos.");
+      const validPassword = account.passwordHash
+        ? (await hashLocalPassword(password, account.salt)).passwordHash ===
+          account.passwordHash
+        : account.password === password;
+      if (!validPassword) throw new Error("E-mail ou senha incorretos.");
+      if (!account.passwordHash) {
+        const credentials = await hashLocalPassword(password);
+        localStorage.setItem(
+          "credmais_account",
+          JSON.stringify({ name: account.name, email: account.email, ...credentials }),
+        );
+      }
       state.user = { name: account.name, email: account.email };
     }
     localStorage.setItem("credmais_user", JSON.stringify(state.user));
@@ -245,9 +349,10 @@ async function register(event) {
       }
       state.user = result.user;
     } else {
+      const credentials = await hashLocalPassword(password);
       localStorage.setItem(
         "credmais_account",
-        JSON.stringify({ name, email, password }),
+        JSON.stringify({ name, email, ...credentials }),
       );
       state.user = { name, email };
     }
@@ -314,6 +419,7 @@ function closeModals() {
   pendingModalId = null;
 }
 function requestClose() {
+  if (!$("#confirmDeleteModal").hidden) return cancelDelete();
   if (!$("#discardModal").hidden) return keepEditing();
   const modal = Array.from(document.querySelectorAll(".modal")).find(
     (item) => !item.hidden && item.id !== "discardModal",
@@ -339,6 +445,33 @@ function discardChanges() {
   $("#modalBackdrop").hidden = true;
   pendingModalId = null;
 }
+function askDelete({ title, message, action }) {
+  pendingDelete = action;
+  $("#confirmDeleteTitle").textContent = title;
+  $("#confirmDeleteMessage").textContent = message;
+  $("#modalBackdrop").hidden = false;
+  $("#confirmDeleteModal").hidden = false;
+}
+function cancelDelete() {
+  pendingDelete = null;
+  $("#confirmDeleteModal").hidden = true;
+  const anotherModal = Array.from(document.querySelectorAll(".modal")).some(
+    (modal) => !modal.hidden && modal.id !== "confirmDeleteModal",
+  );
+  if (!anotherModal) $("#modalBackdrop").hidden = true;
+}
+async function confirmDelete() {
+  if (!pendingDelete) return cancelDelete();
+  const action = pendingDelete;
+  pendingDelete = null;
+  const button = $("[data-confirm-delete]");
+  button.disabled = true;
+  try {
+    await action();
+  } finally {
+    button.disabled = false;
+  }
+}
 function openClient(id) {
   resetClientForm();
   if (id) {
@@ -357,7 +490,10 @@ function openClient(id) {
 }
 function prepareLoan(id) {
   $("#loanClient").innerHTML = state.clients
-    .map((client) => `<option value="${client.id}">${client.name}</option>`)
+    .map(
+      (client) =>
+        `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name)}</option>`,
+    )
     .join("");
   if (!id) resetLoanForm();
   else {
@@ -463,7 +599,7 @@ function renderDueLoans() {
               (item) => item.id === loan.clientId,
             ),
             late = lateCharge(loan, date);
-          return `<div class="due-item"><div><b>${client?.name || "Cliente removido"}</b><span>${installmentStatus(loan, index, date)}${late.value ? ` · +${money(late.value)}` : ""}</span></div><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Cobrar</button></div>`;
+          return `<div class="due-item"><div><b>${escapeHtml(client?.name || "Cliente removido")}</b><span>${installmentStatus(loan, index, date)}${late.value ? ` · +${money(late.value)}` : ""}</span></div><button class="whatsapp" data-whatsapp="${escapeHtml(loan.id)}" data-installment="${index}">Cobrar</button></div>`;
         })
         .join("")
     : '<div class="empty compact"><span>✓</span><h4>Tudo em dia</h4><p>Não há cobranças vencidas ou para hoje.</p></div>';
@@ -484,7 +620,7 @@ function renderClients() {
           const count = state.loans.filter(
             (loan) => loan.clientId === client.id,
           ).length;
-          return `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${initials(client.name)}</div><button class="edit-button" data-edit-client="${client.id}" aria-label="Editar ${client.name}">✎</button></div><h3>${client.name}</h3><p>${client.phone || client.email || "Sem contato informado"}</p><footer><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span></footer></article>`;
+          return `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><div class="card-actions"><button class="edit-button" data-edit-client="${escapeHtml(client.id)}" aria-label="Editar ${escapeHtml(client.name)}">✎</button><button class="edit-button delete-button" data-delete-client="${escapeHtml(client.id)}" aria-label="Excluir ${escapeHtml(client.name)}">⌫</button></div></div><h3>${escapeHtml(client.name)}</h3><p>${escapeHtml(client.phone || client.email || "Sem contato informado")}</p><footer><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span></footer></article>`;
         })
         .join("")
     : '<div class="empty"><span>♙</span><h4>Nenhum cliente encontrado</h4><p>Cadastre seu primeiro cliente para começar.</p><button class="outline" data-open-client>Novo cliente</button></div>';
@@ -495,7 +631,7 @@ function renderBlacklist() {
     ? clients
         .map(
           (client) =>
-            `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${initials(client.name)}</div><button class="edit-button" data-toggle-blacklist="${client.id}" aria-label="Remover ${client.name} da lista negra">✓</button></div><h3>${client.name}</h3><p>${client.phone || "Sem telefone"}</p><footer><span>Marcado para atenção</span><span class="badge danger">Lista negra</span></footer></article>`,
+            `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><button class="edit-button" data-toggle-blacklist="${escapeHtml(client.id)}" aria-label="Remover ${escapeHtml(client.name)} da lista negra">✓</button></div><h3>${escapeHtml(client.name)}</h3><p>${escapeHtml(client.phone || "Sem telefone")}</p><footer><span>Marcado para atenção</span><span class="badge danger">Lista negra</span></footer></article>`,
         )
         .join("")
     : '<div class="empty"><span>✓</span><h4>Nenhum cliente na lista</h4><p>Clientes marcados aparecem aqui.</p></div>';
@@ -504,7 +640,7 @@ function loanRow(loan) {
   const client = state.clients.find((item) => item.id === loan.clientId) || {
     name: "Cliente removido",
   };
-  return `<article class="loan-row"><div><h3>${client.name}</h3><p>${loan.installments}x de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value">${money(loan.total)}</div><button data-details="${loan.id}">Detalhes →</button></article>`;
+  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${loan.installments}x de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value">${money(loan.total)}</div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
   const activeLoans = state.loans.filter((loan) => !loan.archived);
@@ -537,8 +673,9 @@ function calc() {
   $("#calcInstallment").textContent = money(total / periods);
   return { amount, rate, periods, total };
 }
-function saveClient(event) {
+async function saveClient(event) {
   event.preventDefault();
+  const snapshot = stateSnapshot();
   const cpf = digits($("#clientCpf").value),
     phone = digits($("#clientPhone").value);
   if (cpf.length !== 11) return toast("Informe um CPF com 11 números.");
@@ -559,17 +696,24 @@ function saveClient(event) {
   const index = state.clients.findIndex((item) => item.id === client.id);
   if (index >= 0) state.clients[index] = client;
   else state.clients.push(client);
-  save();
+  const synced = await save();
   closeModals();
   render();
-  toast(
-    index >= 0
+  const message =
+    !synced
+      ? "Cliente salvo neste dispositivo. A sincronização será tentada novamente."
+      : index >= 0
       ? "Cliente atualizado com sucesso."
-      : "Cliente cadastrado com sucesso.",
-  );
+      : "Cliente cadastrado com sucesso.";
+  toast(message, async () => {
+    if (index < 0 && window.credmaisBridge?.enabled)
+      await window.credmaisBridge.deleteClient(client.id);
+    await restoreSnapshot(snapshot, "clients");
+  });
 }
-function saveLoan(event) {
+async function saveLoan(event) {
   event.preventDefault();
+  const snapshot = stateSnapshot();
   const calculation = calc();
   if (!calculation.amount) return toast("Informe o valor emprestado.");
   const previous = state.loans.find((item) => item.id === $("#loanId").value);
@@ -593,14 +737,20 @@ function saveLoan(event) {
   const index = state.loans.findIndex((item) => item.id === loan.id);
   if (index >= 0) state.loans[index] = loan;
   else state.loans.push(loan);
-  save();
+  const synced = await save();
   closeModals();
   setPage("loans");
-  toast(
-    index >= 0
+  const message =
+    !synced
+      ? "Empréstimo salvo neste dispositivo. A sincronização será tentada novamente."
+      : index >= 0
       ? "Empréstimo atualizado com sucesso."
-      : "Empréstimo cadastrado com sucesso.",
-  );
+      : "Empréstimo cadastrado com sucesso.";
+  toast(message, async () => {
+    if (index < 0 && window.credmaisBridge?.enabled)
+      await window.credmaisBridge.deleteLoan(loan.id);
+    await restoreSnapshot(snapshot, "loans");
+  });
 }
 function installmentInfo(loan, index) {
   let carry = 0;
@@ -651,28 +801,31 @@ function details(id) {
     return `<article class="installment-card ${expanded ? "expanded" : ""}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button>${index < loan.installments - 1 ? `<button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button>` : ""}<button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${loan.contract || "EMP-S/CONTRATO"}</span><h2>${client?.name || "Cliente"}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small" data-edit-loan="${loan.id}">Editar</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><div class="details-tools"><button class="outline small" data-toggle-blacklist="${client?.id}">${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-edit-client="${client?.id}">Editar cliente</button><button class="outline small" data-archive-loan="${loan.id}">${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}">Editar</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><div class="details-tools"><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}">${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}">Editar cliente</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}">${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}">Excluir empréstimo</button></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
 }
-function updatePayment(loanId, installment, status) {
+async function updatePayment(loanId, installment, status) {
   const loan = state.loans.find((item) => item.id === loanId);
   if (status === "interest" && Number(installment) === loan.installments - 1)
     return toast(
       "Na última parcela, adie a data ou registre o pagamento completo.",
     );
+  const snapshot = stateSnapshot();
   loan.paymentStates = loan.paymentStates || {};
   loan.paymentStates[installment] = status;
-  save();
+  const synced = await save();
   render();
   expandedInstallment = `${loanId}:${installment}`;
   details(loanId);
-  toast(
-    status === "paid"
+  const message =
+    !synced
+      ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
+      : status === "paid"
       ? "Parcela marcada como quitada."
       : status === "interest"
         ? "Juros registrados; o saldo foi levado para a próxima parcela."
-        : "Parcela marcada como não paga.",
-  );
+        : "Parcela marcada como não paga.";
+  toast(message, () => restoreSnapshot(snapshot, null, loanId));
 }
 function openPostpone(loanId, installment) {
   const loan = state.loans.find((item) => item.id === loanId),
@@ -682,11 +835,12 @@ function openPostpone(loanId, installment) {
   $("#postponeInstallment").value = installment;
   $("#postponeDate").value = date.toISOString().slice(0, 10);
   $("#postponeSummary").innerHTML =
-    `<span>Cliente</span><b>${client?.name || "Cliente"}</b><span>Parcela</span><b>${Number(installment) + 1} de ${loan.installments} · ${money(loan.installment)}</b><span>Data atual</span><b>${date.toLocaleDateString("pt-BR")}</b>`;
+    `<span>Cliente</span><b>${escapeHtml(client?.name || "Cliente")}</b><span>Parcela</span><b>${Number(installment) + 1} de ${loan.installments} · ${money(loan.installment)}</b><span>Data atual</span><b>${date.toLocaleDateString("pt-BR")}</b>`;
   openModal("postponeModal");
 }
-function savePostpone(event) {
+async function savePostpone(event) {
   event.preventDefault();
+  const snapshot = stateSnapshot();
   const loanId = $("#postponeLoanId").value,
     installment = $("#postponeInstallment").value,
     next = $("#postponeDate").value;
@@ -694,32 +848,105 @@ function savePostpone(event) {
   const loan = state.loans.find((item) => item.id === loanId);
   loan.customDates = loan.customDates || {};
   loan.customDates[installment] = next;
-  save();
+  const synced = await save();
   closeModals();
   render();
   details(loanId);
-  toast("Data da parcela atualizada.");
-}
-function toggleBlacklist(clientId) {
-  const client = state.clients.find((item) => item.id === clientId);
-  if (!client) return;
-  client.blacklisted = !client.blacklisted;
-  save();
-  render();
   toast(
-    client.blacklisted
-      ? "Cliente adicionado à lista negra."
-      : "Cliente removido da lista negra.",
+    synced
+      ? "Data da parcela atualizada."
+      : "Data salva neste dispositivo. A sincronização será tentada novamente.",
+    () => restoreSnapshot(snapshot, null, loanId),
   );
 }
-function archiveLoan(loanId) {
+async function toggleBlacklist(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  const snapshot = stateSnapshot();
+  client.blacklisted = !client.blacklisted;
+  const synced = await save();
+  render();
+  const message =
+    !synced
+      ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
+      : client.blacklisted
+      ? "Cliente adicionado à lista negra."
+      : "Cliente removido da lista negra.";
+  toast(message, () => restoreSnapshot(snapshot));
+}
+async function archiveLoan(loanId) {
   const loan = state.loans.find((item) => item.id === loanId);
+  const snapshot = stateSnapshot();
   loan.archived = !loan.archived;
-  save();
+  const synced = await save();
   closeModals();
   render();
   setPage(loan.archived ? "history" : "loans");
-  toast(loan.archived ? "Empréstimo arquivado." : "Empréstimo restaurado.");
+  const message =
+    !synced
+      ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
+      : loan.archived
+        ? "Empréstimo arquivado."
+        : "Empréstimo restaurado.";
+  toast(message, () => restoreSnapshot(snapshot, loan.archived ? "loans" : "history"));
+}
+function requestDeleteClient(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  const linkedLoans = state.loans.filter((loan) => loan.clientId === clientId);
+  askDelete({
+    title: `Excluir ${client.name}?`,
+    message: linkedLoans.length
+      ? `Este cliente possui ${linkedLoans.length} empréstimo${linkedLoans.length === 1 ? "" : "s"}. O cliente, os empréstimos e todo o histórico de parcelas serão apagados. Você terá 8 segundos para desfazer.`
+      : "O cadastro deste cliente será apagado. Você terá 8 segundos para desfazer caso tenha sido um engano.",
+    action: () => deleteClient(clientId),
+  });
+}
+async function deleteClient(clientId) {
+  const snapshot = stateSnapshot();
+  try {
+    if (window.credmaisBridge?.enabled)
+      await window.credmaisBridge.deleteClient(clientId);
+    state.loans = state.loans.filter((loan) => loan.clientId !== clientId);
+    state.clients = state.clients.filter((client) => client.id !== clientId);
+    await save();
+    closeModals();
+    render();
+    setPage("clients");
+    toast("Cliente e dados relacionados excluídos.", () =>
+      restoreSnapshot(snapshot, "clients"),
+    );
+  } catch (error) {
+    cancelDelete();
+    toast(error.message || "Não foi possível excluir o cliente.");
+  }
+}
+function requestDeleteLoan(loanId) {
+  const loan = state.loans.find((item) => item.id === loanId);
+  if (!loan) return;
+  askDelete({
+    title: "Excluir empréstimo?",
+    message: `O contrato ${loan.contract} e todo o histórico de parcelas serão apagados. Você terá 8 segundos para desfazer.`,
+    action: () => deleteLoan(loanId),
+  });
+}
+async function deleteLoan(loanId) {
+  const snapshot = stateSnapshot();
+  try {
+    if (window.credmaisBridge?.enabled)
+      await window.credmaisBridge.deleteLoan(loanId);
+    state.loans = state.loans.filter((loan) => loan.id !== loanId);
+    await save();
+    closeModals();
+    render();
+    setPage("loans");
+    toast("Empréstimo excluído.", () =>
+      restoreSnapshot(snapshot, "loans", loanId),
+    );
+  } catch (error) {
+    cancelDelete();
+    toast(error.message || "Não foi possível excluir o empréstimo.");
+  }
 }
 function openWhatsApp(loanId, installmentIndex) {
   const loan = state.loans.find((item) => item.id === loanId),
@@ -755,7 +982,8 @@ function openWhatsApp(loanId, installmentIndex) {
       : status === "Só juros"
         ? "PAGAMENTO DE JUROS REGISTRADO"
         : "LEMBRETE DE PAGAMENTO";
-  const message = `Olá, *${client.name}*! 👋\n\n📌 *${title}*\n━━━━━━━━━━━━━━━━\n\n🧾 Contrato: *${loan.contract}*\n🔢 Parcela: *${index + 1} de ${loan.installments}*\n📅 Vencimento: *${date.toLocaleDateString("pt-BR")}*\n⏰ Situação: *${status}*\n\n${action}${status === "Quitada" ? "" : pixPayment}\n\n━━━━━━━━━━━━━━━━\n${status === "Quitada" ? "🤝 Obrigado pela pontualidade!" : "✅ Após o pagamento, envie o comprovante por aqui."}\n\nObrigado!`;
+  const senderName = pixRecipientName || "CredMais";
+  const message = `Olá, *${client.name}*! 👋\n\n📌 *${title}*\n━━━━━━━━━━━━━━━━\n\n🧾 Contrato: *${loan.contract}*\n🔢 Parcela: *${index + 1} de ${loan.installments}*\n📅 Vencimento: *${date.toLocaleDateString("pt-BR")}*\n⏰ Situação: *${status}*\n\n${action}${status === "Quitada" ? "" : pixPayment}\n\n━━━━━━━━━━━━━━━━\n${status === "Quitada" ? "🤝 Obrigado pela pontualidade!" : "✅ Após o pagamento, envie o comprovante por aqui."}\n\nAtenciosamente,\n*${senderName}*`;
   window.open(
     `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`,
     "_blank",
@@ -824,6 +1052,8 @@ document.addEventListener("click", (event) => {
   if (button.dataset.whatsapp)
     openWhatsApp(button.dataset.whatsapp, button.dataset.installment);
   if (button.dataset.editClient) openClient(button.dataset.editClient);
+  if (button.dataset.deleteClient)
+    requestDeleteClient(button.dataset.deleteClient);
   if (button.dataset.editLoan) {
     closeModals();
     openLoan(button.dataset.editLoan);
@@ -839,16 +1069,24 @@ document.addEventListener("click", (event) => {
   if (button.dataset.toggleBlacklist)
     toggleBlacklist(button.dataset.toggleBlacklist);
   if (button.dataset.archiveLoan) archiveLoan(button.dataset.archiveLoan);
+  if (button.dataset.deleteLoan) requestDeleteLoan(button.dataset.deleteLoan);
   if (button.hasAttribute("data-open-client")) openClient();
 });
 if (localStorage.getItem("credmais_theme") === "dark") toggleTheme();
 (async () => {
-  if (window.credmaisBridge?.enabled) {
-    const user = await window.credmaisBridge.currentUser();
-    if (user) {
-      state.user = user;
-      localStorage.setItem("credmais_user", JSON.stringify(user));
+  try {
+    if (window.credmaisBridge?.enabled) {
+      const user = await window.credmaisBridge.currentUser();
+      if (user) {
+        state.user = user;
+        localStorage.setItem("credmais_user", JSON.stringify(user));
+        await showApp();
+      }
+    } else if (state.user) {
       await showApp();
     }
-  } else if (state.user) await showApp();
+  } catch (error) {
+    console.error("Falha ao restaurar a sessão:", error);
+    if (state.user) await showApp();
+  }
 })();
