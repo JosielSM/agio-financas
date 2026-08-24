@@ -199,6 +199,90 @@ function openPix() {
   $("#pixType").value = state.user?.pixType || "Chave aleatória";
   openModal("pixModal");
 }
+function openSecurity() {
+  $("#passwordChangeForm").reset();
+  setFeedback("passwordChangeFeedback");
+  $(".sidebar").classList.remove("open");
+  openModal("securityModal");
+}
+async function changePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    currentPassword = $("#currentPassword").value,
+    newPassword = $("#newPassword").value,
+    confirmation = $("#confirmNewPassword").value;
+  if (currentPassword.length < 6)
+    return setFeedback(
+      "passwordChangeFeedback",
+      "Informe corretamente sua senha atual.",
+      "error",
+    );
+  if (newPassword.length < 6)
+    return setFeedback(
+      "passwordChangeFeedback",
+      "A nova senha precisa ter pelo menos 6 caracteres.",
+      "error",
+    );
+  if (newPassword !== confirmation)
+    return setFeedback(
+      "passwordChangeFeedback",
+      "A confirmação não corresponde à nova senha.",
+      "error",
+    );
+  if (currentPassword === newPassword)
+    return setFeedback(
+      "passwordChangeFeedback",
+      "A nova senha deve ser diferente da senha atual.",
+      "error",
+    );
+  setFeedback("passwordChangeFeedback");
+  setFormLoading(form, true);
+  try {
+    if (window.credmaisBridge?.enabled) {
+      await window.credmaisBridge.changePassword(
+        state.user.email,
+        currentPassword,
+        newPassword,
+      );
+    } else {
+      const account = JSON.parse(
+        localStorage.getItem("credmais_account") || "null",
+      );
+      if (!account) throw new Error("Conta local não encontrada.");
+      const validPassword = account.passwordHash
+        ? (await hashLocalPassword(currentPassword, account.salt)).passwordHash ===
+          account.passwordHash
+        : account.password === currentPassword;
+      if (!validPassword) throw new Error("A senha atual está incorreta.");
+      const credentials = await hashLocalPassword(newPassword);
+      localStorage.setItem(
+        "credmais_account",
+        JSON.stringify({
+          name: account.name,
+          email: account.email,
+          ...credentials,
+        }),
+      );
+    }
+    addHistory(
+      "settings",
+      "Senha alterada",
+      "A senha de acesso da conta foi atualizada.",
+    );
+    await save();
+    closeModals();
+    form.reset();
+    toast("Senha alterada com sucesso.");
+  } catch (error) {
+    setFeedback(
+      "passwordChangeFeedback",
+      error.message || "Não foi possível alterar a senha.",
+      "error",
+    );
+  } finally {
+    setFormLoading(form, false);
+  }
+}
 async function savePix(event) {
   event.preventDefault();
   const form = event.currentTarget,
@@ -1250,6 +1334,7 @@ $("#register").addEventListener("submit", register);
 $("#clientForm").addEventListener("submit", saveClient);
 $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
+$("#passwordChangeForm").addEventListener("submit", changePassword);
 $("#clientCpf").addEventListener("input", (event) => {
   event.target.value = formatCpf(event.target.value);
 });
@@ -1268,6 +1353,7 @@ $("#clientPhone").addEventListener("input", (event) => {
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
+$("#securityBtn").onclick = openSecurity;
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;
 $("#installAppBtn").onclick = openInstall;

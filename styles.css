@@ -294,6 +294,12 @@ textarea {
 .install-app {
   color: var(--brand);
 }
+.security-link {
+  color: var(--text);
+}
+.security-modal form {
+  margin-top: 20px;
+}
 .install-instructions {
   display: grid;
   gap: 12px;

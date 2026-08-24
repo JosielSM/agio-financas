@@ -95,6 +95,15 @@
       if (error) throw error;
       return userData(data.user);
     },
+    async changePassword(email, currentPassword, newPassword) {
+      const { error: signInError } = await client.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      });
+      if (signInError) throw new Error("A senha atual está incorreta.");
+      const { error } = await client.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+    },
     async signOut() {
       if (client) await client.auth.signOut();
     },
