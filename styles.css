@@ -20,6 +20,69 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+.app-loader {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #073e30, #0b9c6e);
+  color: #fff;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+.app-loader.is-hiding {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.loader-brand {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  padding: 24px;
+}
+.loader-logo {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: #fff;
+  color: #079668;
+  font: 700 38px Outfit;
+  box-shadow: 0 16px 36px #042b2070;
+}
+.loader-brand h1 {
+  margin: 18px 0 5px;
+  color: #fff;
+  font: 700 30px Outfit;
+}
+.loader-brand p {
+  margin: 0;
+  color: #d8f5e9;
+  font-size: 13px;
+}
+.loader-spinner {
+  width: 30px;
+  height: 30px;
+  margin-top: 28px;
+  border: 3px solid #ffffff55;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: app-loader-spin .75s linear infinite;
+}
+@keyframes app-loader-spin {
+  to { transform: rotate(360deg); }
+}
+.dark .app-loader {
+  background: linear-gradient(145deg, #071a13, #0a5d43);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-loader { transition: none; }
+  .loader-spinner { animation-duration: 1.5s; }
+}
 button,
 input,
 select,

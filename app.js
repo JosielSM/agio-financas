@@ -1203,6 +1203,17 @@ applyTheme(
     : window.matchMedia?.("(prefers-color-scheme: dark)").matches,
   false,
 );
+function finishInitialLoading() {
+  const loader = $("#appLoader");
+  if (!loader) return;
+  const delay = Math.max(0, 650 - performance.now());
+  setTimeout(() => {
+    loader.classList.add("is-hiding");
+    setTimeout(() => {
+      loader.hidden = true;
+    }, 320);
+  }, delay);
+}
 (async () => {
   try {
     if (window.credmaisBridge?.enabled) {
@@ -1218,5 +1229,7 @@ applyTheme(
   } catch (error) {
     console.error("Falha ao restaurar a sessão:", error);
     if (state.user) await showApp();
+  } finally {
+    finishInitialLoading();
   }
 })();
