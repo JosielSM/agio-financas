@@ -990,11 +990,23 @@ function openWhatsApp(loanId, installmentIndex) {
     "noopener",
   );
 }
+function applyTheme(dark, persist = true) {
+  document.body.classList.toggle("dark", dark);
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  const label = dark ? "Ativar modo claro" : "Ativar modo noturno";
+  [$("#headerTheme"), $("#authTheme")].filter(Boolean).forEach((button) => {
+    button.textContent = dark ? "☀" : "☾";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  });
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.content = dark ? "#101714" : "#0e9f6e";
+  if (persist)
+    localStorage.setItem("credmais_theme", dark ? "dark" : "light");
+}
 function toggleTheme() {
-  document.body.classList.toggle("dark");
-  const dark = document.body.classList.contains("dark");
-  localStorage.setItem("credmais_theme", dark ? "dark" : "light");
-  $("#headerTheme").textContent = dark ? "☀" : "☾";
+  const dark = !document.body.classList.contains("dark");
+  applyTheme(dark);
 }
 $("#login").addEventListener("submit", login);
 $("#register").addEventListener("submit", register);
@@ -1020,6 +1032,7 @@ $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#headerTheme").onclick = toggleTheme;
+$("#authTheme").onclick = toggleTheme;
 $("#logoutBtn").onclick = async () => {
   if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
   localStorage.removeItem("credmais_user");
@@ -1072,7 +1085,13 @@ document.addEventListener("click", (event) => {
   if (button.dataset.deleteLoan) requestDeleteLoan(button.dataset.deleteLoan);
   if (button.hasAttribute("data-open-client")) openClient();
 });
-if (localStorage.getItem("credmais_theme") === "dark") toggleTheme();
+const savedTheme = localStorage.getItem("credmais_theme");
+applyTheme(
+  savedTheme
+    ? savedTheme === "dark"
+    : window.matchMedia?.("(prefers-color-scheme: dark)").matches,
+  false,
+);
 (async () => {
   try {
     if (window.credmaisBridge?.enabled) {
