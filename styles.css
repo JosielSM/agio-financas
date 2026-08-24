@@ -681,6 +681,19 @@ textarea {
   background: #10241c91;
   backdrop-filter: blur(3px);
 }
+.modal-backdrop {
+  z-index: 200 !important;
+}
+.modal {
+  z-index: 201 !important;
+}
+.discard-modal,
+#confirmDeleteModal {
+  z-index: 203 !important;
+}
+.toast {
+  z-index: 300 !important;
+}
 .modal {
   position: fixed;
   z-index: 11;
@@ -1636,8 +1649,17 @@ body.dark {
     max-height: calc(
       100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
     ) !important;
-    padding-bottom: calc(28px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(48px + env(safe-area-inset-bottom)) !important;
     touch-action: pan-y;
+  }
+  .details-modal {
+    width: calc(100% - 16px) !important;
+  }
+  .details-modal #loanDetails {
+    padding-bottom: 12px;
+  }
+  .installment-body .payment-actions {
+    padding-bottom: 4px;
   }
   .modal form {
     padding-bottom: 2px;
