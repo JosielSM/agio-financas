@@ -14,6 +14,7 @@ let toastTimer = null;
 let autoRefreshTimer = null;
 let refreshingFromCloud = false;
 let deferredInstallPrompt = null;
+const submissionLocks = new Set();
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
@@ -117,12 +118,18 @@ const dueStatus = (date) => {
 };
 const formatFrequency = (days) =>
   Number(days) === 30 ? "Mensal" : `A cada ${days} dias`;
+const paymentStateFor = (loan, index) => {
+  const payment = loan.paymentStates?.[index];
+  return typeof payment === "object" ? payment.status : payment;
+};
 const installmentStatus = (loan, index, date) =>
-  loan.paymentStates?.[index] === "paid"
+  paymentStateFor(loan, index) === "paid"
     ? "Quitada"
-    : loan.paymentStates?.[index] === "interest"
+    : paymentStateFor(loan, index) === "interest"
       ? "Só juros"
-      : loan.paymentStates?.[index] === "missed"
+      : paymentStateFor(loan, index) === "partial"
+        ? "Pagamento parcial"
+      : paymentStateFor(loan, index) === "missed"
         ? "Não pagou"
         : dueStatus(date);
 const lateCharge = (loan, date) => {
@@ -191,6 +198,19 @@ function setFormLoading(form, loading) {
   button.classList.toggle("is-loading", loading);
   button.disabled = loading;
   button.setAttribute("aria-busy", String(loading));
+}
+function beginSubmission(form, key) {
+  if (submissionLocks.has(key)) {
+    toast("Aguarde: este cadastro já está sendo salvo.");
+    return false;
+  }
+  submissionLocks.add(key);
+  setFormLoading(form, true);
+  return true;
+}
+function endSubmission(form, key) {
+  submissionLocks.delete(key);
+  setFormLoading(form, false);
 }
 function openPix() {
   $("#pixRecipientName").value =
@@ -896,12 +916,14 @@ function calc() {
 }
 async function saveClient(event) {
   event.preventDefault();
+  const form = event.currentTarget;
   const snapshot = stateSnapshot();
   const cpf = digits($("#clientCpf").value),
     phone = digits($("#clientPhone").value);
   if (cpf.length !== 11) return toast("Informe um CPF com 11 números.");
   if (phone.length < 10 || phone.length > 11)
     return toast("Informe um telefone válido com DDD.");
+  if (!beginSubmission(form, "client")) return;
   const previous = state.clients.find(
     (item) => item.id === $("#clientId").value,
   );
@@ -923,6 +945,7 @@ async function saveClient(event) {
     `${client.name} teve o cadastro ${index >= 0 ? "alterado" : "criado"}.`,
   );
   const synced = await save();
+  endSubmission(form, "client");
   closeModals();
   render();
   const message =
@@ -939,9 +962,11 @@ async function saveClient(event) {
 }
 async function saveLoan(event) {
   event.preventDefault();
+  const form = event.currentTarget;
   const snapshot = stateSnapshot();
   const calculation = calc();
   if (!calculation.amount) return toast("Informe o valor emprestado.");
+  if (!beginSubmission(form, "loan")) return;
   const previous = state.loans.find((item) => item.id === $("#loanId").value);
   const loan = {
     id: $("#loanId").value || crypto.randomUUID(),
@@ -970,6 +995,7 @@ async function saveLoan(event) {
     `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)}.`,
   );
   const synced = await save();
+  endSubmission(form, "loan");
   closeModals();
   setPage("loans");
   const message =
@@ -989,11 +1015,18 @@ function installmentInfo(loan, index) {
   const interestOnlyValue = Math.min(loan.installment, loan.amount * loan.rate);
   for (let current = 0; current < index; current += 1) {
     const due = loan.installment + carry,
-      previousState = loan.paymentStates?.[current];
-    carry = previousState === "interest" ? due - interestOnlyValue : 0;
+      previousPayment = loan.paymentStates?.[current],
+      previousState = paymentStateFor(loan, current);
+    carry =
+      previousState === "interest"
+        ? due - interestOnlyValue
+        : previousState === "partial" && typeof previousPayment === "object"
+          ? Number(previousPayment.adjustedRemaining || 0)
+          : 0;
   }
   const due = loan.installment + carry,
-    state = loan.paymentStates?.[index];
+    payment = loan.paymentStates?.[index],
+    state = paymentStateFor(loan, index);
   return {
     due,
     interestOnlyValue: Math.min(interestOnlyValue, due),
@@ -1003,6 +1036,8 @@ function installmentInfo(loan, index) {
         ? loan.installment + Math.max(0, due - interestOnlyValue)
         : 0,
     state,
+    partial:
+      state === "partial" && typeof payment === "object" ? payment : null,
   };
 }
 function toggleInstallment(loanId, index) {
@@ -1021,16 +1056,30 @@ function details(id) {
       expanded = expandedInstallment === `${loan.id}:${index}`,
       lateValue =
         status === "Vencida" || status === "Não pagou" ? late.value : 0,
+      partial = info.partial,
       value =
-        status === "Só juros" ? info.interestOnlyValue : info.due + lateValue,
+        status === "Só juros"
+          ? info.interestOnlyValue
+          : status === "Pagamento parcial"
+            ? index < loan.installments - 1
+              ? Number(partial?.paidAmount || 0)
+              : Number(partial?.adjustedRemaining || 0)
+            : info.due + lateValue,
       charge = lateValue
         ? `${late.days} dia(s) de atraso · +${money(lateValue)}`
-        : "",
+        : status === "Pagamento parcial"
+          ? `Pago ${money(partial?.paidAmount)} · saldo corrigido ${money(partial?.adjustedRemaining)}`
+          : "",
       interestGuide =
         index < loan.installments - 1
           ? `Pagar somente ${money(info.interestOnlyValue)} agora. O saldo de ${money(info.deferred)} será somado à próxima parcela, que ficará em ${money(info.nextDue)}.`
-          : "Só juros não está disponível na última parcela; use Adiar para negociar uma nova data.";
-    return `<article class="installment-card ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button>${index < loan.installments - 1 ? `<button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button>` : ""}<button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button>${loan.paymentStates?.[index] ? `<button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}">↶ Deixar em aberto</button>` : ""}</div></div>` : ""}</article>`;
+          : "Só juros não está disponível na última parcela; use Adiar ou Pagamento parcial.",
+      partialGuide = partial
+        ? index < loan.installments - 1
+          ? `💡 Foram pagos ${money(partial.paidAmount)}. O saldo de ${money(partial.remaining)} recebeu ${(Number(partial.interestRate || 0) * 100).toLocaleString("pt-BR")}% de juros e ${money(partial.adjustedRemaining)} foi somado à próxima parcela.`
+          : `💡 Foram pagos ${money(partial.paidAmount)}. O saldo corrigido de ${money(partial.adjustedRemaining)} permanece em aberto nesta última parcela.`
+        : "";
+    return `<article class="installment-card ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}" ${index === loan.installments - 1 ? 'disabled title="Indisponível na última parcela"' : ""}>◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
     `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
@@ -1098,6 +1147,86 @@ function openPostpone(loanId, installment) {
   $("#postponeSummary").innerHTML =
     `<span>Cliente</span><b>${escapeHtml(client?.name || "Cliente")}</b><span>Parcela</span><b>${Number(installment) + 1} de ${loan.installments} · ${money(loan.installment)}</b><span>Data atual</span><b>${date.toLocaleDateString("pt-BR")}</b>`;
   openModal("postponeModal");
+}
+function calculatePartialPayment() {
+  const due = Number($("#partialDueAmount").value) || 0,
+    paid = Number($("#partialPaidAmount").value) || 0,
+    rate = (Number($("#partialInterest").value) || 0) / 100,
+    remaining = Math.round(Math.max(0, due - paid) * 100) / 100,
+    adjusted = Math.round(remaining * (1 + rate) * 100) / 100;
+  $("#partialRemaining").textContent = money(remaining);
+  $("#partialAdjusted").textContent = money(adjusted);
+  return { due, paid, rate, remaining, adjusted };
+}
+function openPartialPayment(loanId, installment) {
+  const loan = state.loans.find((item) => item.id === loanId),
+    client = state.clients.find((item) => item.id === loan.clientId),
+    index = Number(installment),
+    date = dateFor(loan, index),
+    status = installmentStatus(loan, index, date),
+    info = installmentInfo(loan, index),
+    late = lateCharge(loan, date),
+    lateValue = status === "Vencida" || status === "Não pagou" ? late.value : 0,
+    existing = info.partial,
+    due = Number(existing?.originalDue || info.due + lateValue);
+  $("#partialForm").reset();
+  $("#partialLoanId").value = loanId;
+  $("#partialInstallment").value = index;
+  $("#partialDueAmount").value = due;
+  $("#partialPaidAmount").max = Math.max(0.01, due - 0.01).toFixed(2);
+  $("#partialPaidAmount").value = existing?.paidAmount || "";
+  $("#partialInterest").value = Number(existing?.interestRate || 0) * 100;
+  $("#partialSummary").innerHTML =
+    `<span>Cliente</span><b>${escapeHtml(client?.name || "Cliente")}</b><span>Parcela</span><b>${index + 1} de ${loan.installments}</b><span>Valor devido</span><b>${money(due)}</b>`;
+  $("#partialDestination").textContent =
+    index < loan.installments - 1
+      ? "O saldo com juros será acrescentado à próxima parcela."
+      : "O saldo com juros continuará nesta última parcela.";
+  calculatePartialPayment();
+  openModal("partialModal");
+}
+async function savePartialPayment(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    snapshot = stateSnapshot(),
+    loanId = $("#partialLoanId").value,
+    installment = Number($("#partialInstallment").value),
+    calculation = calculatePartialPayment();
+  if (calculation.paid <= 0)
+    return toast("Informe o valor que o cliente pagará.");
+  if (calculation.paid >= calculation.due)
+    return toast("Para pagar o valor completo, use a opção Quitado.");
+  if (calculation.rate < 0 || calculation.rate > 1)
+    return toast("Informe juros entre 0% e 100%.");
+  if (!beginSubmission(form, "partial-payment")) return;
+  const loan = state.loans.find((item) => item.id === loanId);
+  loan.paymentStates = loan.paymentStates || {};
+  loan.paymentStates[installment] = {
+    status: "partial",
+    paidAmount: calculation.paid,
+    originalDue: calculation.due,
+    remaining: calculation.remaining,
+    interestRate: calculation.rate,
+    adjustedRemaining: calculation.adjusted,
+    createdAt: new Date().toISOString(),
+  };
+  addHistory(
+    "payment",
+    `Pagamento parcial na parcela ${installment + 1}`,
+    `${loan.contract}: pago ${money(calculation.paid)}; saldo com juros ${money(calculation.adjusted)}.`,
+  );
+  const synced = await save();
+  endSubmission(form, "partial-payment");
+  closeModals();
+  render();
+  expandedInstallment = `${loanId}:${installment}`;
+  details(loanId);
+  toast(
+    synced
+      ? "Pagamento parcial registrado e saldo recalculado."
+      : "Pagamento salvo neste dispositivo. A sincronização será tentada novamente.",
+    () => restoreSnapshot(snapshot, null, loanId),
+  );
 }
 async function savePostpone(event) {
   event.preventDefault();
@@ -1256,7 +1385,11 @@ function openWhatsApp(loanId, installmentIndex) {
     late = lateCharge(loan, date),
     lateValue = status === "Vencida" || status === "Não pagou" ? late.value : 0,
     value =
-      status === "Só juros" ? info.interestOnlyValue : info.due + lateValue,
+      status === "Só juros"
+        ? info.interestOnlyValue
+        : status === "Pagamento parcial"
+          ? Number(info.partial?.paidAmount || 0)
+          : info.due + lateValue,
     pixKey = state.user?.pixKey?.trim(),
     pixRecipientName =
       state.user?.pixRecipientName?.trim() || state.user?.name?.trim(),
@@ -1266,6 +1399,8 @@ function openWhatsApp(loanId, installmentIndex) {
     action =
       status === "Quitada"
         ? `✅ Confirmamos o pagamento de *${money(value)}*. Esta parcela está quitada.`
+        : status === "Pagamento parcial"
+          ? `◑ Confirmamos o pagamento parcial de *${money(info.partial?.paidAmount)}*. O saldo de *${money(info.partial?.remaining)}* foi corrigido para *${money(info.partial?.adjustedRemaining)}*${index < loan.installments - 1 ? " e acrescentado à próxima parcela" : " e continua em aberto nesta parcela"}.`
         : status === "Só juros"
           ? `◔ Recebemos *${money(info.interestOnlyValue)}* referentes aos juros. O saldo de *${money(info.deferred)}* foi levado para a próxima parcela, que ficará em *${money(info.nextDue)}*.`
           : status === "Não pagou"
@@ -1274,6 +1409,8 @@ function openWhatsApp(loanId, installmentIndex) {
   const title =
     status === "Quitada"
       ? "CONFIRMAÇÃO DE PAGAMENTO"
+      : status === "Pagamento parcial"
+        ? "PAGAMENTO PARCIAL REGISTRADO"
       : status === "Só juros"
         ? "PAGAMENTO DE JUROS REGISTRADO"
         : "LEMBRETE DE PAGAMENTO";
@@ -1312,7 +1449,11 @@ $("#register").addEventListener("submit", register);
 $("#clientForm").addEventListener("submit", saveClient);
 $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
+$("#partialForm").addEventListener("submit", savePartialPayment);
 $("#passwordChangeForm").addEventListener("submit", changePassword);
+[$("#partialPaidAmount"), $("#partialInterest")].forEach((input) =>
+  input.addEventListener("input", calculatePartialPayment),
+);
 $("#clientCpf").addEventListener("input", (event) => {
   event.target.value = formatCpf(event.target.value);
 });
@@ -1385,6 +1526,8 @@ document.addEventListener("click", (event) => {
     );
   if (button.dataset.postpone)
     openPostpone(button.dataset.postpone, button.dataset.installment);
+  if (button.dataset.partial)
+    openPartialPayment(button.dataset.partial, button.dataset.installment);
   if (button.dataset.toggleBlacklist)
     toggleBlacklist(
       button.dataset.toggleBlacklist,
