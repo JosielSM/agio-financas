@@ -1073,13 +1073,13 @@ function details(id) {
       interestGuide =
         index < loan.installments - 1
           ? `Pagar somente ${money(info.interestOnlyValue)} agora. O saldo de ${money(info.deferred)} será somado à próxima parcela, que ficará em ${money(info.nextDue)}.`
-          : "Só juros não está disponível na última parcela; use Adiar ou Pagamento parcial.",
+          : `Pagar ${money(info.interestOnlyValue)} de juros e renovar esta parcela por mais ${Number(loan.frequency || 30)} dias. O saldo principal continuará em aberto até a quitação.`,
       partialGuide = partial
         ? index < loan.installments - 1
           ? `💡 Foram pagos ${money(partial.paidAmount)}. O saldo de ${money(partial.remaining)} recebeu ${(Number(partial.interestRate || 0) * 100).toLocaleString("pt-BR")}% de juros e ${money(partial.adjustedRemaining)} foi somado à próxima parcela.`
           : `💡 Foram pagos ${money(partial.paidAmount)}. O saldo corrigido de ${money(partial.adjustedRemaining)} permanece em aberto nesta última parcela.`
         : "";
-    return `<article class="installment-card ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}" ${index === loan.installments - 1 ? 'disabled title="Indisponível na última parcela"' : ""}>◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
+    return `<article class="installment-card ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
     `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
@@ -1102,12 +1102,18 @@ function toggleDetailsActions(button) {
 }
 async function updatePayment(loanId, installment, status) {
   const loan = state.loans.find((item) => item.id === loanId);
-  if (status === "interest" && Number(installment) === loan.installments - 1)
-    return toast(
-      "Na última parcela, adie a data ou registre o pagamento completo.",
-    );
   const snapshot = stateSnapshot();
   loan.paymentStates = loan.paymentStates || {};
+  const isLastInterest =
+    status === "interest" && Number(installment) === loan.installments - 1;
+  if (isLastInterest) {
+    const renewedDate = dateFor(loan, Number(installment));
+    renewedDate.setDate(
+      renewedDate.getDate() + Number(loan.frequency || 30),
+    );
+    loan.customDates = loan.customDates || {};
+    loan.customDates[installment] = renewedDate.toISOString().slice(0, 10);
+  }
   if (status === "open") delete loan.paymentStates[installment];
   else loan.paymentStates[installment] = status;
   const paymentLabels = {
@@ -1119,7 +1125,7 @@ async function updatePayment(loanId, installment, status) {
   addHistory(
     "payment",
     `Parcela ${Number(installment) + 1} alterada`,
-    `${loan.contract}: parcela ${paymentLabels[status]}.`,
+    `${loan.contract}: parcela ${paymentLabels[status]}${isLastInterest ? ` e renovada por mais ${Number(loan.frequency || 30)} dias` : ""}.`,
   );
   const synced = await save();
   render();
@@ -1131,7 +1137,9 @@ async function updatePayment(loanId, installment, status) {
       : status === "paid"
       ? "Parcela marcada como quitada."
       : status === "interest"
-        ? "Juros registrados; o saldo foi levado para a próxima parcela."
+        ? isLastInterest
+          ? "Juros registrados; a última parcela foi renovada pelo mesmo prazo."
+          : "Juros registrados; o saldo foi levado para a próxima parcela."
         : status === "open"
           ? "Parcela deixada em aberto novamente."
           : "Parcela marcada como não paga.";
@@ -1402,7 +1410,9 @@ function openWhatsApp(loanId, installmentIndex) {
         : status === "Pagamento parcial"
           ? `◑ Confirmamos o pagamento parcial de *${money(info.partial?.paidAmount)}*. O saldo de *${money(info.partial?.remaining)}* foi corrigido para *${money(info.partial?.adjustedRemaining)}*${index < loan.installments - 1 ? " e acrescentado à próxima parcela" : " e continua em aberto nesta parcela"}.`
         : status === "Só juros"
-          ? `◔ Recebemos *${money(info.interestOnlyValue)}* referentes aos juros. O saldo de *${money(info.deferred)}* foi levado para a próxima parcela, que ficará em *${money(info.nextDue)}*.`
+          ? index < loan.installments - 1
+            ? `◔ Recebemos *${money(info.interestOnlyValue)}* referentes aos juros. O saldo de *${money(info.deferred)}* foi levado para a próxima parcela, que ficará em *${money(info.nextDue)}*.`
+            : `◔ Recebemos *${money(info.interestOnlyValue)}* referentes aos juros. O saldo principal permanece em aberto nesta última parcela, com novo vencimento em *${date.toLocaleDateString("pt-BR")}*.`
           : status === "Não pagou"
             ? `⚠️ Esta parcela está em aberto. O valor atualizado para pagamento é *${money(value)}*.`
             : `💰 *Valor para pagamento*\n${money(value)}`;
