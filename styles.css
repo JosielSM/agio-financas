@@ -835,6 +835,18 @@ textarea {
   transform: translate(-50%, 0);
   opacity: 1;
 }
+.toast.has-undo {
+  top: calc(18px + env(safe-area-inset-top)) !important;
+  right: 18px !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: translateY(-90px) !important;
+  width: min(430px, calc(100vw - 36px));
+  justify-content: space-between;
+}
+.toast.has-undo.show {
+  transform: translateY(0) !important;
+}
 .mobile-menu {
   display: none;
   background: transparent;

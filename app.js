@@ -145,6 +145,7 @@ const lateCharge = (loan, date) => {
 function toast(message, undoAction = null) {
   const element = $("#toast");
   clearTimeout(toastTimer);
+  element.classList.toggle("has-undo", Boolean(undoAction));
   element.replaceChildren();
   const text = document.createElement("span");
   text.textContent = message;
