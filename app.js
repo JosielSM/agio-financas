@@ -20,6 +20,20 @@ const money = (value) =>
     style: "currency",
     currency: "BRL",
   });
+function setCurrencyInput(input, value, showZero = true) {
+  const amount = Math.max(0, Number(value) || 0);
+  input.dataset.value = String(amount);
+  input.value = amount || showZero ? money(amount) : "";
+}
+function readCurrencyInput(input) {
+  return Number(input.dataset.value || 0);
+}
+function maskCurrencyInput(event) {
+  const input = event.currentTarget,
+    amount = Number(digits(input.value) || 0) / 100;
+  setCurrencyInput(input, amount);
+  input.setSelectionRange(input.value.length, input.value.length);
+}
 const digits = (value) => String(value || "").replace(/\D/g, "");
 const escapeHtml = (value) =>
   String(value ?? "").replace(
@@ -376,7 +390,9 @@ async function showApp() {
   $("#userName").textContent = state.user.name;
   $("#greetingName").textContent = state.user.name.split(" ")[0];
   $("#initials").textContent = initials(state.user.name);
-  render();
+  const requestedPage = location.hash.slice(1);
+  if ($(`#${requestedPage}Page`)) setPage(requestedPage);
+  else setPage("dashboard");
   startAutoRefresh();
 }
 function hasOpenModal() {
@@ -603,9 +619,10 @@ function resetClientForm() {
 function resetLoanForm() {
   $("#loanForm").reset();
   $("#loanId").value = "";
+  setCurrencyInput($("#loanAmount"), 0, false);
   $("#loanInterest").value = "10";
   $("#loanFrequency").value = "30";
-  $("#loanLateFee").value = "0";
+  setCurrencyInput($("#loanLateFee"), 0);
   $("#loanInstallments").value = "6";
   const date = new Date();
   date.setDate(date.getDate() + 30);
@@ -632,6 +649,7 @@ function openModal(id) {
     toast("Cadastre um cliente antes de criar um empréstimo.");
     return openClient();
   }
+  document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $(`#${id}`).hidden = false;
   rememberModalState(id);
@@ -641,6 +659,7 @@ function closeModals() {
     modal.hidden = true;
   });
   $("#modalBackdrop").hidden = true;
+  document.body.classList.remove("modal-open");
   pendingModalId = null;
 }
 function requestClose() {
@@ -668,12 +687,14 @@ function discardChanges() {
   if (pendingModalId) $(`#${pendingModalId}`).hidden = true;
   $("#discardModal").hidden = true;
   $("#modalBackdrop").hidden = true;
+  document.body.classList.remove("modal-open");
   pendingModalId = null;
 }
 function askDelete({ title, message, action }) {
   pendingDelete = action;
   $("#confirmDeleteTitle").textContent = title;
   $("#confirmDeleteMessage").textContent = message;
+  document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $("#confirmDeleteModal").hidden = false;
 }
@@ -683,7 +704,10 @@ function cancelDelete() {
   const anotherModal = Array.from(document.querySelectorAll(".modal")).some(
     (modal) => !modal.hidden && modal.id !== "confirmDeleteModal",
   );
-  if (!anotherModal) $("#modalBackdrop").hidden = true;
+  if (!anotherModal) {
+    $("#modalBackdrop").hidden = true;
+    document.body.classList.remove("modal-open");
+  }
 }
 async function confirmDelete() {
   if (!pendingDelete) return cancelDelete();
@@ -726,11 +750,11 @@ function prepareLoan(id) {
     if (!loan) return;
     $("#loanId").value = loan.id;
     $("#loanClient").value = loan.clientId;
-    $("#loanAmount").value = loan.amount;
+    setCurrencyInput($("#loanAmount"), loan.amount);
     $("#loanInterest").value = loan.rate * 100;
     $("#loanInstallments").value = loan.installments;
     $("#loanFrequency").value = loan.frequency || 30;
-    $("#loanLateFee").value = loan.lateFee || 0;
+    setCurrencyInput($("#loanLateFee"), loan.lateFee || 0);
     $("#loanDueDate").value = loan.dueDate;
     $("#loanModalEyebrow").textContent = "EDITAR OPERAÇÃO";
     $("#loanModalTitle").textContent = "Atualizar empréstimo";
@@ -740,12 +764,15 @@ function prepareLoan(id) {
 }
 function openLoan(id) {
   if (!state.clients.length) return openModal("loanModal");
+  document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $("#loanModal").hidden = false;
   prepareLoan(id);
   rememberModalState("loanModal");
 }
 function setPage(page) {
+  const target = $(`#${page}Page`);
+  if (!target) return;
   document
     .querySelectorAll(".page")
     .forEach((item) =>
@@ -760,9 +787,11 @@ function setPage(page) {
     dashboard: "Visão geral",
     clients: "Clientes",
     loans: "Empréstimos",
+    paid: "Quitados",
     history: "Histórico",
     blacklist: "Lista negra",
   }[page];
+  window.history.replaceState(null, "", `#${page}`);
   $(".sidebar").classList.remove("open");
   render();
 }
@@ -770,16 +799,76 @@ function render() {
   renderStats();
   renderClients();
   renderLoans();
+  renderPaid();
   renderHistory();
   renderBlacklist();
 }
+const isLoanFullyPaid = (loan) =>
+  Array.from({ length: loan.installments }, (_, index) =>
+    paymentStateFor(loan, index),
+  ).every((status) => status === "paid");
+function receivedAmountFor(loan, index, info = installmentInfo(loan, index)) {
+  const payment = loan.paymentStates?.[index],
+    status = paymentStateFor(loan, index);
+  if (typeof payment === "object" && payment.receivedTotal != null)
+    return Number(payment.receivedTotal);
+  if (status === "paid") return Number(info.due || 0);
+  if (status === "interest") return Number(info.interestOnlyValue || 0);
+  if (status === "partial") return Number(payment?.paidAmount || 0);
+  return 0;
+}
+function financialsForLoan(loan) {
+  let receivable = 0,
+    received = 0,
+    paidInstallments = 0;
+  for (let index = 0; index < loan.installments; index += 1) {
+    const info = installmentInfo(loan, index),
+      status = paymentStateFor(loan, index);
+    received += receivedAmountFor(loan, index, info);
+    if (status === "paid") paidInstallments += 1;
+    if (status === "paid") continue;
+    if (status === "interest") {
+      if (index === loan.installments - 1) receivable += info.deferred;
+      continue;
+    }
+    if (status === "partial") {
+      if (index === loan.installments - 1)
+        receivable += Number(info.partial?.adjustedRemaining || 0);
+      continue;
+    }
+    receivable += Number(info.due || 0);
+  }
+  const lent = Math.max(
+    0,
+    Number(loan.amount) -
+      (Number(loan.amount) / Number(loan.installments)) * paidInstallments,
+  );
+  return { lent, receivable, received };
+}
 function renderStats() {
-  const activeLoans = state.loans.filter((loan) => !loan.archived);
-  const lent = activeLoans.reduce((sum, loan) => sum + loan.amount, 0);
-  const receivable = activeLoans.reduce((sum, loan) => sum + loan.total, 0);
+  const activeLoans = state.loans.filter(
+    (loan) => !loan.archived && !isLoanFullyPaid(loan),
+  );
+  const totals = state.loans
+    .filter((loan) => !loan.archived)
+    .reduce(
+      (sum, loan) => {
+        const values = financialsForLoan(loan);
+        sum.lent += values.lent;
+        sum.receivable += values.receivable;
+        return sum;
+      },
+      { lent: 0, receivable: 0 },
+    );
+  const { lent, receivable } = totals,
+    received = state.loans.reduce(
+      (sum, loan) => sum + financialsForLoan(loan).received,
+      0,
+    );
   const interest = Math.max(0, receivable - lent);
   $("#statLent").textContent = money(lent);
   $("#statReceivable").textContent = money(receivable);
+  $("#statReceived").textContent = money(received);
   $("#statClients").textContent = state.clients.length;
   $("#statLoans").textContent = activeLoans.length;
   $("#chartTotal").textContent = money(receivable);
@@ -868,10 +957,44 @@ function loanRow(loan) {
   return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${loan.installments}x de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value">${money(loan.total)}</div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
-  const activeLoans = state.loans.filter((loan) => !loan.archived);
+  const activeLoans = state.loans.filter(
+    (loan) => !loan.archived && !isLoanFullyPaid(loan),
+  );
   $("#loansList").innerHTML = activeLoans.length
     ? activeLoans.slice().reverse().map(loanRow).join("")
     : '<div class="empty"><span>◫</span><h4>Nenhum empréstimo ativo</h4><p>Crie uma operação quando estiver pronto.</p><button class="outline add-loan">Criar empréstimo</button></div>';
+}
+function renderPaid() {
+  const paidInstallments = state.loans
+    .flatMap((loan) =>
+      Array.from({ length: loan.installments }, (_, index) => ({
+        loan,
+        index,
+        status: paymentStateFor(loan, index),
+        payment: loan.paymentStates?.[index],
+      })),
+    )
+    .filter((item) => item.status === "paid")
+    .sort((a, b) => {
+      const dateA = a.payment?.createdAt || dateFor(a.loan, a.index).toISOString(),
+        dateB = b.payment?.createdAt || dateFor(b.loan, b.index).toISOString();
+      return dateB.localeCompare(dateA);
+    });
+  $("#paidList").innerHTML = paidInstallments.length
+    ? paidInstallments
+        .map(({ loan, index, payment }) => {
+          const client = state.clients.find((item) => item.id === loan.clientId),
+            info = installmentInfo(loan, index),
+            received = Number(
+              payment?.receivedTotal ?? payment?.lastPayment ?? info.due ?? 0,
+            ),
+            paidAt = payment?.createdAt
+              ? new Date(payment.createdAt).toLocaleDateString("pt-BR")
+              : dateFor(loan, index).toLocaleDateString("pt-BR");
+          return `<article class="paid-card"><span class="paid-check">✓</span><div><span class="eyebrow">${escapeHtml(loan.contract)}</span><h3>${escapeHtml(client?.name || "Cliente removido")}</h3><p>Parcela ${index + 1} de ${loan.installments} · quitada em ${paidAt}</p></div><strong>${money(received)}</strong><button class="outline small" data-details="${escapeHtml(loan.id)}">Ver empréstimo</button></article>`;
+        })
+        .join("")
+    : '<div class="empty"><span>✓</span><h4>Nenhuma parcela quitada</h4><p>As parcelas marcadas como quitadas aparecerão aqui.</p></div>';
 }
 function renderHistory() {
   const archived = state.loans.filter((loan) => loan.archived);
@@ -906,7 +1029,7 @@ function renderHistory() {
     : '<div class="empty compact"><span>✓</span><h4>Nenhum empréstimo arquivado</h4><p>Os contratos arquivados aparecerão nesta seção.</p></div>';
 }
 function calc() {
-  const amount = Number($("#loanAmount").value) || 0;
+  const amount = readCurrencyInput($("#loanAmount"));
   const rate = (Number($("#loanInterest").value) || 0) / 100;
   const periods = Number($("#loanInstallments").value) || 1;
   const total = amount * Math.pow(1 + rate, periods);
@@ -977,7 +1100,7 @@ async function saveLoan(event) {
     rate: calculation.rate,
     installments: calculation.periods,
     frequency: Number($("#loanFrequency").value),
-    lateFee: Number($("#loanLateFee").value) || 0,
+    lateFee: readCurrencyInput($("#loanLateFee")),
     total: calculation.total,
     installment: calculation.total / calculation.periods,
     dueDate: $("#loanDueDate").value,
@@ -1105,10 +1228,27 @@ async function updatePayment(loanId, installment, status) {
   const loan = state.loans.find((item) => item.id === loanId);
   const snapshot = stateSnapshot();
   loan.paymentStates = loan.paymentStates || {};
+  const installmentIndex = Number(installment),
+    infoBefore = installmentInfo(loan, installmentIndex),
+    previousPayment = loan.paymentStates[installment],
+    previousStatus = paymentStateFor(loan, installmentIndex),
+    previousReceived = receivedAmountFor(
+      loan,
+      installmentIndex,
+      infoBefore,
+    );
   const isLastInterest =
-    status === "interest" && Number(installment) === loan.installments - 1;
+    status === "interest" && installmentIndex === loan.installments - 1;
+  if (previousStatus === status && !isLastInterest)
+    return toast("Esta parcela já está com essa situação.");
+  const remainingPayment =
+    previousStatus === "partial" && typeof previousPayment === "object"
+      ? Number(previousPayment.adjustedRemaining || 0)
+      : previousStatus === "interest"
+        ? Number(infoBefore.deferred || 0)
+        : Number(infoBefore.due || 0);
   if (isLastInterest) {
-    const renewedDate = dateFor(loan, Number(installment));
+    const renewedDate = dateFor(loan, installmentIndex);
     renewedDate.setDate(
       renewedDate.getDate() + Number(loan.frequency || 30),
     );
@@ -1116,7 +1256,41 @@ async function updatePayment(loanId, installment, status) {
     loan.customDates[installment] = renewedDate.toISOString().slice(0, 10);
   }
   if (status === "open") delete loan.paymentStates[installment];
-  else loan.paymentStates[installment] = status;
+  else if (status === "paid")
+    loan.paymentStates[installment] = {
+      status,
+      receivedTotal:
+        (previousStatus === "partial" || previousStatus === "interest"
+          ? previousReceived
+          : 0) + remainingPayment,
+      lastPayment: remainingPayment,
+      createdAt: new Date().toISOString(),
+    };
+  else if (status === "interest")
+    loan.paymentStates[installment] = {
+      status,
+      receivedTotal:
+        (previousStatus === "partial" ||
+        (previousStatus === "interest" && isLastInterest)
+          ? previousReceived
+          : 0) + Number(infoBefore.interestOnlyValue || 0),
+      lastPayment: Number(infoBefore.interestOnlyValue || 0),
+      renewals:
+        Number(
+          typeof previousPayment === "object"
+            ? previousPayment.renewals || 0
+            : previousStatus === "interest"
+              ? 1
+              : 0,
+        ) + (isLastInterest ? 1 : 0),
+      createdAt: new Date().toISOString(),
+    };
+  else
+    loan.paymentStates[installment] = {
+      status,
+      receivedTotal: 0,
+      createdAt: new Date().toISOString(),
+    };
   const paymentLabels = {
     paid: "marcada como quitada",
     interest: "marcada como somente juros",
@@ -1136,7 +1310,7 @@ async function updatePayment(loanId, installment, status) {
     !synced
       ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
       : status === "paid"
-      ? "Parcela marcada como quitada."
+      ? "Parcela quitada, saldo atualizado e registro enviado para Quitados."
       : status === "interest"
         ? isLastInterest
           ? "Juros registrados; a última parcela foi renovada pelo mesmo prazo."
@@ -1159,7 +1333,7 @@ function openPostpone(loanId, installment) {
 }
 function calculatePartialPayment() {
   const due = Number($("#partialDueAmount").value) || 0,
-    paid = Number($("#partialPaidAmount").value) || 0,
+    paid = readCurrencyInput($("#partialPaidAmount")),
     rate = (Number($("#partialInterest").value) || 0) / 100,
     remaining = Math.round(Math.max(0, due - paid) * 100) / 100,
     adjusted = Math.round(remaining * (1 + rate) * 100) / 100;
@@ -1182,8 +1356,11 @@ function openPartialPayment(loanId, installment) {
   $("#partialLoanId").value = loanId;
   $("#partialInstallment").value = index;
   $("#partialDueAmount").value = due;
-  $("#partialPaidAmount").max = Math.max(0.01, due - 0.01).toFixed(2);
-  $("#partialPaidAmount").value = existing?.paidAmount || "";
+  setCurrencyInput(
+    $("#partialPaidAmount"),
+    existing?.paidAmount || 0,
+    Boolean(existing?.paidAmount),
+  );
   $("#partialInterest").value = Number(existing?.interestRate || 0) * 100;
   $("#partialSummary").innerHTML =
     `<span>Cliente</span><b>${escapeHtml(client?.name || "Cliente")}</b><span>Parcela</span><b>${index + 1} de ${loan.installments}</b><span>Valor devido</span><b>${money(due)}</b>`;
@@ -1213,6 +1390,8 @@ async function savePartialPayment(event) {
   loan.paymentStates[installment] = {
     status: "partial",
     paidAmount: calculation.paid,
+    receivedTotal: calculation.paid,
+    lastPayment: calculation.paid,
     originalDue: calculation.due,
     remaining: calculation.remaining,
     interestRate: calculation.rate,
@@ -1462,9 +1641,11 @@ $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
 $("#partialForm").addEventListener("submit", savePartialPayment);
 $("#passwordChangeForm").addEventListener("submit", changePassword);
-[$("#partialPaidAmount"), $("#partialInterest")].forEach((input) =>
-  input.addEventListener("input", calculatePartialPayment),
+[$("#loanAmount"), $("#loanLateFee"), $("#partialPaidAmount")].forEach(
+  (input) => input.addEventListener("input", maskCurrencyInput),
 );
+$("#partialPaidAmount").addEventListener("input", calculatePartialPayment);
+$("#partialInterest").addEventListener("input", calculatePartialPayment);
 $("#clientCpf").addEventListener("input", (event) => {
   event.target.value = formatCpf(event.target.value);
 });
@@ -1497,14 +1678,18 @@ $("#modalBackdrop").onclick = closeModals;
 document.querySelectorAll("[data-auth]").forEach((button) => {
   button.onclick = () => setAuth(button.dataset.auth);
 });
-document
-  .querySelectorAll(".nav-link[data-page], .bottom-link[data-page]")
-  .forEach((button) => {
-    button.onclick = () => setPage(button.dataset.page);
-  });
+$(".logo").onclick = (event) => {
+  event.preventDefault();
+  setPage("dashboard");
+};
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.dataset.page) {
+    event.preventDefault();
+    setPage(button.dataset.page);
+    return;
+  }
   if (button.dataset.passwordToggle) {
     const input = $(`#${button.dataset.passwordToggle}`),
       show = input.type === "password";
@@ -1567,6 +1752,10 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshFromCloud({ notify: true });
 });
 window.addEventListener("online", () => refreshFromCloud({ notify: true }));
+window.addEventListener("hashchange", () => {
+  const page = location.hash.slice(1);
+  if ($(`#${page}Page`)) setPage(page);
+});
 window.addEventListener("storage", (event) => {
   if (!state.user || hasOpenModal()) return;
   if (event.key === "credmais_clients")
