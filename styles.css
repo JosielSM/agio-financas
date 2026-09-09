@@ -1163,12 +1163,54 @@ body.dark {
   border-radius: 20px;
   padding: 3px 7px;
   margin-left: 5px;
-  color: #bc4939;
-  background: #ffebe7;
+  border: 1px solid transparent;
+  color: #58645e;
+  background: #eef1ef;
 }
-.due.future {
-  color: #467364;
-  background: var(--soft);
+.due.status-paid {
+  color: #fff;
+  background: #07875f;
+  border-color: #07875f;
+  box-shadow: 0 3px 8px #07875f38;
+}
+.due.status-upcoming {
+  color: #58645e;
+  background: #eef1ef;
+  border-color: #d9dfdc;
+}
+.due.status-overdue {
+  color: #fff;
+  background: #cf403d;
+  border-color: #cf403d;
+}
+.due.status-today {
+  color: #7b4c04;
+  background: #fff0c9;
+  border-color: #f1d58e;
+}
+.due.status-interest {
+  color: #295fa8;
+  background: #e8f1ff;
+  border-color: #c8dcfb;
+}
+.due.status-partial {
+  color: #7550a3;
+  background: #f2eaff;
+  border-color: #decdf5;
+}
+.details-modal .installment-card.status-paid {
+  border-color: #62cda4;
+  box-shadow: inset 4px 0 #07875f;
+}
+.details-modal .installment-card.status-paid .installment-summary {
+  background: #f0fbf6;
+}
+.details-modal .installment-card.status-overdue {
+  border-color: #e09a97;
+  box-shadow: inset 4px 0 #cf403d;
+}
+.details-modal .installment-card.status-overdue .installment-summary {
+  background: #fff7f6;
 }
 .whatsapp {
   background: #daf6e7;
@@ -1642,6 +1684,42 @@ body.dark {
 .dark .due {
   background: #562d29;
   color: #ffd3cb;
+}
+.dark .due.status-paid {
+  color: #fff;
+  background: #15966c;
+  border-color: #32b98a;
+}
+.dark .due.status-upcoming {
+  color: #d6e0da;
+  background: #29332e;
+  border-color: #45534b;
+}
+.dark .due.status-overdue {
+  color: #fff;
+  background: #b83e3b;
+  border-color: #e0716d;
+}
+.dark .due.status-today {
+  color: #ffe5a7;
+  background: #533d16;
+  border-color: #80652b;
+}
+.dark .due.status-interest {
+  color: #c5dcff;
+  background: #243c5d;
+  border-color: #3e628f;
+}
+.dark .due.status-partial {
+  color: #e3d0ff;
+  background: #3f3153;
+  border-color: #654c82;
+}
+.dark .details-modal .installment-card.status-paid .installment-summary {
+  background: #14362b;
+}
+.dark .details-modal .installment-card.status-overdue .installment-summary {
+  background: #3b2322;
 }
 .dark .stats article,
 .dark .panel,
