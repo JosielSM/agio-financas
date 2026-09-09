@@ -134,6 +134,52 @@ const formatFrequency = (days) =>
   ({ 1: "Diário", 7: "Semanal", 15: "Quinzenal", 30: "Mensal" })[
     Number(days)
   ] || `A cada ${days} dias`;
+const dateInputValue = (date) =>
+  [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+function dueRelativeLabel(date) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const days = Math.round((date - today) / 86400000);
+  if (days === 0) return "hoje";
+  if (days === 1) return "amanhã";
+  if (days > 1) return `daqui a ${days} dias`;
+  return `há ${Math.abs(days)} dia${days === -1 ? "" : "s"}`;
+}
+function updateLoanDuePreview() {
+  const value = $("#loanDueDate").value,
+    firstLabel = $("#loanDuePrimary"),
+    scheduleLabel = $("#loanDueSecondary");
+  if (!value) {
+    firstLabel.textContent = "Escolha a data do primeiro vencimento";
+    scheduleLabel.textContent = "As demais datas serão calculadas automaticamente.";
+    return;
+  }
+  const first = new Date(`${value}T12:00`),
+    frequency = Math.max(1, Number($("#loanFrequency").value) || 1),
+    installments = Math.max(1, Number($("#loanInstallments").value) || 1),
+    next = new Date(first),
+    last = new Date(first);
+  next.setDate(next.getDate() + frequency);
+  last.setDate(last.getDate() + frequency * (installments - 1));
+  firstLabel.textContent = `1º vencimento: ${first.toLocaleDateString("pt-BR")} (${dueRelativeLabel(first)})`;
+  scheduleLabel.textContent =
+    installments > 1
+      ? `2º vencimento: ${next.toLocaleDateString("pt-BR")} · Último previsto: ${last.toLocaleDateString("pt-BR")}`
+      : "Este empréstimo possui um único pagamento.";
+}
+function suggestFirstDueDate() {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(
+    date.getDate() + Math.max(1, Number($("#loanFrequency").value) || 1),
+  );
+  $("#loanDueDate").value = dateInputValue(date);
+  updateLoanDuePreview();
+}
 function interestModeFor(loan) {
   if (!loan) return "flat";
   const amount = Number(loan.amount || 0),
@@ -643,9 +689,7 @@ function resetLoanForm() {
   $("#loanFrequency").value = "30";
   setCurrencyInput($("#loanLateFee"), 0);
   $("#loanInstallments").value = "6";
-  const date = new Date();
-  date.setDate(date.getDate() + 30);
-  $("#loanDueDate").value = date.toISOString().slice(0, 10);
+  suggestFirstDueDate();
   $("#loanModalEyebrow").textContent = "NOVA OPERAÇÃO";
   $("#loanModalTitle").textContent = "Novo empréstimo";
   $("#loanSaveBtn").textContent = "Confirmar empréstimo";
@@ -781,6 +825,7 @@ function prepareLoan(id) {
     $("#loanSaveBtn").textContent = "Salvar alterações";
   }
   calc();
+  updateLoanDuePreview();
 }
 function openLoan(id) {
   if (!state.clients.length) return openModal("loanModal");
@@ -1699,8 +1744,17 @@ $("#clientPhone").addEventListener("input", (event) => {
   "loanInterest",
   "loanInstallments",
   "loanInterestMode",
-  "loanFrequency",
-].forEach((id) => $(`#${id}`).addEventListener("input", calc));
+].forEach((id) =>
+  $(`#${id}`).addEventListener("input", () => {
+    calc();
+    if (id === "loanInstallments") updateLoanDuePreview();
+  }),
+);
+$("#loanFrequency").addEventListener("change", () => {
+  suggestFirstDueDate();
+  calc();
+});
+$("#loanDueDate").addEventListener("input", updateLoanDuePreview);
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");

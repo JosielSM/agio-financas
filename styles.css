@@ -807,6 +807,34 @@ textarea {
   font-size: 11px;
   font-weight: 400;
 }
+.loan-due-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  margin-top: -4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--soft);
+}
+.loan-due-preview > span {
+  font-size: 22px;
+}
+.loan-due-preview strong,
+.loan-due-preview small {
+  display: block;
+}
+.loan-due-preview strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.loan-due-preview small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
 .calculation > p {
   grid-column: 1 / -1;
   margin: 2px 0 0;
