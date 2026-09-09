@@ -464,8 +464,11 @@ function validateRegistration() {
   return enough && matches;
 }
 function setAuth(view) {
-  $("#loginForm").hidden = view !== "login";
-  $("#registerForm").hidden = view !== "register";
+  ["login", "register", "forgot", "verification"].forEach((name) => {
+    $(`#${name}Form`).hidden = view !== name;
+  });
+  if (view === "forgot")
+    $("#forgotEmail").value = $("#loginEmail").value.trim();
 }
 async function showApp() {
   if (window.credmaisBridge?.enabled) {
@@ -489,6 +492,10 @@ async function showApp() {
       state.clients = cloud.clients;
       state.loans = cloud.loans;
       state.history = cloud.history ?? state.history;
+      if (cloud.profile) {
+        state.user = { ...state.user, ...cloud.profile };
+        localStorage.setItem("credmais_user", JSON.stringify(state.user));
+      }
       localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
       localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
       localStorage.setItem("credmais_history", JSON.stringify(state.history));
@@ -630,7 +637,31 @@ async function login(event) {
   setFormLoading(form, true);
   try {
     if (window.credmaisBridge?.enabled) {
+      const cachedUser = state.user;
       state.user = await window.credmaisBridge.signIn(email, password);
+      if (
+        window.credmaisBridge.authProvider === "firebase" &&
+        cachedUser?.email?.toLowerCase() === state.user.email?.toLowerCase() &&
+        (cachedUser.pixKey || cachedUser.pixRecipientName)
+      ) {
+        state.user = {
+          ...state.user,
+          pixKey: state.user.pixKey || cachedUser.pixKey || "",
+          pixType:
+            state.user.pixType || cachedUser.pixType || "Chave aleatória",
+          pixRecipientName:
+            state.user.pixRecipientName ||
+            cachedUser.pixRecipientName ||
+            cachedUser.name ||
+            "",
+        };
+        if (state.user.pixKey)
+          state.user = await window.credmaisBridge.updatePix(
+            state.user.pixKey,
+            state.user.pixType,
+            state.user.pixRecipientName,
+          );
+      }
     } else {
       const account = JSON.parse(
         localStorage.getItem("credmais_account") || "null",
@@ -659,6 +690,42 @@ async function login(event) {
       error.message || "Não foi possível entrar.",
       "error",
     );
+    setFormLoading(form, false);
+  }
+}
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    email = $("#forgotEmail").value.trim();
+  if (!email || !email.includes("@"))
+    return setFeedback(
+      "forgotFeedback",
+      "Informe o e-mail usado na sua conta.",
+      "error",
+    );
+  setFeedback("forgotFeedback");
+  setFormLoading(form, true);
+  try {
+    if (
+      !window.credmaisBridge?.enabled ||
+      window.credmaisBridge.authProvider !== "firebase"
+    )
+      throw new Error(
+        "A recuperação por Firebase ficará disponível assim que as chaves do projeto forem configuradas.",
+      );
+    await window.credmaisBridge.sendPasswordReset(email);
+    setFeedback(
+      "forgotFeedback",
+      "E-mail enviado. Confira sua caixa de entrada e também a pasta Spam.",
+      "success",
+    );
+  } catch (error) {
+    setFeedback(
+      "forgotFeedback",
+      error.message || "Não foi possível enviar o e-mail.",
+      "error",
+    );
+  } finally {
     setFormLoading(form, false);
   }
 }
@@ -691,6 +758,16 @@ async function register(event) {
   try {
     if (window.credmaisBridge?.enabled) {
       const result = await window.credmaisBridge.signUp(name, email, password);
+      if (result.requiresVerification) {
+        $("#verificationMessage").textContent =
+          `Enviamos para ${email} um link de confirmação com a identidade do CredMais.`;
+        setFeedback("verificationFeedback");
+        form.reset();
+        validateRegistration();
+        setAuth("verification");
+        setFormLoading(form, false);
+        return;
+      }
       if (!result.hasSession) {
         setFeedback(
           "registerFeedback",
@@ -2214,6 +2291,7 @@ function toggleTheme() {
 }
 $("#login").addEventListener("submit", login);
 $("#register").addEventListener("submit", register);
+$("#forgotPassword").addEventListener("submit", requestPasswordReset);
 $("#clientForm").addEventListener("submit", saveClient);
 $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
@@ -2398,8 +2476,20 @@ function finishInitialLoading() {
     if (window.credmaisBridge?.enabled) {
       const user = await window.credmaisBridge.currentUser();
       if (user) {
-        state.user = user;
-        localStorage.setItem("credmais_user", JSON.stringify(user));
+        const cachedUser = state.user;
+        state.user =
+          cachedUser?.email?.toLowerCase() === user.email?.toLowerCase()
+            ? {
+                ...cachedUser,
+                ...user,
+                pixKey: user.pixKey || cachedUser.pixKey || "",
+                pixType:
+                  user.pixType || cachedUser.pixType || "Chave aleatória",
+                pixRecipientName:
+                  user.pixRecipientName || cachedUser.pixRecipientName || "",
+              }
+            : user;
+        localStorage.setItem("credmais_user", JSON.stringify(state.user));
         await showApp();
       }
     } else if (state.user) {
@@ -2407,7 +2497,12 @@ function finishInitialLoading() {
     }
   } catch (error) {
     console.error("Falha ao restaurar a sessão:", error);
-    if (state.user) await showApp();
+    if (
+      state.user &&
+      window.credmaisBridge?.authProvider !== "firebase"
+    )
+      await showApp();
+    else localStorage.removeItem("credmais_user");
   } finally {
     finishInitialLoading();
   }

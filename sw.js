@@ -1,9 +1,13 @@
-const CACHE_NAME = "credmais-shell-v2";
+const CACHE_NAME = "credmais-shell-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/auth-action.html",
+  "/auth-action.js",
   "/styles.css",
   "/app.js",
+  "/firebase-config.js",
+  "/firebase-bridge.js",
   "/supabase-config.js",
   "/supabase-bridge.js",
   "/vendor/html2pdf.bundle.min.js",
@@ -33,14 +37,21 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
   if (event.request.mode === "navigate") {
+    const page = requestUrl.pathname.endsWith("/auth-action.html")
+      ? "/auth-action.html"
+      : "/index.html";
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(page, copy));
           return response;
         })
-        .catch(() => caches.match("/index.html").then((response) => response || caches.match("/offline.html"))),
+        .catch(() =>
+          caches
+            .match(page)
+            .then((response) => response || caches.match("/offline.html")),
+        ),
     );
     return;
   }
