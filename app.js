@@ -12,6 +12,7 @@ let expandedInstallment = null;
 let pendingDelete = null;
 let toastTimer = null;
 let autoRefreshTimer = null;
+let renderedMonthKey = null;
 let refreshingFromCloud = false;
 let deferredInstallPrompt = null;
 const submissionLocks = new Set();
@@ -927,6 +928,48 @@ function receivedAmountFor(loan, index, info = installmentInfo(loan, index)) {
   if (status === "partial") return Number(payment?.paidAmount || 0);
   return 0;
 }
+const monthKey = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
+  const payment = loan.paymentStates?.[index];
+  if (typeof payment === "object" && Array.isArray(payment.receipts))
+    return payment.receipts
+      .map((receipt) => ({
+        amount: Number(receipt.amount || 0),
+        createdAt: receipt.createdAt,
+      }))
+      .filter((receipt) => receipt.amount > 0 && receipt.createdAt);
+  const amount =
+    typeof payment === "object" && payment.lastPayment != null
+      ? Number(payment.lastPayment)
+      : receivedAmountFor(loan, index, info);
+  if (amount <= 0) return [];
+  return [
+    {
+      amount,
+      createdAt:
+        (typeof payment === "object" && payment.createdAt) ||
+        dateFor(loan, index).toISOString(),
+    },
+  ];
+}
+function receivedInMonth(referenceDate = new Date()) {
+  const selectedMonth = monthKey(referenceDate);
+  return state.loans.reduce(
+    (loanTotal, loan) =>
+      loanTotal +
+      Array.from({ length: loan.installments }, (_, index) =>
+        receiptEntriesFor(loan, index),
+      )
+        .flat()
+        .filter((receipt) => {
+          const date = new Date(receipt.createdAt);
+          return !Number.isNaN(date.getTime()) && monthKey(date) === selectedMonth;
+        })
+        .reduce((sum, receipt) => sum + receipt.amount, 0),
+    0,
+  );
+}
 function financialsForLoan(loan) {
   let receivable = 0,
     received = 0,
@@ -956,6 +999,8 @@ function financialsForLoan(loan) {
   return { lent, receivable, received };
 }
 function renderStats() {
+  const now = new Date();
+  renderedMonthKey = monthKey(now);
   const activeLoans = state.loans.filter(
     (loan) => !loan.archived && !isLoanFullyPaid(loan),
   );
@@ -971,14 +1016,13 @@ function renderStats() {
       { lent: 0, receivable: 0 },
     );
   const { lent, receivable } = totals,
-    received = state.loans.reduce(
-      (sum, loan) => sum + financialsForLoan(loan).received,
-      0,
-    );
+    received = receivedInMonth(now);
   const interest = Math.max(0, receivable - lent);
   $("#statLent").textContent = money(lent);
   $("#statReceivable").textContent = money(receivable);
   $("#statReceived").textContent = money(received);
+  $("#statReceived").previousElementSibling.textContent =
+    `Recebido em ${now.toLocaleDateString("pt-BR", { month: "long" })}`;
   $("#statClients").textContent = state.clients.length;
   $("#statLoans").textContent = activeLoans.length;
   $("#chartTotal").textContent = money(receivable);
@@ -1368,7 +1412,13 @@ async function updatePayment(loanId, installment, status) {
       loan,
       installmentIndex,
       infoBefore,
-    );
+    ),
+    previousReceipts = receiptEntriesFor(
+      loan,
+      installmentIndex,
+      infoBefore,
+    ),
+    paymentCreatedAt = new Date().toISOString();
   const isLastInterest =
     status === "interest" && installmentIndex === loan.installments - 1;
   if (previousStatus === status && !isLastInterest)
@@ -1396,7 +1446,13 @@ async function updatePayment(loanId, installment, status) {
           ? previousReceived
           : 0) + remainingPayment,
       lastPayment: remainingPayment,
-      createdAt: new Date().toISOString(),
+      receipts: [
+        ...(previousStatus === "partial" || previousStatus === "interest"
+          ? previousReceipts
+          : []),
+        { amount: remainingPayment, createdAt: paymentCreatedAt, type: "paid" },
+      ],
+      createdAt: paymentCreatedAt,
     };
   else if (status === "interest")
     loan.paymentStates[installment] = {
@@ -1407,6 +1463,17 @@ async function updatePayment(loanId, installment, status) {
           ? previousReceived
           : 0) + Number(infoBefore.interestOnlyValue || 0),
       lastPayment: Number(infoBefore.interestOnlyValue || 0),
+      receipts: [
+        ...(previousStatus === "partial" ||
+        (previousStatus === "interest" && isLastInterest)
+          ? previousReceipts
+          : []),
+        {
+          amount: Number(infoBefore.interestOnlyValue || 0),
+          createdAt: paymentCreatedAt,
+          type: "interest",
+        },
+      ],
       renewals:
         Number(
           typeof previousPayment === "object"
@@ -1415,13 +1482,14 @@ async function updatePayment(loanId, installment, status) {
               ? 1
               : 0,
         ) + (isLastInterest ? 1 : 0),
-      createdAt: new Date().toISOString(),
+      createdAt: paymentCreatedAt,
     };
   else
     loan.paymentStates[installment] = {
       status,
       receivedTotal: 0,
-      createdAt: new Date().toISOString(),
+      receipts: [],
+      createdAt: paymentCreatedAt,
     };
   const paymentLabels = {
     paid: "marcada como quitada",
@@ -1524,6 +1592,13 @@ async function savePartialPayment(event) {
     paidAmount: calculation.paid,
     receivedTotal: calculation.paid,
     lastPayment: calculation.paid,
+    receipts: [
+      {
+        amount: calculation.paid,
+        createdAt: new Date().toISOString(),
+        type: "partial",
+      },
+    ],
     originalDue: calculation.due,
     remaining: calculation.remaining,
     interestRate: calculation.rate,
@@ -1920,6 +1995,10 @@ window.addEventListener("storage", (event) => {
   render();
   toast("Dados atualizados em outra aba.");
 });
+setInterval(() => {
+  if (state.user && renderedMonthKey && monthKey(new Date()) !== renderedMonthKey)
+    renderStats();
+}, 60000);
 const savedTheme = localStorage.getItem("credmais_theme");
 applyTheme(
   savedTheme
