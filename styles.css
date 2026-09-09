@@ -1902,6 +1902,26 @@ body.dark {
   cursor: not-allowed;
   filter: grayscale(.35);
 }
+.payment-actions button.is-action-loading {
+  position: relative;
+  color: transparent !important;
+}
+.payment-actions button.is-action-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 17px;
+  height: 17px;
+  margin: auto;
+  border: 2px solid #ffffff80;
+  border-top-color: #1d5f4a;
+  border-radius: 50%;
+  animation: button-spin .7s linear infinite;
+}
+.dark .payment-actions button.is-action-loading::after {
+  border-color: #ffffff4d;
+  border-top-color: #fff;
+}
 .dark .payment-actions .partial-button {
   background: #253e59;
   color: #cfe5ff;
