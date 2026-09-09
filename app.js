@@ -749,8 +749,9 @@ function formSnapshot(modal) {
     .join("|");
 }
 function rememberModalState(id) {
-  const modal = $(`#${id}`);
-  if (modal?.querySelector("form"))
+  const modal = $(`#${id}`),
+    form = modal?.querySelector("form");
+  if (form && !form.hasAttribute("data-passive-form"))
     modal.dataset.initialState = formSnapshot(modal);
 }
 function openModal(id) {
@@ -778,8 +779,10 @@ function requestClose() {
     (item) => !item.hidden && item.id !== "discardModal",
   );
   if (!modal) return closeModals();
+  const form = modal.querySelector("form");
   if (
-    modal.querySelector("form") &&
+    form &&
+    !form.hasAttribute("data-passive-form") &&
     modal.dataset.initialState !== formSnapshot(modal)
   ) {
     pendingModalId = modal.id;
@@ -937,6 +940,7 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
       .map((receipt) => ({
         amount: Number(receipt.amount || 0),
         createdAt: receipt.createdAt,
+        type: receipt.type || payment.status || "payment",
       }))
       .filter((receipt) => receipt.amount > 0 && receipt.createdAt);
   const amount =
@@ -950,6 +954,10 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
       createdAt:
         (typeof payment === "object" && payment.createdAt) ||
         dateFor(loan, index).toISOString(),
+      type:
+        (typeof payment === "object" && payment.status) ||
+        paymentStateFor(loan, index) ||
+        "payment",
     },
   ];
 }
@@ -969,6 +977,236 @@ function receivedInMonth(referenceDate = new Date()) {
         .reduce((sum, receipt) => sum + receipt.amount, 0),
     0,
   );
+}
+const reportMonthValue = (date = new Date()) => monthKey(date);
+function reportPeriod(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  const year = Number(match[1]),
+    month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0),
+    end = new Date(year, month, 1, 0, 0, 0, 0);
+  return {
+    key: value,
+    year,
+    month,
+    start,
+    end,
+    days: new Date(year, month, 0).getDate(),
+    label: start.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+  };
+}
+function isInReportPeriod(value, period) {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date >= period.start && date < period.end;
+}
+const reportPaymentLabel = (type) =>
+  ({ paid: "Quitação", partial: "Pagamento parcial", interest: "Somente juros" })[
+    type
+  ] || "Recebimento";
+function monthlyReceiptRows(period) {
+  return state.loans
+    .flatMap((loan) =>
+      Array.from({ length: Number(loan.installments) || 0 }, (_, index) => {
+        const client = state.clients.find((item) => item.id === loan.clientId);
+        return receiptEntriesFor(loan, index).map((receipt) => ({
+          ...receipt,
+          clientName: client?.name || "Cliente removido",
+          contract: loan.contract || "Sem contrato",
+          installment: index + 1,
+          installments: loan.installments,
+          loanId: loan.id,
+        }));
+      }).flat(),
+    )
+    .filter((receipt) => isInReportPeriod(receipt.createdAt, period))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+function monthlyReportData(period) {
+  const receipts = monthlyReceiptRows(period),
+    loansCreated = state.loans
+      .filter((loan) => isInReportPeriod(loan.createdAt, period))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    activities = state.history
+      .filter((entry) => isInReportPeriod(entry.createdAt, period))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    received = receipts.reduce((sum, item) => sum + item.amount, 0),
+    lent = loansCreated.reduce((sum, loan) => sum + Number(loan.amount || 0), 0),
+    clients = new Set([
+      ...receipts.map((item) => item.clientName),
+      ...loansCreated.map(
+        (loan) =>
+          state.clients.find((client) => client.id === loan.clientId)?.name ||
+          "Cliente removido",
+      ),
+    ]),
+    currentPortfolio = state.loans
+      .filter((loan) => !loan.archived)
+      .reduce(
+        (totals, loan) => {
+          const values = financialsForLoan(loan);
+          totals.lent += values.lent;
+          totals.receivable += values.receivable;
+          return totals;
+        },
+        { lent: 0, receivable: 0 },
+      );
+  const installments = state.loans
+    .filter((loan) => !loan.archived)
+    .flatMap((loan) =>
+      Array.from({ length: Number(loan.installments) || 0 }, (_, index) => {
+        const date = dateFor(loan, index),
+          status = installmentStatus(loan, index, date);
+        return status === "Quitada"
+          ? "paid"
+          : status === "Vencida" || status === "Não pagou"
+            ? "overdue"
+            : "open";
+      }),
+    );
+  const status = installments.reduce(
+    (totals, item) => ({ ...totals, [item]: totals[item] + 1 }),
+    { paid: 0, open: 0, overdue: 0 },
+  );
+  return {
+    receipts,
+    loansCreated,
+    activities,
+    received,
+    lent,
+    clients: clients.size,
+    currentPortfolio,
+    status,
+  };
+}
+function updateReportPreview() {
+  const period = reportPeriod($("#reportMonth").value),
+    preview = $("#reportPreview");
+  if (!period) {
+    preview.innerHTML = "<p>Escolha um mês válido.</p>";
+    return;
+  }
+  const data = monthlyReportData(period);
+  preview.innerHTML = `<div><span>Recebido</span><b>${money(data.received)}</b></div><div><span>Empréstimos</span><b>${data.loansCreated.length}</b></div><div><span>Atividades</span><b>${data.activities.length}</b></div>`;
+}
+function openMonthlyReport() {
+  $("#reportMonth").value = reportMonthValue();
+  updateReportPreview();
+  $(".sidebar").classList.remove("open");
+  openModal("monthlyReportModal");
+}
+function reportDailyChart(period, receipts) {
+  const totals = Array.from({ length: period.days }, () => 0);
+  receipts.forEach((receipt) => {
+    const date = new Date(receipt.createdAt);
+    totals[date.getDate() - 1] += receipt.amount;
+  });
+  const maximum = Math.max(...totals, 1);
+  return totals
+    .map((value, index) => {
+      const day = index + 1,
+        height = value ? Math.max(5, Math.round((value / maximum) * 100)) : 2,
+        showLabel = day === 1 || day === period.days || day % 5 === 0;
+      return `<div class="pdf-bar-column"><span class="pdf-bar-value">${value ? money(value) : ""}</span><i style="height:${height}%" class="${value ? "has-value" : ""}"></i><small>${showLabel ? day : ""}</small></div>`;
+    })
+    .join("");
+}
+function reportTable(headers, rows, emptyMessage) {
+  if (!rows.length)
+    return `<div class="pdf-empty">${escapeHtml(emptyMessage)}</div>`;
+  return `<table class="pdf-table"><thead><tr>${headers
+    .map((header) => `<th>${escapeHtml(header)}</th>`)
+    .join("")}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+function buildMonthlyReport(period, data) {
+  const generatedAt = new Date(),
+    owner = state.user?.pixRecipientName || state.user?.name || "Usuário CredMais",
+    loanRows = data.loansCreated.map((loan) => {
+      const client = state.clients.find((item) => item.id === loan.clientId);
+      return `<tr><td>${new Date(loan.createdAt).toLocaleDateString("pt-BR")}</td><td><b>${escapeHtml(client?.name || "Cliente removido")}</b><small>${escapeHtml(loan.contract || "Sem contrato")}</small></td><td>${escapeHtml(formatFrequency(loan.frequency))}</td><td class="pdf-money">${money(loan.amount)}</td><td class="pdf-money">${money(loan.total)}</td></tr>`;
+    }),
+    receiptRows = data.receipts.map(
+      (receipt) =>
+        `<tr><td>${new Date(receipt.createdAt).toLocaleDateString("pt-BR")}</td><td><b>${escapeHtml(receipt.clientName)}</b><small>${escapeHtml(receipt.contract)} · Parcela ${receipt.installment}/${receipt.installments}</small></td><td>${escapeHtml(reportPaymentLabel(receipt.type))}</td><td class="pdf-money pdf-positive">${money(receipt.amount)}</td></tr>`,
+    ),
+    activityRows = data.activities.map(
+      (entry) =>
+        `<tr><td>${new Date(entry.createdAt).toLocaleDateString("pt-BR")}<small>${new Date(entry.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></td><td><b>${escapeHtml(entry.title)}</b><small>${escapeHtml(entry.description || "Sem detalhes")}</small></td></tr>`,
+    ),
+    statusTotal = data.status.paid + data.status.open + data.status.overdue,
+    statusWidth = (value) =>
+      statusTotal ? Math.max(value ? 3 : 0, (value / statusTotal) * 100) : 0,
+    article = document.createElement("article"),
+    stage = document.createElement("div");
+  article.className = "pdf-report";
+  article.setAttribute("aria-hidden", "true");
+  article.innerHTML = `
+    <header class="pdf-report-header"><div class="pdf-brand"><span>C</span><div><strong>CredMais</strong><small>Gestão de empréstimos</small></div></div><div class="pdf-period"><span>RELATÓRIO MENSAL</span><strong>${escapeHtml(period.label)}</strong></div></header>
+    <section class="pdf-report-intro"><div><p>Responsável</p><h1>${escapeHtml(owner)}</h1><small>Relatório gerado em ${generatedAt.toLocaleDateString("pt-BR")} às ${generatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div><span class="pdf-report-seal">Fechamento<br>mensal</span></section>
+    <section class="pdf-kpis"><div class="pdf-kpi emphasis"><span>Recebido no mês</span><strong>${money(data.received)}</strong><small>${data.receipts.length} movimentaç${data.receipts.length === 1 ? "ão" : "ões"}</small></div><div class="pdf-kpi"><span>Capital emprestado</span><strong>${money(data.lent)}</strong><small>${data.loansCreated.length} novo${data.loansCreated.length === 1 ? " contrato" : "s contratos"}</small></div><div class="pdf-kpi"><span>Clientes movimentados</span><strong>${data.clients}</strong><small>com empréstimo ou recebimento</small></div><div class="pdf-kpi"><span>Alterações registradas</span><strong>${data.activities.length}</strong><small>ações no histórico</small></div></section>
+    <section class="pdf-grid pdf-avoid-break"><div class="pdf-card pdf-chart-card"><div class="pdf-section-heading"><div><span>ENTRADAS</span><h2>Recebimentos por dia</h2></div><strong>${money(data.received)}</strong></div><div class="pdf-bar-chart">${reportDailyChart(period, data.receipts)}</div><p class="pdf-chart-caption">Cada barra representa o total recebido no dia; os valores detalhados aparecem na tabela de recebimentos.</p></div><div class="pdf-card pdf-status-card"><div class="pdf-section-heading"><div><span>CARTEIRA</span><h2>Situação atual das parcelas</h2></div></div><div class="pdf-status-total"><strong>${statusTotal}</strong><span>parcelas</span></div><div class="pdf-status-track"><i class="paid" style="width:${statusWidth(data.status.paid)}%"></i><i class="open" style="width:${statusWidth(data.status.open)}%"></i><i class="overdue" style="width:${statusWidth(data.status.overdue)}%"></i></div><div class="pdf-status-legend"><p><i class="paid"></i><span>Quitadas</span><b>${data.status.paid}</b></p><p><i class="open"></i><span>Em aberto</span><b>${data.status.open}</b></p><p><i class="overdue"></i><span>Vencidas</span><b>${data.status.overdue}</b></p></div></div></section>
+    <section class="pdf-card pdf-portfolio pdf-avoid-break"><div class="pdf-section-heading"><div><span>POSIÇÃO CONSULTADA EM ${generatedAt.toLocaleDateString("pt-BR")}</span><h2>Resumo atual da carteira</h2></div></div><div><p>Capital ainda emprestado<strong>${money(data.currentPortfolio.lent)}</strong></p><p>Saldo total a receber<strong>${money(data.currentPortfolio.receivable)}</strong></p><p>Juros previstos no saldo<strong>${money(Math.max(0, data.currentPortfolio.receivable - data.currentPortfolio.lent))}</strong></p></div><small>Estes três valores mostram a posição atual no momento da geração; as demais seções consideram apenas ${escapeHtml(period.label)}.</small></section>
+    <section class="pdf-section"><div class="pdf-section-heading"><div><span>NOVAS OPERAÇÕES</span><h2>Empréstimos cadastrados no mês</h2></div><b>${data.loansCreated.length}</b></div>${reportTable(["Data", "Cliente / contrato", "Frequência", "Emprestado", "Total previsto"], loanRows, "Nenhum empréstimo foi cadastrado neste mês.")}</section>
+    <section class="pdf-section"><div class="pdf-section-heading"><div><span>CAIXA</span><h2>Recebimentos do mês</h2></div><b>${money(data.received)}</b></div>${reportTable(["Data", "Cliente / parcela", "Tipo", "Valor"], receiptRows, "Nenhum recebimento foi registrado neste mês.")}</section>
+    <section class="pdf-section"><div class="pdf-section-heading"><div><span>RASTREABILIDADE</span><h2>Histórico completo do mês</h2></div><b>${data.activities.length}</b></div>${reportTable(["Quando", "Alteração realizada"], activityRows, "Nenhuma alteração foi registrada neste mês.")}</section>
+    <footer class="pdf-report-footer"><div><b>CredMais</b><span>Relatório de ${escapeHtml(period.label)}</span></div><p>Documento gerado pelo sistema. Confira as informações antes de imprimir ou compartilhar.</p></footer>`;
+  stage.className = "pdf-render-stage";
+  stage.appendChild(article);
+  document.body.appendChild(stage);
+  return article;
+}
+async function downloadMonthlyReport(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    period = reportPeriod($("#reportMonth").value);
+  if (!period) return toast("Escolha um mês válido para gerar o relatório.");
+  if (!window.html2pdf)
+    return toast("O gerador de PDF não carregou. Atualize o aplicativo e tente novamente.");
+  if (!beginSubmission(form, "monthly-report")) return;
+  let report,
+    renderMask;
+  try {
+    toast("Preparando o relatório mensal...");
+    const data = monthlyReportData(period);
+    report = buildMonthlyReport(period, data);
+    renderMask = document.createElement("div");
+    renderMask.className = "pdf-render-mask";
+    renderMask.innerHTML = '<div><span class="loader-spinner"></span><b>Gerando seu relatório</b><small>Organizando gráficos e movimentações...</small></div>';
+    document.body.appendChild(renderMask);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const filename = `credmais-relatorio-${period.key}.pdf`,
+      worker = window
+        .html2pdf()
+        .set({
+          margin: [7, 7, 11, 7],
+          filename,
+          image: { type: "jpeg", quality: 0.97 },
+          html2canvas: {
+            scale: 1.65,
+            useCORS: true,
+            backgroundColor: "#f2f6f4",
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 740,
+            windowHeight: Math.max(1123, report.scrollHeight),
+          },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"], avoid: ["tr", ".pdf-avoid-break"] },
+        })
+        .from(report);
+    await worker.save();
+    closeModals();
+    toast(`Relatório de ${period.label} baixado com sucesso.`);
+  } catch (error) {
+    console.error("Falha ao gerar relatório:", error);
+    toast("Não foi possível gerar o PDF. Tente novamente.");
+  } finally {
+    report?.closest(".pdf-render-stage")?.remove();
+    renderMask?.remove();
+    endSubmission(form, "monthly-report");
+  }
 }
 function financialsForLoan(loan) {
   let receivable = 0,
@@ -1847,6 +2085,7 @@ $("#clientForm").addEventListener("submit", saveClient);
 $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
 $("#partialForm").addEventListener("submit", savePartialPayment);
+$("#monthlyReportForm").addEventListener("submit", downloadMonthlyReport);
 $("#passwordChangeForm").addEventListener("submit", changePassword);
 [$("#loanAmount"), $("#loanLateFee"), $("#partialPaidAmount")].forEach(
   (input) => input.addEventListener("input", maskCurrencyInput),
@@ -1888,9 +2127,11 @@ $("#loanCustomFrequency").addEventListener("input", () => {
   calc();
 });
 $("#loanDueDate").addEventListener("input", updateLoanDuePreview);
+$("#reportMonth").addEventListener("input", updateReportPreview);
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
+$("#monthlyReportBtn").onclick = openMonthlyReport;
 $("#securityBtn").onclick = openSecurity;
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;

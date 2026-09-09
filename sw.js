@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v1";
+const CACHE_NAME = "credmais-shell-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/app.js",
   "/supabase-config.js",
   "/supabase-bridge.js",
+  "/vendor/html2pdf.bundle.min.js",
   "/manifest.webmanifest",
   "/offline.html",
   "/icons/icon-192.png",
