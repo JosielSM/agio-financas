@@ -131,7 +131,25 @@ const dueStatus = (date) => {
       : "A vencer";
 };
 const formatFrequency = (days) =>
-  Number(days) === 30 ? "Mensal" : `A cada ${days} dias`;
+  ({ 1: "Diário", 7: "Semanal", 15: "Quinzenal", 30: "Mensal" })[
+    Number(days)
+  ] || `A cada ${days} dias`;
+function interestModeFor(loan) {
+  if (!loan) return "flat";
+  const amount = Number(loan.amount || 0),
+    rate = Number(loan.rate || 0),
+    installments = Math.max(1, Number(loan.installments || 1)),
+    flatTotal = amount * (1 + rate),
+    compoundTotal = amount * Math.pow(1 + rate, installments);
+  return Math.abs(Number(loan.total) - compoundTotal) <
+    Math.abs(Number(loan.total) - flatTotal)
+    ? "compound"
+    : "flat";
+}
+const interestDescription = (loan) =>
+  interestModeFor(loan) === "compound"
+    ? `juros compostos de ${(loan.rate * 100).toLocaleString("pt-BR")}% por parcela`
+    : `juros totais de ${(loan.rate * 100).toLocaleString("pt-BR")}%`;
 const paymentStateFor = (loan, index) => {
   const payment = loan.paymentStates?.[index];
   return typeof payment === "object" ? payment.status : payment;
@@ -621,6 +639,7 @@ function resetLoanForm() {
   $("#loanId").value = "";
   setCurrencyInput($("#loanAmount"), 0, false);
   $("#loanInterest").value = "10";
+  $("#loanInterestMode").value = "flat";
   $("#loanFrequency").value = "30";
   setCurrencyInput($("#loanLateFee"), 0);
   $("#loanInstallments").value = "6";
@@ -752,6 +771,7 @@ function prepareLoan(id) {
     $("#loanClient").value = loan.clientId;
     setCurrencyInput($("#loanAmount"), loan.amount);
     $("#loanInterest").value = loan.rate * 100;
+    $("#loanInterestMode").value = interestModeFor(loan);
     $("#loanInstallments").value = loan.installments;
     $("#loanFrequency").value = loan.frequency || 30;
     setCurrencyInput($("#loanLateFee"), loan.lateFee || 0);
@@ -953,8 +973,9 @@ function renderBlacklist() {
 function loanRow(loan) {
   const client = state.clients.find((item) => item.id === loan.clientId) || {
     name: "Cliente removido",
-  };
-  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${loan.installments}x de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value">${money(loan.total)}</div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
+    },
+    financials = financialsForLoan(loan);
+  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${loan.installments} pagamentos de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
   const activeLoans = state.loans.filter(
@@ -1031,11 +1052,20 @@ function renderHistory() {
 function calc() {
   const amount = readCurrencyInput($("#loanAmount"));
   const rate = (Number($("#loanInterest").value) || 0) / 100;
-  const periods = Number($("#loanInstallments").value) || 1;
-  const total = amount * Math.pow(1 + rate, periods);
+  const periods = Math.max(1, Number($("#loanInstallments").value) || 1);
+  const mode = $("#loanInterestMode").value;
+  const frequency = formatFrequency($("#loanFrequency").value).toLowerCase();
+  const total =
+    mode === "compound"
+      ? amount * Math.pow(1 + rate, periods)
+      : amount * (1 + rate);
   $("#calcInterest").textContent = money(total - amount);
   $("#calcTotal").textContent = money(total);
   $("#calcInstallment").textContent = money(total / periods);
+  $("#calcExplanation").textContent =
+    mode === "compound"
+      ? `Os juros de ${(rate * 100).toLocaleString("pt-BR")}% serão aplicados novamente em cada parcela, com vencimento ${frequency}.`
+      : `${money(amount)} + ${(rate * 100).toLocaleString("pt-BR")}% = ${money(total)}, dividido em ${periods} pagamento${periods === 1 ? "" : "s"}, com vencimento ${frequency}.`;
   return { amount, rate, periods, total };
 }
 async function saveClient(event) {
@@ -1116,7 +1146,7 @@ async function saveLoan(event) {
   addHistory(
     "loan",
     index >= 0 ? "Empréstimo atualizado" : "Empréstimo criado",
-    `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)}.`,
+    `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)} · ${formatFrequency(loan.frequency)} · ${interestDescription(loan)} · total ${money(loan.total)}.`,
   );
   const synced = await save();
   endSubmission(form, "loan");
@@ -1136,7 +1166,12 @@ async function saveLoan(event) {
 }
 function installmentInfo(loan, index) {
   let carry = 0;
-  const interestOnlyValue = Math.min(loan.installment, loan.amount * loan.rate);
+  const interestOnlyValue = Math.min(
+    loan.installment,
+    interestModeFor(loan) === "flat"
+      ? Math.max(0, loan.total - loan.amount) / loan.installments
+      : loan.amount * loan.rate,
+  );
   for (let current = 0; current < index; current += 1) {
     const due = loan.installment + carry,
       previousPayment = loan.paymentStates?.[current],
@@ -1171,7 +1206,8 @@ function toggleInstallment(loanId, index) {
 }
 function details(id) {
   const loan = state.loans.find((item) => item.id === id),
-    client = state.clients.find((item) => item.id === loan.clientId);
+    client = state.clients.find((item) => item.id === loan.clientId),
+    financials = financialsForLoan(loan);
   const items = Array.from({ length: loan.installments }, (_, index) => {
     const date = dateFor(loan, index),
       status = installmentStatus(loan, index, date),
@@ -1206,7 +1242,7 @@ function details(id) {
     return `<article class="installment-card ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${status === "A vencer" || status === "Quitada" ? "future" : "late"}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · juros de ${(loan.rate * 100).toLocaleString("pt-BR")}% por período</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Juros diários no atraso</span><b>${money(loan.lateFee || 0)}</b></div><div><span>Total a receber</span><b>${money(loan.total)}</b></div></div><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por dia.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
   if (expandedInstallment?.startsWith(`${loan.id}:`)) {
     const installmentIndex = expandedInstallment.split(":")[1];
@@ -1658,9 +1694,13 @@ $("#clientPhone").addEventListener("input", (event) => {
     setFeedback("registerFeedback");
   }),
 );
-["loanAmount", "loanInterest", "loanInstallments"].forEach((id) =>
-  $(`#${id}`).addEventListener("input", calc),
-);
+[
+  "loanAmount",
+  "loanInterest",
+  "loanInstallments",
+  "loanInterestMode",
+  "loanFrequency",
+].forEach((id) => $(`#${id}`).addEventListener("input", calc));
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");

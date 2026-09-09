@@ -800,6 +800,36 @@ textarea {
   font: 600 15px Outfit;
   color: var(--brand);
 }
+.field-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.calculation > p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.loan-value {
+  display: grid;
+  gap: 3px;
+}
+.loan-value small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.details-late-fee {
+  margin: -7px 0 17px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .details-modal {
   max-width: 580px;
 }
