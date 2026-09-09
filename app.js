@@ -1241,7 +1241,11 @@ function renderStats() {
   renderedMonthKey = monthKey(now);
   const activeLoans = state.loans.filter(
     (loan) => !loan.archived && !isLoanFullyPaid(loan),
-  );
+  ),
+    activeClientIds = new Set(activeLoans.map((loan) => loan.clientId)),
+    activeClients = state.clients.filter((client) =>
+      activeClientIds.has(client.id),
+    ).length;
   const totals = state.loans
     .filter((loan) => !loan.archived)
     .reduce(
@@ -1262,6 +1266,7 @@ function renderStats() {
   $("#statReceived").previousElementSibling.textContent =
     `Recebido em ${now.toLocaleDateString("pt-BR", { month: "long" })}`;
   $("#statClients").textContent = state.clients.length;
+  $("#statActiveClients").textContent = activeClients;
   $("#statLoans").textContent = activeLoans.length;
   $("#chartTotal").textContent = money(receivable);
   $("#legendLent").textContent = money(lent);
