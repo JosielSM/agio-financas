@@ -2129,13 +2129,14 @@ body.dark {
 
 /* O relatório usa cores fixas para continuar legível no modo noturno e na impressão. */
 .pdf-render-stage {
-  position: fixed;
+  position: absolute;
   z-index: 9998;
   left: 0;
   top: 0;
   width: 740px;
   min-height: 1123px;
   overflow: visible;
+  pointer-events: none;
 }
 .pdf-report {
   position: relative;
@@ -2333,6 +2334,8 @@ body.dark {
 .pdf-section-heading {
   justify-content: space-between;
   gap: 15px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .pdf-section-heading span,
 .pdf-section-heading h2 {
@@ -2553,6 +2556,8 @@ body.dark {
   border-radius: 9px;
   color: #72837b;
   text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .pdf-report-footer {
   margin: 8px 34px 0;

@@ -2,10 +2,16 @@
 !index.html
 !styles.css
 !app.js
+!auth-action.html
+!auth-action.js
+!firebase-config.js
+!firebase-bridge.js
 !supabase-config.js
 !supabase-bridge.js
 !manifest.webmanifest
 !sw.js
 !offline.html
+!vendor/
+!vendor/html2pdf.bundle.min.js
 !icons/
 !icons/**
