@@ -273,6 +273,62 @@ textarea {
   font-size: 12px;
   line-height: 1.45;
 }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+.google-sign-in {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 5px 14px #10251a0d;
+}
+.google-sign-in:hover {
+  border-color: #4285f4;
+  background: var(--bg);
+}
+.google-sign-in svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+.google-sign-in.is-loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+.google-sign-in.is-loading > * {
+  visibility: hidden;
+}
+.google-sign-in.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #4285f455;
+  border-top-color: #4285f4;
+  border-radius: 50%;
+  animation: button-spin .7s linear infinite;
+}
 .auth-state-icon {
   width: 52px;
   height: 52px;

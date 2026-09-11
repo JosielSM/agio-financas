@@ -8,8 +8,11 @@
   let initializationError = null;
 
   const errorMessages = {
+    "auth/account-exists-with-different-credential":
+      "Já existe uma conta com este e-mail. Use “Esqueci minha senha” uma vez e depois tente entrar com o Google novamente.",
     "auth/admin-restricted-operation":
       "O cadastro por e-mail ainda não foi liberado no Firebase.",
+    "auth/cancelled-popup-request": "A tentativa anterior de entrar com o Google foi cancelada.",
     "auth/email-already-in-use": "Este e-mail já possui uma conta.",
     "auth/email-not-verified":
       "Confirme seu e-mail antes de entrar. Enviamos um novo link para sua caixa de entrada.",
@@ -19,16 +22,24 @@
       "Este link é inválido ou já foi utilizado. Solicite um novo e-mail.",
     "auth/invalid-api-key":
       "A configuração do Firebase está inválida. Revise a chave do aplicativo.",
-    "auth/invalid-credential": "E-mail ou senha incorretos.",
+    "auth/invalid-credential":
+      "E-mail ou senha incorretos. Se sua conta foi migrada, use “Esqueci minha senha” ou entre com o Google.",
     "auth/invalid-email": "Informe um e-mail válido.",
     "auth/network-request-failed":
       "Não foi possível conectar. Confira sua internet e tente novamente.",
     "auth/operation-not-allowed":
-      "Ative o acesso por E-mail/Senha no Firebase Authentication.",
+      "Este método de acesso ainda não foi ativado no Firebase.",
+    "auth/operation-not-supported-in-this-environment":
+      "Abra o CredMais no navegador para entrar com o Google.",
+    "auth/popup-blocked":
+      "O navegador bloqueou a janela do Google. Permita pop-ups para o CredMais e tente novamente.",
+    "auth/popup-closed-by-user": "O acesso com o Google foi cancelado.",
     "auth/requires-recent-login":
       "Por segurança, saia e entre novamente antes de alterar a senha.",
     "auth/too-many-requests":
       "Muitas tentativas foram feitas. Aguarde alguns minutos e tente novamente.",
+    "auth/unauthorized-domain":
+      "Este endereço do CredMais ainda não está autorizado no Firebase.",
     "auth/user-disabled": "Esta conta foi desativada.",
     "auth/user-not-found": "E-mail ou senha incorretos.",
     "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
@@ -146,6 +157,18 @@
       } catch (error) {
         if (error?.code === "auth/email-not-verified") throw error;
         throw friendlyError(error, "Não foi possível entrar.");
+      }
+    },
+    async signInWithGoogle() {
+      const instance = await requireAuth();
+      try {
+        const provider = new window.firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const credential = await instance.signInWithPopup(provider);
+        await credential.user.getIdToken(true);
+        return userData(credential.user);
+      } catch (error) {
+        throw friendlyError(error, "Não foi possível entrar com o Google.");
       }
     },
     async signUp(name, email, password) {

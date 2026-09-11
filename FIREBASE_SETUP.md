@@ -7,7 +7,7 @@ Configuração de produção concluída em 10/09/2026.
 - Firebase: `credmais-2ded3`
 - Aplicativo web: `CredMais Web`
 - Domínio autorizado: `agio-financas.santosjosiel2003.workers.dev`
-- Provedor: e-mail e senha
+- Provedores: e-mail/senha e Google
 - Idioma dos e-mails: português do Brasil
 - Plano Firebase: Spark, sem faturamento
 - Dados financeiros: PostgreSQL do Supabase
@@ -34,6 +34,10 @@ A migração `supabase-firebase-migration.sql`:
 As cinco contas antigas foram importadas no Firebase com o mesmo UID. Como as
 senhas não podem ser transferidas pela API administrativa do Supabase, esses
 usuários devem usar **Esqueci minha senha** no primeiro acesso.
+
+O aplicativo também oferece **Continuar com Google**. Ao usar a mesma conta
+Google do cadastro existente, o Firebase preserva a identidade e o vínculo com
+os clientes e empréstimos desse UID.
 
 ## E-mails
 

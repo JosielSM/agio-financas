@@ -693,6 +693,56 @@ async function login(event) {
     setFormLoading(form, false);
   }
 }
+async function loginWithGoogle() {
+  const button = $("#googleSignInButton");
+  setFeedback("loginFeedback");
+  button.classList.add("is-loading");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    if (
+      !window.credmaisBridge?.enabled ||
+      window.credmaisBridge.authProvider !== "firebase"
+    )
+      throw new Error("O acesso com Google ainda não está disponível.");
+    const cachedUser = state.user;
+    state.user = await window.credmaisBridge.signInWithGoogle();
+    if (
+      cachedUser?.email?.toLowerCase() === state.user.email?.toLowerCase() &&
+      (cachedUser.pixKey || cachedUser.pixRecipientName)
+    ) {
+      state.user = {
+        ...state.user,
+        pixKey: state.user.pixKey || cachedUser.pixKey || "",
+        pixType: state.user.pixType || cachedUser.pixType || "Chave aleatória",
+        pixRecipientName:
+          state.user.pixRecipientName ||
+          cachedUser.pixRecipientName ||
+          cachedUser.name ||
+          "",
+      };
+      if (state.user.pixKey)
+        state.user = await window.credmaisBridge.updatePix(
+          state.user.pixKey,
+          state.user.pixType,
+          state.user.pixRecipientName,
+        );
+    }
+    localStorage.setItem("credmais_user", JSON.stringify(state.user));
+    await showApp();
+    toast("Acesso com Google realizado com sucesso.");
+  } catch (error) {
+    setFeedback(
+      "loginFeedback",
+      error.message || "Não foi possível entrar com o Google.",
+      "error",
+    );
+  } finally {
+    button.classList.remove("is-loading");
+    button.disabled = false;
+    button.setAttribute("aria-busy", "false");
+  }
+}
 async function requestPasswordReset(event) {
   event.preventDefault();
   const form = event.currentTarget,
@@ -2288,6 +2338,7 @@ function toggleTheme() {
   applyTheme(dark);
 }
 $("#login").addEventListener("submit", login);
+$("#googleSignInButton").addEventListener("click", loginWithGoogle);
 $("#register").addEventListener("submit", register);
 $("#forgotPassword").addEventListener("submit", requestPasswordReset);
 $("#clientForm").addEventListener("submit", saveClient);

@@ -123,6 +123,11 @@
       if (error) throw error;
       return loadProfile(supabaseUserData(data.user));
     },
+    async signInWithGoogle() {
+      if (!firebaseAuth)
+        throw new Error("O acesso com Google depende do Firebase.");
+      return firebaseAuth.signInWithGoogle();
+    },
     async signUp(name, email, password) {
       if (firebaseAuth) return firebaseAuth.signUp(name, email, password);
       const { data, error } = await client.auth.signUp({
