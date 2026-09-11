@@ -266,6 +266,13 @@ textarea {
   font-size: 12px;
   font-weight: 700;
 }
+
+.auth-migration-note {
+  margin: -4px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .auth-state-icon {
   width: 52px;
   height: 52px;

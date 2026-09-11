@@ -1,0 +1,5 @@
+.wrangler/
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firebase/migration/users-import.json

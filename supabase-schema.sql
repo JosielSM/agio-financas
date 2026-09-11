@@ -56,26 +56,26 @@ alter table public.profiles enable row level security;
 
 drop policy if exists "Clientes pertencem ao usuario" on public.clients;
 create policy "Clientes pertencem ao usuario" on public.clients
-  for all to authenticated
+  for all to anon, authenticated
   using (owner_id = (select auth.jwt()->>'sub'))
   with check (owner_id = (select auth.jwt()->>'sub'));
 drop policy if exists "Emprestimos pertencem ao usuario" on public.loans;
 create policy "Emprestimos pertencem ao usuario" on public.loans
-  for all to authenticated
+  for all to anon, authenticated
   using (owner_id = (select auth.jwt()->>'sub'))
   with check (owner_id = (select auth.jwt()->>'sub'));
 drop policy if exists "Historico pertence ao usuario" on public.activity_history;
 create policy "Historico pertence ao usuario" on public.activity_history
-  for all to authenticated
+  for all to anon, authenticated
   using (owner_id = (select auth.jwt()->>'sub'))
   with check (owner_id = (select auth.jwt()->>'sub'));
 drop policy if exists "Perfil pertence ao usuario" on public.profiles;
 create policy "Perfil pertence ao usuario" on public.profiles
-  for all to authenticated
+  for all to anon, authenticated
   using (owner_id = (select auth.jwt()->>'sub'))
   with check (owner_id = (select auth.jwt()->>'sub'));
 
-grant select, insert, update, delete on public.clients to authenticated;
-grant select, insert, update, delete on public.loans to authenticated;
-grant select, insert, update, delete on public.activity_history to authenticated;
-grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.clients to anon, authenticated;
+grant select, insert, update, delete on public.loans to anon, authenticated;
+grant select, insert, update, delete on public.activity_history to anon, authenticated;
+grant select, insert, update, delete on public.profiles to anon, authenticated;

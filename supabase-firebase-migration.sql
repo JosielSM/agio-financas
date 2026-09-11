@@ -2,19 +2,16 @@
 -- Esta migração preserva os dados e permite UIDs alfanuméricos do Firebase.
 begin;
 
-alter table public.clients
-  drop constraint if exists clients_owner_id_fkey;
-alter table public.loans
-  drop constraint if exists loans_owner_id_fkey;
-alter table public.activity_history
-  drop constraint if exists activity_history_owner_id_fkey;
-
-alter table public.clients
-  alter column owner_id type text using owner_id::text;
-alter table public.loans
-  alter column owner_id type text using owner_id::text;
-alter table public.activity_history
-  alter column owner_id type text using owner_id::text;
+-- Algumas instalações antigas ainda não têm histórico e perfil na nuvem.
+-- Criar as tabelas primeiro torna a migração repetível e evita uma ativação parcial.
+create table if not exists public.activity_history (
+  id uuid primary key,
+  owner_id text not null,
+  category text not null,
+  title text not null,
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.profiles (
   owner_id text primary key,
@@ -25,32 +22,57 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
-alter table public.profiles enable row level security;
+alter table public.clients
+  drop constraint if exists clients_owner_id_fkey;
+alter table public.loans
+  drop constraint if exists loans_owner_id_fkey;
+alter table public.activity_history
+  drop constraint if exists activity_history_owner_id_fkey;
 
 drop policy if exists "Clientes pertencem ao usuario" on public.clients;
-create policy "Clientes pertencem ao usuario" on public.clients
-  for all to authenticated
-  using (owner_id = (select auth.jwt()->>'sub'))
-  with check (owner_id = (select auth.jwt()->>'sub'));
-
 drop policy if exists "Emprestimos pertencem ao usuario" on public.loans;
-create policy "Emprestimos pertencem ao usuario" on public.loans
-  for all to authenticated
-  using (owner_id = (select auth.jwt()->>'sub'))
-  with check (owner_id = (select auth.jwt()->>'sub'));
-
 drop policy if exists "Historico pertence ao usuario" on public.activity_history;
-create policy "Historico pertence ao usuario" on public.activity_history
-  for all to authenticated
-  using (owner_id = (select auth.jwt()->>'sub'))
-  with check (owner_id = (select auth.jwt()->>'sub'));
-
 drop policy if exists "Perfil pertence ao usuario" on public.profiles;
-create policy "Perfil pertence ao usuario" on public.profiles
-  for all to authenticated
+
+alter table public.clients
+  alter column owner_id type text using owner_id::text;
+alter table public.loans
+  alter column owner_id type text using owner_id::text;
+alter table public.activity_history
+  alter column owner_id type text using owner_id::text;
+
+alter table public.clients enable row level security;
+alter table public.loans enable row level security;
+alter table public.activity_history enable row level security;
+alter table public.profiles enable row level security;
+
+-- Tokens Firebase sem uma claim "role" são executados pelo PostgREST como anon.
+-- O sub continua sendo o UID autenticado; as políticas abaixo exigem esse UID e
+-- também funcionam para contas antigas que já tenham role=authenticated.
+
+create policy "Clientes pertencem ao usuario" on public.clients
+  for all to anon, authenticated
   using (owner_id = (select auth.jwt()->>'sub'))
   with check (owner_id = (select auth.jwt()->>'sub'));
 
-grant select, insert, update, delete on public.profiles to authenticated;
+create policy "Emprestimos pertencem ao usuario" on public.loans
+  for all to anon, authenticated
+  using (owner_id = (select auth.jwt()->>'sub'))
+  with check (owner_id = (select auth.jwt()->>'sub'));
+
+create policy "Historico pertence ao usuario" on public.activity_history
+  for all to anon, authenticated
+  using (owner_id = (select auth.jwt()->>'sub'))
+  with check (owner_id = (select auth.jwt()->>'sub'));
+
+create policy "Perfil pertence ao usuario" on public.profiles
+  for all to anon, authenticated
+  using (owner_id = (select auth.jwt()->>'sub'))
+  with check (owner_id = (select auth.jwt()->>'sub'));
+
+grant select, insert, update, delete on public.clients to anon, authenticated;
+grant select, insert, update, delete on public.loans to anon, authenticated;
+grant select, insert, update, delete on public.activity_history to anon, authenticated;
+grant select, insert, update, delete on public.profiles to anon, authenticated;
 
 commit;

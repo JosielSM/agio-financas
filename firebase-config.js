@@ -3,13 +3,12 @@
  * Estes identificadores podem ficar no navegador; nunca coloque chaves privadas
  * ou credenciais do Firebase Admin neste arquivo.
  *
- * Enquanto os valores estiverem vazios, o CredMais mantém o login atual pelo
- * Supabase. Depois de concluir FIREBASE_SETUP.md, preencha os valores para ativar
- * o Firebase Authentication sem interromper o sistema durante a migração.
+ * O Firebase cuida da autenticação; os dados financeiros continuam protegidos
+ * no PostgreSQL do Supabase por UID e Row Level Security.
  */
 window.CREDMAIS_FIREBASE = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  appId: "",
+  apiKey: "AIzaSyDjKAHTLnl-phVjoQQOFGZt8HXUPfFTA8E",
+  authDomain: "credmais-2ded3.firebaseapp.com",
+  projectId: "credmais-2ded3",
+  appId: "1:559155375201:web:3633a70fec3328a4a68e20",
 };
