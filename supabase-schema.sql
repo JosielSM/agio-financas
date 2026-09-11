@@ -16,7 +16,7 @@ create table if not exists public.loans (
   id uuid primary key,
   owner_id text not null,
   contract text not null,
-  client_id uuid not null references public.clients(id) on delete restrict,
+  client_id uuid not null references public.clients(id) on delete cascade,
   amount numeric(14,2) not null,
   rate numeric(8,5) not null,
   installments integer not null check (installments > 0),

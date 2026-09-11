@@ -41,6 +41,14 @@ alter table public.loans
 alter table public.activity_history
   alter column owner_id type text using owner_id::text;
 
+-- Excluir um cliente e seus empréstimos em uma única transação do banco.
+-- O CASCADE evita o estado parcial que ocorreria com duas requisições separadas.
+alter table public.loans
+  drop constraint if exists loans_client_id_fkey;
+alter table public.loans
+  add constraint loans_client_id_fkey
+  foreign key (client_id) references public.clients(id) on delete cascade;
+
 alter table public.clients enable row level security;
 alter table public.loans enable row level security;
 alter table public.activity_history enable row level security;

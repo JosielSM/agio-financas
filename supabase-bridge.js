@@ -244,12 +244,11 @@
     },
     async deleteClient(clientId) {
       if (!client) return;
-      const { error: loanError } = await client
-        .from("loans")
-        .delete()
-        .eq("client_id", clientId);
-      if (loanError) throw loanError;
       const { error } = await client.from("clients").delete().eq("id", clientId);
+      if (error?.code === "23503")
+        throw new Error(
+          "A atualização de exclusão segura ainda precisa ser aplicada no banco.",
+        );
       if (error) throw error;
     },
     async sync(user, clients, loans, history = []) {

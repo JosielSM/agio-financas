@@ -23,6 +23,46 @@ const money = (value) =>
   });
 const roundCurrency = (value) =>
   Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+const pendingSyncStorageKey = (userId) =>
+  `credmais_pending_sync:${String(userId || "")}`;
+function pendingSyncPayload(userId, allowCurrentCache = true) {
+  if (!userId) return null;
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(pendingSyncStorageKey(userId)) || "null",
+    );
+    if (stored?.clients && stored?.loans && stored?.history) return stored;
+  } catch (error) {
+    console.warn("Fila local de sincronização inválida:", error.message);
+  }
+  if (
+    allowCurrentCache &&
+    localStorage.getItem("credmais_sync_pending") === userId &&
+    localStorage.getItem("credmais_cache_owner") === userId
+  )
+    return {
+      clients: structuredClone(state.clients),
+      loans: structuredClone(state.loans),
+      history: structuredClone(state.history),
+    };
+  return null;
+}
+function rememberPendingSync(userId, payload = null) {
+  if (!userId) return;
+  const data = payload || {
+    clients: state.clients,
+    loans: state.loans,
+    history: state.history,
+  };
+  localStorage.setItem("credmais_sync_pending", userId);
+  localStorage.setItem(pendingSyncStorageKey(userId), JSON.stringify(data));
+}
+function clearPendingSync(userId) {
+  if (!userId) return;
+  if (localStorage.getItem("credmais_sync_pending") === userId)
+    localStorage.removeItem("credmais_sync_pending");
+  localStorage.removeItem(pendingSyncStorageKey(userId));
+}
 function setCurrencyInput(input, value, showZero = true) {
   const amount = Math.max(0, Number(value) || 0);
   input.dataset.value = String(amount);
@@ -66,10 +106,10 @@ const save = async () => {
       state.loans,
       state.history,
     );
-    localStorage.removeItem("credmais_sync_pending");
+    clearPendingSync(state.user.id);
     return true;
   } catch (error) {
-    localStorage.setItem("credmais_sync_pending", state.user.id);
+    rememberPendingSync(state.user.id);
     console.error("Falha ao sincronizar Supabase:", error.message);
     return false;
   }
@@ -238,6 +278,90 @@ const paymentStateFor = (loan, index) => {
   const payment = loan.paymentStates?.[index];
   return typeof payment === "object" ? payment.status : payment;
 };
+const scheduledInstallmentFor = (loan, index) => {
+  const installments = Math.max(1, Number(loan.installments) || 1),
+    total = roundCurrency(loan.total),
+    regular = roundCurrency(
+      Number(loan.installment) || total / installments,
+    );
+  return index === installments - 1
+    ? roundCurrency(total - regular * (installments - 1))
+    : regular;
+};
+const scheduledPrincipalFor = (loan, index) => {
+  const installments = Math.max(1, Number(loan.installments) || 1),
+    amount = roundCurrency(loan.amount),
+    regular = roundCurrency(amount / installments);
+  return index === installments - 1
+    ? roundCurrency(amount - regular * (installments - 1))
+    : regular;
+};
+function principalPositionFor(loan, index) {
+  let carry = 0;
+  for (let current = 0; current <= index; current += 1) {
+    const due = roundCurrency(scheduledPrincipalFor(loan, current) + carry),
+      payment = loan.paymentStates?.[current],
+      paymentStatus = paymentStateFor(loan, current);
+    let paid = 0,
+      remaining = due;
+    if (paymentStatus === "paid") {
+      paid = Math.min(
+        due,
+        Math.max(
+          0,
+          Number(
+            typeof payment === "object" && payment.principalPaid != null
+              ? payment.principalPaid
+              : due,
+          ),
+        ),
+      );
+      remaining = Math.max(0, due - paid);
+    } else if (
+      (paymentStatus === "partial" || paymentStatus === "interest") &&
+      typeof payment === "object"
+    ) {
+      if (payment.principalPaid != null) {
+        paid = Math.min(due, Math.max(0, Number(payment.principalPaid)));
+      } else if (paymentStatus === "partial") {
+        const partialReceived = Array.isArray(payment.receipts)
+            ? payment.receipts
+                .filter((receipt) => receipt.type === "partial")
+                .reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0)
+            : Number(payment.paidAmount || 0),
+          referenceDue = Math.max(
+            Number(payment.originalDue || payment.currentDue || 0),
+            partialReceived,
+          );
+        paid = referenceDue
+          ? Math.min(due, roundCurrency(due * (partialReceived / referenceDue)))
+          : 0;
+      }
+      remaining = Math.max(
+        0,
+        Math.min(
+          due - paid,
+          Number(
+            payment.principalRemaining != null
+              ? payment.principalRemaining
+              : due - paid,
+          ),
+        ),
+      );
+    }
+    const position = {
+      due,
+      paid: roundCurrency(paid),
+      remaining: roundCurrency(remaining),
+    };
+    if (current === index) return position;
+    carry =
+      paymentStatus === "partial" || paymentStatus === "interest"
+        ? position.remaining
+        : 0;
+  }
+  return { due: 0, paid: 0, remaining: 0 };
+}
 const installmentStatus = (loan, index, date) =>
   paymentStateFor(loan, index) === "paid"
     ? "Quitada"
@@ -472,21 +596,37 @@ function setAuth(view) {
 }
 async function showApp() {
   if (window.credmaisBridge?.enabled) {
-    const ownsCache =
-      localStorage.getItem("credmais_cache_owner") === state.user.id;
+    const cacheOwner = localStorage.getItem("credmais_cache_owner"),
+      ownsCache = cacheOwner === state.user.id;
     if (!ownsCache) {
+      if (
+        cacheOwner &&
+        localStorage.getItem("credmais_sync_pending") === cacheOwner &&
+        !localStorage.getItem(pendingSyncStorageKey(cacheOwner))
+      )
+        rememberPendingSync(cacheOwner, {
+          clients: state.clients,
+          loans: state.loans,
+          history: state.history,
+        });
       state.clients = [];
       state.loans = [];
+      state.history = [];
+      localStorage.setItem("credmais_clients", "[]");
+      localStorage.setItem("credmais_loans", "[]");
+      localStorage.setItem("credmais_history", "[]");
+      localStorage.setItem("credmais_cache_owner", state.user.id);
     }
     try {
-      if (localStorage.getItem("credmais_sync_pending") === state.user.id) {
+      const pending = pendingSyncPayload(state.user.id, ownsCache);
+      if (pending) {
         await window.credmaisBridge.sync(
           state.user,
-          state.clients,
-          state.loans,
-          state.history,
+          pending.clients,
+          pending.loans,
+          pending.history,
         );
-        localStorage.removeItem("credmais_sync_pending");
+        clearPendingSync(state.user.id);
       }
       const cloud = await window.credmaisBridge.load();
       state.clients = cloud.clients;
@@ -525,12 +665,22 @@ async function refreshFromCloud({ notify = false } = {}) {
     !window.credmaisBridge?.enabled ||
     !state.user?.id ||
     document.hidden ||
-    hasOpenModal() ||
-    localStorage.getItem("credmais_sync_pending") === state.user.id
+    hasOpenModal()
   )
     return false;
   refreshingFromCloud = true;
   try {
+    const pending = pendingSyncPayload(state.user.id),
+      hadPendingSync = Boolean(pending);
+    if (pending) {
+      await window.credmaisBridge.sync(
+        state.user,
+        pending.clients,
+        pending.loans,
+        pending.history,
+      );
+      clearPendingSync(state.user.id);
+    }
     const cloud = await window.credmaisBridge.load();
     const nextHistory = cloud.history ?? state.history;
     const changed =
@@ -539,6 +689,8 @@ async function refreshFromCloud({ notify = false } = {}) {
       JSON.stringify(state.history) !== JSON.stringify(nextHistory);
     if (!changed) {
       render();
+      if (notify && hadPendingSync)
+        toast("Dados pendentes sincronizados com sucesso.");
       return false;
     }
     state.clients = cloud.clients;
@@ -548,7 +700,12 @@ async function refreshFromCloud({ notify = false } = {}) {
     localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
     localStorage.setItem("credmais_history", JSON.stringify(state.history));
     render();
-    if (notify) toast("Dados atualizados automaticamente.");
+    if (notify)
+      toast(
+        hadPendingSync
+          ? "Dados pendentes sincronizados e atualizados."
+          : "Dados atualizados automaticamente.",
+      );
     return true;
   } catch (error) {
     console.warn("Atualização automática indisponível:", error.message);
@@ -1338,12 +1495,12 @@ async function downloadMonthlyReport(event) {
 function financialsForLoan(loan) {
   let receivable = 0,
     received = 0,
-    paidInstallments = 0;
+    principalPaid = 0;
   for (let index = 0; index < loan.installments; index += 1) {
     const info = installmentInfo(loan, index),
       status = paymentStateFor(loan, index);
     received += receivedAmountFor(loan, index, info);
-    if (status === "paid") paidInstallments += 1;
+    principalPaid += principalPositionFor(loan, index).paid;
     if (status === "paid") continue;
     if (status === "interest") {
       if (index === loan.installments - 1) receivable += info.deferred;
@@ -1358,8 +1515,7 @@ function financialsForLoan(loan) {
   }
   const lent = Math.max(
     0,
-    Number(loan.amount) -
-      (Number(loan.amount) / Number(loan.installments)) * paidInstallments,
+    roundCurrency(Number(loan.amount) - Math.min(loan.amount, principalPaid)),
   );
   return { lent, receivable, received };
 }
@@ -1478,8 +1634,17 @@ function loanRow(loan) {
   const client = state.clients.find((item) => item.id === loan.clientId) || {
     name: "Cliente removido",
     },
-    financials = financialsForLoan(loan);
-  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${loan.installments} pagamentos de ${money(loan.installment)} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
+    financials = financialsForLoan(loan),
+    firstInstallment = scheduledInstallmentFor(loan, 0),
+    lastInstallment = scheduledInstallmentFor(
+      loan,
+      Number(loan.installments) - 1,
+    ),
+    paymentSummary =
+      firstInstallment === lastInstallment
+        ? `${loan.installments} pagamentos de ${money(firstInstallment)}`
+        : `${loan.installments} pagamentos de ${money(firstInstallment)} · último de ${money(lastInstallment)}`;
+  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${paymentSummary} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
   const activeLoans = state.loans.filter(
@@ -1562,18 +1727,27 @@ function calc() {
     frequency = frequencyDays
       ? formatFrequency(frequencyDays).toLowerCase()
       : "personalizado";
-  const total =
+  const total = roundCurrency(
     mode === "compound"
       ? amount * Math.pow(1 + rate, periods)
-      : amount * (1 + rate);
+      : amount * (1 + rate),
+  );
+  const installment = roundCurrency(total / periods);
   $("#calcInterest").textContent = money(total - amount);
   $("#calcTotal").textContent = money(total);
-  $("#calcInstallment").textContent = money(total / periods);
+  $("#calcInstallment").textContent = money(installment);
   $("#calcExplanation").textContent =
     mode === "compound"
       ? `Os juros de ${(rate * 100).toLocaleString("pt-BR")}% serão aplicados novamente em cada parcela, com vencimento ${frequency}.`
       : `${money(amount)} + ${(rate * 100).toLocaleString("pt-BR")}% = ${money(total)}, dividido em ${periods} pagamento${periods === 1 ? "" : "s"}, com vencimento ${frequency}.`;
-  return { amount, rate, periods, total, frequency: frequencyDays };
+  return {
+    amount,
+    rate,
+    periods,
+    total,
+    installment,
+    frequency: frequencyDays,
+  };
 }
 async function saveClient(event) {
   event.preventDefault();
@@ -1641,7 +1815,7 @@ async function saveLoan(event) {
     frequency: calculation.frequency,
     lateFee: readCurrencyInput($("#loanLateFee")),
     total: calculation.total,
-    installment: calculation.total / calculation.periods,
+    installment: calculation.installment,
     dueDate: $("#loanDueDate").value,
     paymentStates: previous?.paymentStates || {},
     customDates: previous?.customDates || {},
@@ -1675,14 +1849,14 @@ async function saveLoan(event) {
 }
 function installmentInfo(loan, index) {
   let carry = 0;
-  const scheduledInterest = Math.min(
-    loan.installment,
-    interestModeFor(loan) === "flat"
-      ? Math.max(0, loan.total - loan.amount) / loan.installments
-      : loan.amount * loan.rate,
-  );
   for (let current = 0; current < index; current += 1) {
-    const due = loan.installment + carry,
+    const scheduledInterest = Math.min(
+        scheduledInstallmentFor(loan, current),
+        interestModeFor(loan) === "flat"
+          ? Math.max(0, loan.total - loan.amount) / loan.installments
+          : loan.amount * loan.rate,
+      ),
+      due = roundCurrency(scheduledInstallmentFor(loan, current) + carry),
       previousPayment = loan.paymentStates?.[current],
       previousState = paymentStateFor(loan, current);
     carry =
@@ -1697,7 +1871,13 @@ function installmentInfo(loan, index) {
           ? Number(previousPayment.adjustedRemaining || 0)
           : 0;
   }
-  const due = loan.installment + carry,
+  const scheduledInterest = Math.min(
+      scheduledInstallmentFor(loan, index),
+      interestModeFor(loan) === "flat"
+        ? Math.max(0, loan.total - loan.amount) / loan.installments
+        : loan.amount * loan.rate,
+    ),
+    due = roundCurrency(scheduledInstallmentFor(loan, index) + carry),
     payment = loan.paymentStates?.[index],
     state = paymentStateFor(loan, index),
     partial = state === "partial" && typeof payment === "object" ? payment : null,
@@ -1727,7 +1907,9 @@ function installmentInfo(loan, index) {
     deferred,
     nextDue:
       index < loan.installments - 1
-        ? loan.installment + deferred
+        ? roundCurrency(
+            scheduledInstallmentFor(loan, index + 1) + deferred,
+          )
         : 0,
     state,
     partial,
@@ -1808,6 +1990,7 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
   loan.paymentStates = loan.paymentStates || {};
   const installmentIndex = Number(installment),
     infoBefore = installmentInfo(loan, installmentIndex),
+    principalBefore = principalPositionFor(loan, installmentIndex),
     previousPayment = loan.paymentStates[installment],
     previousStatus = paymentStateFor(loan, installmentIndex),
     previousReceived = receivedAmountFor(
@@ -1862,6 +2045,10 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
     else if (status === "paid")
       loan.paymentStates[installment] = {
         status,
+        principalPaid: roundCurrency(
+          principalBefore.paid + principalBefore.remaining,
+        ),
+        principalRemaining: 0,
         receivedTotal: roundCurrency(
           (previousStatus === "partial" || previousStatus === "interest"
             ? previousReceived
@@ -1879,6 +2066,8 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
     else if (status === "interest")
       loan.paymentStates[installment] = {
         status,
+        principalPaid: principalBefore.paid,
+        principalRemaining: principalBefore.remaining,
         receivedTotal: roundCurrency(
           (previousStatus === "partial" ||
           (previousStatus === "interest" && isLastInterest)
@@ -2050,6 +2239,7 @@ async function savePartialPayment(event) {
     loan.paymentStates = loan.paymentStates || {};
     const previousPayment = loan.paymentStates[installment],
       previousInfo = installmentInfo(loan, installment),
+      principalBefore = principalPositionFor(loan, installment),
       previousStatus = paymentStateFor(loan, installment),
       continuesPreviousPayment =
         previousStatus === "partial" || previousStatus === "interest",
@@ -2060,12 +2250,27 @@ async function savePartialPayment(event) {
         ? receiptEntriesFor(loan, installment, previousInfo)
         : [],
       receivedTotal = roundCurrency(previousReceived + calculation.paid),
+      principalPaidNow = roundCurrency(
+        Math.min(
+          principalBefore.remaining,
+          calculation.due
+            ? principalBefore.remaining *
+                Math.min(1, calculation.paid / calculation.due)
+            : 0,
+        ),
+      ),
       paymentCreatedAt = new Date().toISOString();
     loan.paymentStates[installment] = {
       status: "partial",
       paidAmount: receivedTotal,
       receivedTotal,
       lastPayment: calculation.paid,
+      principalPaid: roundCurrency(
+        principalBefore.paid + principalPaidNow,
+      ),
+      principalRemaining: roundCurrency(
+        principalBefore.remaining - principalPaidNow,
+      ),
       receipts: [
         ...previousReceipts,
         {
@@ -2120,74 +2325,144 @@ async function savePartialPayment(event) {
 }
 async function savePostpone(event) {
   event.preventDefault();
-  const snapshot = stateSnapshot();
-  const loanId = $("#postponeLoanId").value,
+  const form = event.currentTarget,
+    snapshot = stateSnapshot(),
+    loanId = $("#postponeLoanId").value,
     installment = $("#postponeInstallment").value,
-    next = $("#postponeDate").value;
+    next = $("#postponeDate").value,
+    actionKey = `postpone:${loanId}:${installment}`;
   if (!next) return toast("Escolha uma nova data.");
   const loan = state.loans.find((item) => item.id === loanId);
-  loan.customDates = loan.customDates || {};
-  const previousDate = dateFor(loan, Number(installment)).toLocaleDateString("pt-BR");
-  loan.customDates[installment] = next;
-  addHistory(
-    "payment",
-    "Vencimento adiado",
-    `${loan.contract}: parcela ${Number(installment) + 1}, de ${previousDate} para ${new Date(`${next}T12:00`).toLocaleDateString("pt-BR")}.`,
-  );
-  const synced = await save();
-  closeModals();
-  render();
-  details(loanId);
-  toast(
-    synced
-      ? "Data da parcela atualizada."
-      : "Data salva neste dispositivo. A sincronização será tentada novamente.",
-    () => restoreSnapshot(snapshot, null, loanId),
-  );
+  if (!loan)
+    return toast("Este empréstimo não foi encontrado. Atualize a tela.");
+  if (!beginSubmission(form, actionKey)) return;
+  toast("Atualizando a data de vencimento...");
+  try {
+    loan.customDates = loan.customDates || {};
+    const previousDate = dateFor(
+      loan,
+      Number(installment),
+    ).toLocaleDateString("pt-BR");
+    loan.customDates[installment] = next;
+    addHistory(
+      "payment",
+      "Vencimento adiado",
+      `${loan.contract}: parcela ${Number(installment) + 1}, de ${previousDate} para ${new Date(`${next}T12:00`).toLocaleDateString("pt-BR")}.`,
+    );
+    const synced = await save();
+    closeModals();
+    render();
+    details(loanId);
+    toast(
+      synced
+        ? "Data da parcela atualizada."
+        : "Data salva neste dispositivo. A sincronização será tentada novamente.",
+      () => restoreSnapshot(snapshot, null, loanId),
+    );
+  } catch (error) {
+    state.clients = structuredClone(snapshot.clients);
+    state.loans = structuredClone(snapshot.loans);
+    render();
+    toast(error.message || "Não foi possível atualizar o vencimento.");
+  } finally {
+    endSubmission(form, actionKey);
+  }
 }
 async function toggleBlacklist(clientId, loanContext = null) {
   const client = state.clients.find((item) => item.id === clientId);
   if (!client) return;
-  const snapshot = stateSnapshot();
-  client.blacklisted = !client.blacklisted;
-  addHistory(
-    "client",
-    client.blacklisted
-      ? "Cliente adicionado à lista negra"
-      : "Cliente removido da lista negra",
-    client.name,
-  );
-  const synced = await save();
-  render();
-  if (loanContext) details(loanContext);
-  const message =
-    !synced
+  const actionKey = `blacklist:${clientId}`;
+  if (submissionLocks.has(actionKey))
+    return toast("Aguarde: a situação deste cliente ainda está sendo salva.");
+  const snapshot = stateSnapshot(),
+    buttons = Array.from(
+      document.querySelectorAll("[data-toggle-blacklist]"),
+    ).filter((button) => button.dataset.toggleBlacklist === clientId);
+  submissionLocks.add(actionKey);
+  buttons.forEach((button) => {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  });
+  toast("Atualizando a situação do cliente...");
+  try {
+    client.blacklisted = !client.blacklisted;
+    addHistory(
+      "client",
+      client.blacklisted
+        ? "Cliente adicionado à lista negra"
+        : "Cliente removido da lista negra",
+      client.name,
+    );
+    const synced = await save();
+    render();
+    if (loanContext) details(loanContext);
+    const message = !synced
       ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
       : client.blacklisted
-      ? "Cliente adicionado à lista negra."
-      : "Cliente removido da lista negra.";
-  toast(message, () => restoreSnapshot(snapshot, null, loanContext));
+        ? "Cliente adicionado à lista negra."
+        : "Cliente removido da lista negra.";
+    toast(message, () => restoreSnapshot(snapshot, null, loanContext));
+  } catch (error) {
+    state.clients = structuredClone(snapshot.clients);
+    state.loans = structuredClone(snapshot.loans);
+    render();
+    if (loanContext) details(loanContext);
+    toast(error.message || "Não foi possível alterar a lista negra.");
+  } finally {
+    submissionLocks.delete(actionKey);
+    buttons.forEach((button) => {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    });
+  }
 }
 async function archiveLoan(loanId) {
   const loan = state.loans.find((item) => item.id === loanId);
-  const snapshot = stateSnapshot();
-  loan.archived = !loan.archived;
-  addHistory(
-    "loan",
-    loan.archived ? "Empréstimo arquivado" : "Empréstimo restaurado",
-    loan.contract,
-  );
-  const synced = await save();
-  closeModals();
-  render();
-  setPage(loan.archived ? "history" : "loans");
-  const message =
-    !synced
+  if (!loan) return toast("Este empréstimo não foi encontrado.");
+  const actionKey = `archive:${loanId}`;
+  if (submissionLocks.has(actionKey))
+    return toast("Aguarde: este empréstimo ainda está sendo atualizado.");
+  const snapshot = stateSnapshot(),
+    buttons = Array.from(
+      document.querySelectorAll("[data-archive-loan]"),
+    ).filter((button) => button.dataset.archiveLoan === loanId);
+  submissionLocks.add(actionKey);
+  buttons.forEach((button) => {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  });
+  toast(loan.archived ? "Restaurando empréstimo..." : "Arquivando empréstimo...");
+  try {
+    loan.archived = !loan.archived;
+    addHistory(
+      "loan",
+      loan.archived ? "Empréstimo arquivado" : "Empréstimo restaurado",
+      loan.contract,
+    );
+    const synced = await save();
+    closeModals();
+    render();
+    setPage(loan.archived ? "history" : "loans");
+    const message = !synced
       ? "Alteração salva neste dispositivo. A sincronização será tentada novamente."
       : loan.archived
         ? "Empréstimo arquivado."
         : "Empréstimo restaurado.";
-  toast(message, () => restoreSnapshot(snapshot, loan.archived ? "loans" : "history"));
+    toast(message, () =>
+      restoreSnapshot(snapshot, loan.archived ? "loans" : "history"),
+    );
+  } catch (error) {
+    state.clients = structuredClone(snapshot.clients);
+    state.loans = structuredClone(snapshot.loans);
+    render();
+    toast(error.message || "Não foi possível atualizar o empréstimo.");
+  } finally {
+    submissionLocks.delete(actionKey);
+    buttons.forEach((button) => {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    });
+  }
 }
 function requestDeleteClient(clientId) {
   const client = state.clients.find((item) => item.id === clientId);

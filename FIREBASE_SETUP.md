@@ -29,6 +29,7 @@ A migração `supabase-firebase-migration.sql`:
 - converte `owner_id` para texto sem trocar os valores;
 - cria `activity_history` e `profiles` quando necessário;
 - mantém clientes e empréstimos vinculados aos UIDs existentes;
+- torna atômica a exclusão de clientes e empréstimos relacionados;
 - recria as políticas RLS para Firebase e Supabase Auth.
 
 As cinco contas antigas foram importadas no Firebase com o mesmo UID. Como as
