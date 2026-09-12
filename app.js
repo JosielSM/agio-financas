@@ -470,6 +470,141 @@ function openPix() {
   $("#pixType").value = state.user?.pixType || "Chave aleatória";
   openModal("pixModal");
 }
+const accountProviders = () =>
+  Array.isArray(state.user?.providers)
+    ? state.user.providers
+    : state.user?.provider === "local" || !window.credmaisBridge?.enabled
+      ? ["password"]
+      : [];
+const hasAccountProvider = (...providers) =>
+  accountProviders().some((provider) => providers.includes(provider));
+function formatAccountDate(value) {
+  if (!value) return "Não disponível";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Não disponível"
+    : date.toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+}
+function openProfile() {
+  const user = state.user || {},
+    googleConnected = hasAccountProvider("google.com", "google"),
+    passwordConnected = hasAccountProvider("password", "email"),
+    usesFirebase =
+      window.credmaisBridge?.enabled &&
+      window.credmaisBridge.authProvider === "firebase",
+    emailVerified = Boolean(user.emailVerified || googleConnected),
+    avatar = $("#profileAvatarLarge"),
+    photo = $("#profilePhoto"),
+    googleButton = $("#profileGoogleButton"),
+    googleStatus = $("#profileGoogleStatus"),
+    resetButton = $("#profileResetPasswordButton");
+  $("#profileName").textContent = user.name || "Usuário";
+  $("#profileEmail").textContent = user.email || "E-mail não informado";
+  $("#profileInitials").textContent = initials(user.name || "Usuário");
+  $("#profileEmailStatus").textContent = emailVerified
+    ? "E-mail verificado"
+    : "Verificação pendente";
+  $("#profileEmailStatus").classList.toggle("connected", emailVerified);
+  googleStatus.classList.toggle("connected", googleConnected);
+  $("#profileGoogleDescription").textContent = googleConnected
+    ? "Você pode entrar no CredMais usando sua conta Google."
+    : usesFirebase
+      ? "Vincule para entrar com o Google sem digitar sua senha."
+      : "Disponível somente para contas autenticadas pelo Firebase.";
+  googleButton.disabled = googleConnected || !usesFirebase;
+  googleButton.classList.toggle("connected", googleConnected);
+  googleStatus.textContent = googleConnected
+    ? "Conectado ✓"
+    : usesFirebase
+      ? "Vincular"
+      : "Indisponível";
+  $("#profilePasswordStatus").textContent = passwordConnected
+    ? "Configurada"
+    : "Não configurada";
+  $("#profilePasswordStatus").classList.toggle(
+    "connected",
+    passwordConnected,
+  );
+  resetButton.disabled = !usesFirebase || !user.email;
+  $("#profileLastAccess").textContent = formatAccountDate(user.lastSignInAt);
+  if (user.photoURL) {
+    photo.src = user.photoURL;
+    photo.alt = `Foto de ${user.name || "usuário"}`;
+    photo.hidden = false;
+    avatar.classList.add("has-photo");
+  } else {
+    photo.removeAttribute("src");
+    photo.hidden = true;
+    avatar.classList.remove("has-photo");
+  }
+  $(".sidebar").classList.remove("open");
+  openModal("profileModal");
+}
+async function linkProfileGoogle() {
+  const button = $("#profileGoogleButton");
+  if (button.disabled || submissionLocks.has("profile-google")) return;
+  submissionLocks.add("profile-google");
+  button.disabled = true;
+  button.classList.add("is-loading");
+  button.setAttribute("aria-busy", "true");
+  toast("Abrindo o Google para vincular sua conta...");
+  try {
+    const linkedUser = await window.credmaisBridge.linkGoogle();
+    state.user = {
+      ...state.user,
+      ...linkedUser,
+      pixKey: linkedUser.pixKey || state.user.pixKey || "",
+      pixType: linkedUser.pixType || state.user.pixType || "Chave aleatória",
+      pixRecipientName:
+        linkedUser.pixRecipientName || state.user.pixRecipientName || "",
+    };
+    localStorage.setItem("credmais_user", JSON.stringify(state.user));
+    addHistory(
+      "settings",
+      "Conta Google vinculada",
+      `A conta Google ${state.user.email} foi vinculada ao perfil.`,
+    );
+    await save();
+    openProfile();
+    toast("Conta Google vinculada com sucesso.");
+  } catch (error) {
+    toast(error.message || "Não foi possível vincular a conta Google.");
+  } finally {
+    submissionLocks.delete("profile-google");
+    button.classList.remove("is-loading");
+    button.removeAttribute("aria-busy");
+    if (!hasAccountProvider("google.com", "google")) button.disabled = false;
+  }
+}
+async function sendProfilePasswordReset() {
+  const button = $("#profileResetPasswordButton");
+  if (button.disabled || submissionLocks.has("profile-password-reset")) return;
+  submissionLocks.add("profile-password-reset");
+  button.disabled = true;
+  button.classList.add("is-loading");
+  button.setAttribute("aria-busy", "true");
+  toast("Enviando o e-mail de recuperação...");
+  try {
+    await window.credmaisBridge.sendPasswordReset(state.user.email);
+    addHistory(
+      "settings",
+      "Recuperação de senha solicitada",
+      `O link de recuperação foi enviado para ${state.user.email}.`,
+    );
+    await save();
+    toast("E-mail de recuperação enviado. Confira também a pasta Spam.");
+  } catch (error) {
+    toast(error.message || "Não foi possível enviar o e-mail de recuperação.");
+  } finally {
+    submissionLocks.delete("profile-password-reset");
+    button.classList.remove("is-loading");
+    button.removeAttribute("aria-busy");
+    button.disabled = false;
+  }
+}
 function openSecurity() {
   $("#passwordChangeForm").reset();
   setFeedback("passwordChangeFeedback");
@@ -498,6 +633,13 @@ async function changePassword(event) {
   try {
     if (window.credmaisBridge?.enabled) {
       await window.credmaisBridge.changePassword(newPassword);
+      state.user = {
+        ...state.user,
+        providers: Array.from(
+          new Set([...(state.user.providers || []), "password"]),
+        ),
+      };
+      localStorage.setItem("credmais_user", JSON.stringify(state.user));
     } else {
       const account = JSON.parse(
         localStorage.getItem("credmais_account") || "null",
@@ -2668,6 +2810,24 @@ $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#monthlyReportBtn").onclick = openMonthlyReport;
 $("#securityBtn").onclick = openSecurity;
+$("#profileGoogleButton").onclick = linkProfileGoogle;
+$("#profileSecurityButton").onclick = () => {
+  closeModals();
+  openSecurity();
+};
+$("#profileResetPasswordButton").onclick = sendProfilePasswordReset;
+$("#profilePixButton").onclick = () => {
+  closeModals();
+  openPix();
+};
+$("#profileLogoutButton").onclick = () => {
+  closeModals();
+  $("#logoutBtn").click();
+};
+$("#profilePhoto").onerror = () => {
+  $("#profilePhoto").hidden = true;
+  $("#profileAvatarLarge").classList.remove("has-photo");
+};
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;
 $("#installAppBtn").onclick = openInstall;

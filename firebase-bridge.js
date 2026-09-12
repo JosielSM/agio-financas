@@ -34,6 +34,10 @@
     "auth/popup-blocked":
       "O navegador bloqueou a janela do Google. Permita pop-ups para o CredMais e tente novamente.",
     "auth/popup-closed-by-user": "O acesso com o Google foi cancelado.",
+    "auth/credential-already-in-use":
+      "Esta conta Google já está vinculada a outro usuário do CredMais.",
+    "auth/provider-already-linked":
+      "Esta conta já está vinculada ao Google.",
     "auth/requires-recent-login":
       "Por segurança, saia e entre novamente antes de alterar a senha.",
     "auth/too-many-requests":
@@ -71,6 +75,16 @@
       name: user.displayName || user.email?.split("@")[0] || "Usuário",
       email: user.email || "",
       emailVerified: Boolean(user.emailVerified),
+      photoURL: user.photoURL || "",
+      providers: Array.from(
+        new Set(
+          (user.providerData || [])
+            .map((provider) => provider?.providerId)
+            .filter(Boolean),
+        ),
+      ),
+      createdAt: user.metadata?.creationTime || "",
+      lastSignInAt: user.metadata?.lastSignInTime || "",
       provider: "firebase",
     };
   }
@@ -169,6 +183,29 @@
         return userData(credential.user);
       } catch (error) {
         throw friendlyError(error, "Não foi possível entrar com o Google.");
+      }
+    },
+    async linkGoogle() {
+      const instance = await requireAuth();
+      if (!instance.currentUser)
+        throw new Error("Entre novamente para vincular sua conta Google.");
+      if (
+        instance.currentUser.providerData?.some(
+          (provider) => provider.providerId === "google.com",
+        )
+      )
+        return userData(instance.currentUser);
+      try {
+        const provider = new window.firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const credential = await instance.currentUser.linkWithPopup(provider);
+        await credential.user.getIdToken(true);
+        return userData(credential.user);
+      } catch (error) {
+        throw friendlyError(
+          error,
+          "Não foi possível vincular a conta Google.",
+        );
       }
     },
     async signUp(name, email, password) {

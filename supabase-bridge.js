@@ -33,6 +33,17 @@
           pixKey: user.user_metadata?.pix_key || "",
           pixType: user.user_metadata?.pix_key_type || "Chave aleatória",
           pixRecipientName: user.user_metadata?.pix_recipient_name || "",
+          emailVerified: Boolean(user.email_confirmed_at),
+          providers: Array.from(
+            new Set(
+              [
+                ...(user.app_metadata?.providers || []),
+                user.app_metadata?.provider,
+              ].filter(Boolean),
+            ),
+          ),
+          createdAt: user.created_at || "",
+          lastSignInAt: user.last_sign_in_at || "",
           provider: "supabase",
         }
       : null;
@@ -186,6 +197,10 @@
       if (firebaseAuth) return firebaseAuth.changePassword(newPassword);
       const { error } = await client.auth.updateUser({ password: newPassword });
       if (error) throw error;
+    },
+    async linkGoogle() {
+      if (firebaseAuth) return firebaseAuth.linkGoogle();
+      throw new Error("O vínculo com Google requer a autenticação pelo Firebase.");
     },
     async signOut() {
       if (firebaseAuth) await firebaseAuth.signOut();
