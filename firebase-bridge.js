@@ -44,6 +44,8 @@
       "Muitas tentativas foram feitas. Aguarde alguns minutos e tente novamente.",
     "auth/unauthorized-domain":
       "Este endereço do CredMais ainda não está autorizado no Firebase.",
+    "auth/user-mismatch":
+      "Selecione a mesma conta Google vinculada a este perfil.",
     "auth/user-disabled": "Esta conta foi desativada.",
     "auth/user-not-found": "E-mail ou senha incorretos.",
     "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
@@ -272,6 +274,51 @@
         await instance.currentUser.updatePassword(newPassword);
       } catch (error) {
         throw friendlyError(error, "Não foi possível alterar a senha.");
+      }
+    },
+    async reauthenticateForDeletion(password = "") {
+      const instance = await requireAuth(),
+        user = instance.currentUser;
+      if (!user)
+        throw new Error("Entre novamente antes de apagar sua conta.");
+      const providers = (user.providerData || []).map(
+        (provider) => provider.providerId,
+      );
+      try {
+        if (providers.includes("google.com")) {
+          const provider = new window.firebase.auth.GoogleAuthProvider(),
+            parameters = { prompt: "select_account" };
+          if (user.email) parameters.login_hint = user.email;
+          provider.setCustomParameters(parameters);
+          await user.reauthenticateWithPopup(provider);
+        } else {
+          if (!password)
+            throw new Error("Informe sua senha atual para confirmar.");
+          const credential =
+            window.firebase.auth.EmailAuthProvider.credential(
+              user.email,
+              password,
+            );
+          await user.reauthenticateWithCredential(credential);
+        }
+        await user.getIdToken(true);
+        return userData(user);
+      } catch (error) {
+        if (!error?.code) throw error;
+        throw friendlyError(
+          error,
+          "Não foi possível confirmar sua identidade.",
+        );
+      }
+    },
+    async deleteAccount() {
+      const instance = await requireAuth();
+      if (!instance.currentUser)
+        throw new Error("Entre novamente antes de apagar sua conta.");
+      try {
+        await instance.currentUser.delete();
+      } catch (error) {
+        throw friendlyError(error, "Não foi possível apagar a conta.");
       }
     },
     async signOut() {

@@ -83,4 +83,29 @@ grant select, insert, update, delete on public.loans to anon, authenticated;
 grant select, insert, update, delete on public.activity_history to anon, authenticated;
 grant select, insert, update, delete on public.profiles to anon, authenticated;
 
+-- Exclusão completa da própria conta em uma única transação do banco.
+-- A função usa as políticas RLS do usuário que fez a solicitação.
+create or replace function public.delete_my_account_data()
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  account_id text := auth.jwt()->>'sub';
+begin
+  if account_id is null or account_id = '' then
+    raise exception 'Usuário não autenticado';
+  end if;
+
+  delete from public.activity_history where owner_id = account_id;
+  delete from public.loans where owner_id = account_id;
+  delete from public.clients where owner_id = account_id;
+  delete from public.profiles where owner_id = account_id;
+end;
+$$;
+
+revoke all on function public.delete_my_account_data() from public;
+grant execute on function public.delete_my_account_data() to anon, authenticated;
+
 commit;

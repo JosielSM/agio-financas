@@ -260,20 +260,52 @@ function suggestFirstDueDate() {
 }
 function interestModeFor(loan) {
   if (!loan) return "flat";
+  if (["flat", "simple", "compound"].includes(loan.interestMode))
+    return loan.interestMode;
   const amount = Number(loan.amount || 0),
     rate = Number(loan.rate || 0),
     installments = Math.max(1, Number(loan.installments || 1)),
     flatTotal = amount * (1 + rate),
+    simpleTotal = amount * (1 + rate * installments),
     compoundTotal = amount * Math.pow(1 + rate, installments);
-  return Math.abs(Number(loan.total) - compoundTotal) <
-    Math.abs(Number(loan.total) - flatTotal)
-    ? "compound"
-    : "flat";
+  return [
+    ["flat", flatTotal],
+    ["simple", simpleTotal],
+    ["compound", compoundTotal],
+  ].sort(
+    (first, second) =>
+      Math.abs(Number(loan.total) - first[1]) -
+      Math.abs(Number(loan.total) - second[1]),
+  )[0][0];
 }
-const interestDescription = (loan) =>
-  interestModeFor(loan) === "compound"
-    ? `juros compostos de ${(loan.rate * 100).toLocaleString("pt-BR")}% por parcela`
-    : `juros totais de ${(loan.rate * 100).toLocaleString("pt-BR")}%`;
+const interestDescription = (loan) => {
+  const rate = (loan.rate * 100).toLocaleString("pt-BR"),
+    mode = interestModeFor(loan);
+  if (mode === "compound") return `juros compostos de ${rate}% por período`;
+  if (mode === "simple") return `juros simples de ${rate}% por período`;
+  return `taxa única de ${rate}% sobre o contrato`;
+};
+function setLoanInterestMode(mode = "flat") {
+  const selected = ["flat", "simple", "compound"].includes(mode)
+    ? mode
+    : "flat";
+  const field = $("#loanInterestMode");
+  if (field) field.value = selected;
+  document
+    .querySelectorAll('[name="loanInterestModeChoice"]')
+    .forEach((input) => {
+      input.checked = input.value === selected;
+    });
+  const guidance = $("#interestModeGuidance");
+  if (!guidance) return;
+  guidance.innerHTML = {
+    flat: "<b>Taxa única:</b> use quando a porcentagem representa o ganho total do contrato, como 30% no empréstimo diário inteiro.",
+    simple:
+      "<b>Juros simples:</b> a taxa vale para cada período, mas é sempre calculada sobre o valor originalmente emprestado.",
+    compound:
+      "<b>Juros compostos:</b> a taxa vale para cada período e passa a incidir sobre o valor já acrescido dos juros anteriores.",
+  }[selected];
+}
 const paymentStateFor = (loan, index) => {
   const payment = loan.paymentStates?.[index];
   return typeof payment === "object" ? payment.status : payment;
@@ -540,6 +572,9 @@ function openProfile() {
     photo.hidden = true;
     avatar.classList.remove("has-photo");
   }
+  $("#profileDangerZone").hidden = true;
+  $("#profileDangerToggle").setAttribute("aria-expanded", "false");
+  $("#profileDangerToggle em").textContent = "Mostrar";
   $(".sidebar").classList.remove("open");
   openModal("profileModal");
 }
@@ -603,6 +638,101 @@ async function sendProfilePasswordReset() {
     button.classList.remove("is-loading");
     button.removeAttribute("aria-busy");
     button.disabled = false;
+  }
+}
+function toggleProfileDanger() {
+  const zone = $("#profileDangerZone"),
+    button = $("#profileDangerToggle"),
+    willOpen = zone.hidden;
+  zone.hidden = !willOpen;
+  button.setAttribute("aria-expanded", String(willOpen));
+  button.querySelector("em").textContent = willOpen ? "Ocultar" : "Mostrar";
+  if (willOpen)
+    requestAnimationFrame(() =>
+      zone.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+    );
+}
+function openDeleteAccount() {
+  const usesFirebase =
+    window.credmaisBridge?.enabled &&
+    window.credmaisBridge.authProvider === "firebase";
+  if (!usesFirebase)
+    return toast(
+      "Conecte-se à internet e entre novamente antes de apagar sua conta.",
+    );
+  const googleConnected = hasAccountProvider("google.com", "google"),
+    form = $("#deleteAccountForm"),
+    passwordField = $("#deleteAccountPasswordField"),
+    passwordInput = $("#deleteAccountPassword");
+  closeModals();
+  form.reset();
+  setFeedback("deleteAccountFeedback");
+  $("#deleteAccountEmail").textContent =
+    state.user?.email || "E-mail não informado";
+  passwordField.hidden = googleConnected;
+  passwordInput.required = !googleConnected;
+  $("#deleteGoogleConfirmation").hidden = !googleConnected;
+  openModal("deleteAccountModal");
+}
+function clearDeletedAccountData(userId) {
+  clearPendingSync(userId);
+  [
+    "credmais_user",
+    "credmais_account",
+    "credmais_clients",
+    "credmais_loans",
+    "credmais_history",
+    "credmais_cache_owner",
+  ].forEach((key) => localStorage.removeItem(key));
+  state.user = null;
+  state.clients = [];
+  state.loans = [];
+  state.history = [];
+}
+async function deleteAccountAndData(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    confirmation = $("#deleteAccountConfirmation").value.trim().toUpperCase(),
+    acknowledged = $("#deleteAccountAcknowledgement").checked,
+    passwordField = $("#deleteAccountPasswordField"),
+    password = $("#deleteAccountPassword").value;
+  if (confirmation !== "APAGAR")
+    return setFeedback(
+      "deleteAccountFeedback",
+      "Digite APAGAR exatamente como mostrado para confirmar.",
+      "error",
+    );
+  if (!acknowledged)
+    return setFeedback(
+      "deleteAccountFeedback",
+      "Marque a confirmação de que você entende a exclusão permanente.",
+      "error",
+    );
+  if (!passwordField.hidden && password.length < 6)
+    return setFeedback(
+      "deleteAccountFeedback",
+      "Informe sua senha atual para confirmar sua identidade.",
+      "error",
+    );
+  if (!beginSubmission(form, "delete-account")) return;
+  setFeedback(
+    "deleteAccountFeedback",
+    "Confirmando sua identidade e apagando os dados...",
+  );
+  try {
+    const userId = state.user.id;
+    await window.credmaisBridge.deleteAccount(password);
+    clearDeletedAccountData(userId);
+    closeModals();
+    location.replace(`${location.pathname}?conta=apagada`);
+  } catch (error) {
+    setFeedback(
+      "deleteAccountFeedback",
+      error.message || "Não foi possível apagar a conta.",
+      "error",
+    );
+  } finally {
+    endSubmission(form, "delete-account");
   }
 }
 function openSecurity() {
@@ -1159,7 +1289,7 @@ function resetLoanForm() {
   $("#loanId").value = "";
   setCurrencyInput($("#loanAmount"), 0, false);
   $("#loanInterest").value = "10";
-  $("#loanInterestMode").value = "flat";
+  setLoanInterestMode("flat");
   setLoanFrequency(30);
   setCurrencyInput($("#loanLateFee"), 0);
   $("#loanInstallments").value = "6";
@@ -1292,7 +1422,7 @@ function prepareLoan(id) {
     $("#loanClient").value = loan.clientId;
     setCurrencyInput($("#loanAmount"), loan.amount);
     $("#loanInterest").value = loan.rate * 100;
-    $("#loanInterestMode").value = interestModeFor(loan);
+    setLoanInterestMode(interestModeFor(loan));
     $("#loanInstallments").value = loan.installments;
     setLoanFrequency(loan.frequency || 30);
     setCurrencyInput($("#loanLateFee"), loan.lateFee || 0);
@@ -1872,16 +2002,21 @@ function calc() {
   const total = roundCurrency(
     mode === "compound"
       ? amount * Math.pow(1 + rate, periods)
+      : mode === "simple"
+        ? amount * (1 + rate * periods)
       : amount * (1 + rate),
   );
   const installment = roundCurrency(total / periods);
   $("#calcInterest").textContent = money(total - amount);
   $("#calcTotal").textContent = money(total);
   $("#calcInstallment").textContent = money(installment);
+  const rateLabel = (rate * 100).toLocaleString("pt-BR");
   $("#calcExplanation").textContent =
     mode === "compound"
-      ? `Os juros de ${(rate * 100).toLocaleString("pt-BR")}% serão aplicados novamente em cada parcela, com vencimento ${frequency}.`
-      : `${money(amount)} + ${(rate * 100).toLocaleString("pt-BR")}% = ${money(total)}, dividido em ${periods} pagamento${periods === 1 ? "" : "s"}, com vencimento ${frequency}.`;
+      ? `${rateLabel}% de juros compostos por período: os juros são reaplicados ${periods} vez${periods === 1 ? "" : "es"}, chegando a ${money(total)}, com vencimento ${frequency}.`
+      : mode === "simple"
+        ? `${rateLabel}% de juros simples sobre ${money(amount)} em cada um dos ${periods} período${periods === 1 ? "" : "s"}: total de ${money(total)}, com vencimento ${frequency}.`
+        : `${money(amount)} + taxa única de ${rateLabel}% = ${money(total)}. A quantidade de pagamentos apenas divide esse total, com vencimento ${frequency}.`;
   return {
     amount,
     rate,
@@ -1889,6 +2024,7 @@ function calc() {
     total,
     installment,
     frequency: frequencyDays,
+    interestMode: mode,
   };
 }
 async function saveClient(event) {
@@ -1953,6 +2089,7 @@ async function saveLoan(event) {
     clientId: $("#loanClient").value,
     amount: calculation.amount,
     rate: calculation.rate,
+    interestMode: calculation.interestMode,
     installments: calculation.periods,
     frequency: calculation.frequency,
     lateFee: readCurrencyInput($("#loanLateFee")),
@@ -2785,13 +2922,21 @@ $("#clientPhone").addEventListener("input", (event) => {
   "loanAmount",
   "loanInterest",
   "loanInstallments",
-  "loanInterestMode",
 ].forEach((id) =>
   $(`#${id}`).addEventListener("input", () => {
     calc();
     if (id === "loanInstallments") updateLoanDuePreview();
   }),
 );
+document
+  .querySelectorAll('[name="loanInterestModeChoice"]')
+  .forEach((input) =>
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      setLoanInterestMode(input.value);
+      calc();
+    }),
+  );
 $("#loanFrequency").addEventListener("change", () => {
   syncCustomFrequencyField();
   suggestFirstDueDate();
@@ -2824,6 +2969,18 @@ $("#profileLogoutButton").onclick = () => {
   closeModals();
   $("#logoutBtn").click();
 };
+$("#profileDangerToggle").onclick = toggleProfileDanger;
+$("#openDeleteAccountButton").onclick = openDeleteAccount;
+$("#deleteAccountForm").addEventListener("submit", deleteAccountAndData);
+$("#deleteAccountConfirmation").addEventListener("input", () =>
+  setFeedback("deleteAccountFeedback"),
+);
+$("#deleteAccountPassword").addEventListener("input", () =>
+  setFeedback("deleteAccountFeedback"),
+);
+$("#deleteAccountAcknowledgement").addEventListener("change", () =>
+  setFeedback("deleteAccountFeedback"),
+);
 $("#profilePhoto").onerror = () => {
   $("#profilePhoto").hidden = true;
   $("#profileAvatarLarge").classList.remove("has-photo");

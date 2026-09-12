@@ -937,6 +937,9 @@ textarea {
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
 }
+.loan-modal {
+  width: min(760px, calc(100% - 28px));
+}
 .modal h2 {
   font: 600 25px Outfit;
   margin: 8px 0;
@@ -981,6 +984,136 @@ textarea {
   color: var(--muted);
   font-size: 11px;
   font-weight: 400;
+}
+.interest-mode-field {
+  min-width: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+}
+.interest-mode-field legend {
+  padding: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.interest-mode-intro {
+  margin: 5px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.interest-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.interest-mode-option {
+  position: relative;
+  display: block;
+  min-width: 0;
+  cursor: pointer;
+}
+.interest-mode-option > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.interest-mode-card {
+  min-height: 196px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.interest-mode-option:hover .interest-mode-card {
+  border-color: #b7c8c0;
+  transform: translateY(-1px);
+}
+.interest-mode-option > input:focus-visible + .interest-mode-card {
+  outline: 3px solid #0796682b;
+  outline-offset: 2px;
+}
+.interest-mode-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.interest-mode-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--brand);
+  font: 700 14px Outfit;
+}
+.interest-mode-check {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 11px;
+}
+.interest-mode-card strong {
+  color: var(--text);
+  font: 700 14px Outfit;
+}
+.interest-mode-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.interest-mode-card em {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.interest-mode-option > input:checked + .interest-mode-card {
+  border-color: var(--brand);
+  background: linear-gradient(160deg, var(--surface), var(--soft));
+  box-shadow: 0 8px 20px #0796681c;
+}
+.interest-mode-option > input:checked + .interest-mode-card .interest-mode-check {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.interest-mode-simple .interest-mode-icon {
+  background: #e9f2ff;
+  color: #326ebc;
+}
+.interest-mode-compound .interest-mode-icon {
+  background: #f1eaff;
+  color: #744db0;
+}
+.interest-mode-guidance {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--brand);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.interest-mode-guidance b {
+  color: var(--text);
 }
 .loan-due-preview {
   display: grid;
@@ -1309,6 +1442,12 @@ body.dark {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .interest-mode-grid {
+    grid-template-columns: 1fr;
+  }
+  .interest-mode-card {
+    min-height: 0;
   }
   .calculation {
     grid-template-columns: 1fr;
@@ -2270,6 +2409,183 @@ button.profile-menu-item:hover:not(:disabled) {
 .profile-logout:hover {
   background: #ffe7e7;
 }
+.profile-advanced {
+  margin: 12px 27px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.profile-danger-toggle {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 8px 3px;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+}
+.profile-danger-toggle span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.profile-danger-toggle small {
+  font-size: 10px;
+}
+.profile-danger-toggle em {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+.profile-danger-zone {
+  margin-top: 8px;
+  padding: 13px;
+  border: 1px solid #efc3c3;
+  border-radius: 11px;
+  background: #fff7f7;
+}
+.profile-danger-zone p {
+  margin: 0 0 11px;
+}
+.profile-danger-zone b,
+.profile-danger-zone span {
+  display: block;
+}
+.profile-danger-zone b {
+  color: #a93232;
+  font-size: 12px;
+}
+.profile-danger-zone span {
+  margin-top: 3px;
+  color: #8a5d5d;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.profile-danger-zone button {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: #b12f2f;
+  background: #ffe5e5;
+  font-size: 11px;
+  font-weight: 700;
+}
+.profile-danger-zone button:hover {
+  background: #ffd4d4;
+}
+.delete-account-modal {
+  max-width: 470px;
+}
+.danger-icon {
+  color: #bd3434;
+  background: #ffe9e9;
+}
+.delete-account-warning {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #efbcbc;
+  border-radius: 11px;
+  color: #864646;
+  background: #fff5f5;
+}
+.delete-account-warning b {
+  display: block;
+  margin-bottom: 5px;
+  color: #ae2f2f;
+}
+.delete-account-warning p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.delete-account-modal form {
+  margin-top: 18px;
+}
+.delete-account-identity {
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.delete-account-identity span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.delete-account-identity b {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.delete-account-modal label > small,
+.delete-google-confirmation {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.delete-account-confirm-label > span {
+  display: inline;
+}
+.delete-account-confirm-label > span b {
+  color: #ad3030;
+}
+.delete-google-confirmation {
+  padding: 11px 12px;
+  border-radius: 9px;
+  color: #315f96;
+  background: #eef5ff;
+}
+.delete-account-check {
+  grid-template-columns: 19px 1fr;
+  align-items: start;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.delete-account-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #b83232;
+}
+.danger-action {
+  border-radius: 10px;
+  padding: 12px 15px;
+  color: #fff;
+  background: #bd3838;
+  font-weight: 700;
+}
+.danger-action:hover {
+  background: #a62c2c;
+}
+.delete-account-submit {
+  width: 100%;
+}
+.danger-action.is-loading {
+  position: relative;
+  color: transparent !important;
+  cursor: wait;
+}
+.danger-action.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 18px;
+  height: 18px;
+  margin: auto;
+  border: 3px solid #ffffff70;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: button-spin .7s linear infinite;
+}
 .dark .profile-method,
 .dark .profile-menu-item {
   background: #111b16;
@@ -2286,6 +2602,27 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 .dark .profile-logout:hover {
   background: #492525;
+}
+.dark .profile-danger-zone,
+.dark .delete-account-warning {
+  border-color: #693b3b;
+  background: #321e1e;
+}
+.dark .profile-danger-zone b,
+.dark .delete-account-warning b {
+  color: #ffaaaa;
+}
+.dark .profile-danger-zone span,
+.dark .delete-account-warning {
+  color: #e9bbbb;
+}
+.dark .profile-danger-zone button {
+  color: #ffc1c1;
+  background: #532828;
+}
+.dark .delete-google-confirmation {
+  color: #cfe5ff;
+  background: #21354b;
 }
 .postpone-summary {
   display: grid;
@@ -2942,6 +3279,10 @@ button.profile-menu-item:hover:not(:disabled) {
   }
   .profile-logout {
     width: calc(100% - 36px);
+    margin-right: 18px;
+    margin-left: 18px;
+  }
+  .profile-advanced {
     margin-right: 18px;
     margin-left: 18px;
   }

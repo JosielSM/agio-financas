@@ -96,27 +96,36 @@
     installment: loan.installment,
     due_date: loan.dueDate,
     payment_states: loan.paymentStates || {},
-    custom_dates: loan.customDates || {},
+    custom_dates: {
+      ...(loan.customDates || {}),
+      _interestMode: loan.interestMode || undefined,
+    },
     archived: Boolean(loan.archived),
     created_at: loan.createdAt,
   });
-  const fromLoanRow = (row) => ({
-    id: row.id,
-    contract: row.contract,
-    clientId: row.client_id,
-    amount: Number(row.amount),
-    rate: Number(row.rate),
-    installments: row.installments,
-    frequency: row.frequency,
-    lateFee: Number(row.late_fee || 0),
-    total: Number(row.total),
-    installment: Number(row.installment),
-    dueDate: row.due_date,
-    paymentStates: row.payment_states || {},
-    customDates: row.custom_dates || {},
-    archived: row.archived,
-    createdAt: row.created_at,
-  });
+  const fromLoanRow = (row) => {
+    const customDates = { ...(row.custom_dates || {}) },
+      interestMode = customDates._interestMode;
+    delete customDates._interestMode;
+    return {
+      id: row.id,
+      contract: row.contract,
+      clientId: row.client_id,
+      amount: Number(row.amount),
+      rate: Number(row.rate),
+      interestMode,
+      installments: row.installments,
+      frequency: row.frequency,
+      lateFee: Number(row.late_fee || 0),
+      total: Number(row.total),
+      installment: Number(row.installment),
+      dueDate: row.due_date,
+      paymentStates: row.payment_states || {},
+      customDates,
+      archived: row.archived,
+      createdAt: row.created_at,
+    };
+  };
 
   window.credmaisBridge = {
     enabled: authProvider !== "local",
@@ -201,6 +210,31 @@
     async linkGoogle() {
       if (firebaseAuth) return firebaseAuth.linkGoogle();
       throw new Error("O vínculo com Google requer a autenticação pelo Firebase.");
+    },
+    async deleteAccount(password = "") {
+      if (!client || !firebaseAuth)
+        throw new Error(
+          "A exclusão completa requer conexão com a conta Firebase.",
+        );
+      const user = await currentAuthUser();
+      if (!user?.id)
+        throw new Error("Entre novamente antes de apagar sua conta.");
+      await firebaseAuth.reauthenticateForDeletion(password);
+      const { error } = await client.rpc("delete_my_account_data");
+      if (["PGRST202", "42883"].includes(error?.code))
+        throw new Error(
+          "A exclusão segura ainda precisa ser ativada no banco de dados.",
+        );
+      if (error) throw error;
+      try {
+        await firebaseAuth.deleteAccount();
+      } catch (error) {
+        const partialError = new Error(
+          "Os dados financeiros foram apagados, mas o acesso ainda não foi removido. Tente apagar a conta novamente.",
+        );
+        partialError.original = error;
+        throw partialError;
+      }
     },
     async signOut() {
       if (firebaseAuth) await firebaseAuth.signOut();
