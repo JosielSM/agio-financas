@@ -1115,6 +1115,38 @@ textarea {
 .interest-mode-guidance b {
   color: var(--text);
 }
+.business-days-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  margin-top: -5px;
+  padding: 11px 13px;
+  border: 1px solid #bfe5d7;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--surface), var(--soft));
+}
+.business-days-notice > span {
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--brand);
+  font: 700 10px Outfit;
+  letter-spacing: .5px;
+}
+.business-days-notice div {
+  display: grid;
+  gap: 2px;
+}
+.business-days-notice strong {
+  color: var(--text);
+  font-size: 11px;
+}
+.business-days-notice small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
 .loan-due-preview {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

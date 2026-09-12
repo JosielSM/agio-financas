@@ -155,12 +155,43 @@ const formatPhone = (value) => {
     ? number.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2")
     : number.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
 };
+const isBusinessDay = (date) => ![0, 6].includes(date.getDay());
+function nextBusinessDayOrSame(date) {
+  const result = new Date(date);
+  while (!isBusinessDay(result)) result.setDate(result.getDate() + 1);
+  return result;
+}
+function addBusinessDays(date, amount) {
+  const result = new Date(date);
+  let remaining = Math.max(0, Number(amount) || 0);
+  if (remaining === 0) return nextBusinessDayOrSame(result);
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1);
+    if (isBusinessDay(result)) remaining -= 1;
+  }
+  return result;
+}
+function addScheduleIntervals(date, frequency, businessDays, amount = 1) {
+  if (businessDays) return addBusinessDays(date, amount);
+  const result = new Date(date);
+  result.setDate(result.getDate() + Number(frequency || 30) * amount);
+  return result;
+}
 const dateFor = (loan, installment) => {
-  if (loan.customDates?.[installment])
-    return new Date(`${loan.customDates[installment]}T12:00`);
-  const date = new Date(`${loan.dueDate}T12:00`);
-  date.setDate(date.getDate() + Number(loan.frequency || 30) * installment);
-  return date;
+  if (loan.customDates?.[installment]) {
+    const customDate = new Date(`${loan.customDates[installment]}T12:00`);
+    return loan.businessDays ? nextBusinessDayOrSame(customDate) : customDate;
+  }
+  const storedFirstDate = new Date(`${loan.dueDate}T12:00`),
+    firstDate = loan.businessDays
+      ? nextBusinessDayOrSame(storedFirstDate)
+      : storedFirstDate;
+  return addScheduleIntervals(
+    firstDate,
+    loan.frequency || 30,
+    Boolean(loan.businessDays),
+    installment,
+  );
 };
 const dueStatus = (date) => {
   const today = new Date();
@@ -173,13 +204,17 @@ const dueStatus = (date) => {
       ? "Vence hoje"
       : "A vencer";
 };
-const formatFrequency = (days) =>
-  ({ 1: "Diário", 7: "Semanal", 15: "Quinzenal", 30: "Mensal" })[
-    Number(days)
-  ] || `A cada ${days} dias`;
+const formatFrequency = (days, businessDays = false) =>
+  businessDays
+    ? "Diário (segunda a sexta)"
+    : ({ 1: "Diário", 7: "Semanal", 15: "Quinzenal", 30: "Mensal" })[
+        Number(days)
+      ] || `A cada ${days} dias`;
 const standardFrequencies = new Set([1, 7, 15, 30, 45]);
+const selectedBusinessDays = () => $("#loanFrequency").value === "business";
 function selectedFrequencyDays() {
   const preset = $("#loanFrequency").value;
+  if (preset === "business") return 1;
   if (preset !== "custom") return Number(preset);
   const custom = Number($("#loanCustomFrequency").value);
   return Number.isInteger(custom) && custom >= 1 && custom <= 365 ? custom : 0;
@@ -191,10 +226,14 @@ function syncCustomFrequencyField() {
   field.hidden = !custom;
   input.disabled = !custom;
   input.required = custom;
+  $("#businessDaysNotice").hidden = !selectedBusinessDays();
 }
-function setLoanFrequency(days) {
+function setLoanFrequency(days, businessDays = false) {
   const frequency = Math.max(1, Number(days) || 30);
-  if (standardFrequencies.has(frequency)) {
+  if (businessDays) {
+    $("#loanFrequency").value = "business";
+    $("#loanCustomFrequency").value = "";
+  } else if (standardFrequencies.has(frequency)) {
     $("#loanFrequency").value = String(frequency);
     $("#loanCustomFrequency").value = "";
   } else {
@@ -222,7 +261,8 @@ function updateLoanDuePreview() {
   const value = $("#loanDueDate").value,
     firstLabel = $("#loanDuePrimary"),
     scheduleLabel = $("#loanDueSecondary"),
-    frequency = selectedFrequencyDays();
+    frequency = selectedFrequencyDays(),
+    businessDays = selectedBusinessDays();
   if (!frequency) {
     firstLabel.textContent = "Informe o intervalo personalizado em dias";
     scheduleLabel.textContent = "Depois disso, os vencimentos serão calculados automaticamente.";
@@ -233,20 +273,28 @@ function updateLoanDuePreview() {
     scheduleLabel.textContent = "As demais datas serão calculadas automaticamente.";
     return;
   }
-  const first = new Date(`${value}T12:00`),
-    installments = Math.max(1, Number($("#loanInstallments").value) || 1),
-    next = new Date(first),
-    last = new Date(first);
-  next.setDate(next.getDate() + frequency);
-  last.setDate(last.getDate() + frequency * (installments - 1));
+  let first = new Date(`${value}T12:00`);
+  if (businessDays && !isBusinessDay(first)) {
+    first = nextBusinessDayOrSame(first);
+    $("#loanDueDate").value = dateInputValue(first);
+  }
+  const installments = Math.max(1, Number($("#loanInstallments").value) || 1),
+    next = addScheduleIntervals(first, frequency, businessDays, 1),
+    last = addScheduleIntervals(
+      first,
+      frequency,
+      businessDays,
+      installments - 1,
+    );
   firstLabel.textContent = `1º vencimento: ${first.toLocaleDateString("pt-BR")} (${dueRelativeLabel(first)})`;
   scheduleLabel.textContent =
     installments > 1
-      ? `2º vencimento: ${next.toLocaleDateString("pt-BR")} · Último previsto: ${last.toLocaleDateString("pt-BR")}`
+      ? `2º vencimento: ${next.toLocaleDateString("pt-BR")} · Último previsto: ${last.toLocaleDateString("pt-BR")}${businessDays ? " · sem finais de semana" : ""}`
       : "Este empréstimo possui um único pagamento.";
 }
 function suggestFirstDueDate() {
-  const frequency = selectedFrequencyDays();
+  const frequency = selectedFrequencyDays(),
+    businessDays = selectedBusinessDays();
   if (!frequency) {
     $("#loanDueDate").value = "";
     updateLoanDuePreview();
@@ -254,8 +302,8 @@ function suggestFirstDueDate() {
   }
   const date = new Date();
   date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + frequency);
-  $("#loanDueDate").value = dateInputValue(date);
+  const suggested = addScheduleIntervals(date, frequency, businessDays, 1);
+  $("#loanDueDate").value = dateInputValue(suggested);
   updateLoanDuePreview();
 }
 function interestModeFor(loan) {
@@ -415,13 +463,20 @@ const installmentStatusClass = (status) =>
     "Pagamento parcial": "status-partial",
   })[status] || "status-upcoming";
 const lateCharge = (loan, date) => {
-  const days = Math.max(
-    0,
-    Math.floor(
-      (new Date().setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) /
-        86400000,
-    ),
-  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(date);
+  due.setHours(0, 0, 0, 0);
+  let days = 0;
+  if (loan.businessDays) {
+    const cursor = new Date(due);
+    while (cursor < today) {
+      cursor.setDate(cursor.getDate() + 1);
+      if (isBusinessDay(cursor)) days += 1;
+    }
+  } else {
+    days = Math.max(0, Math.floor((today - due) / 86400000));
+  }
   return { days, value: days * Number(loan.lateFee || 0) };
 };
 function toast(message, undoAction = null) {
@@ -1290,7 +1345,7 @@ function resetLoanForm() {
   setCurrencyInput($("#loanAmount"), 0, false);
   $("#loanInterest").value = "10";
   setLoanInterestMode("flat");
-  setLoanFrequency(30);
+  setLoanFrequency(30, false);
   setCurrencyInput($("#loanLateFee"), 0);
   $("#loanInstallments").value = "6";
   suggestFirstDueDate();
@@ -1424,7 +1479,7 @@ function prepareLoan(id) {
     $("#loanInterest").value = loan.rate * 100;
     setLoanInterestMode(interestModeFor(loan));
     $("#loanInstallments").value = loan.installments;
-    setLoanFrequency(loan.frequency || 30);
+    setLoanFrequency(loan.frequency || 30, Boolean(loan.businessDays));
     setCurrencyInput($("#loanLateFee"), loan.lateFee || 0);
     $("#loanDueDate").value = loan.dueDate;
     $("#loanModalEyebrow").textContent = "EDITAR OPERAÇÃO";
@@ -1682,7 +1737,7 @@ function buildMonthlyReport(period, data) {
     owner = state.user?.pixRecipientName || state.user?.name || "Usuário CredMais",
     loanRows = data.loansCreated.map((loan) => {
       const client = state.clients.find((item) => item.id === loan.clientId);
-      return `<tr><td>${new Date(loan.createdAt).toLocaleDateString("pt-BR")}</td><td><b>${escapeHtml(client?.name || "Cliente removido")}</b><small>${escapeHtml(loan.contract || "Sem contrato")}</small></td><td>${escapeHtml(formatFrequency(loan.frequency))}</td><td class="pdf-money">${money(loan.amount)}</td><td class="pdf-money">${money(loan.total)}</td></tr>`;
+      return `<tr><td>${new Date(loan.createdAt).toLocaleDateString("pt-BR")}</td><td><b>${escapeHtml(client?.name || "Cliente removido")}</b><small>${escapeHtml(loan.contract || "Sem contrato")}</small></td><td>${escapeHtml(formatFrequency(loan.frequency, loan.businessDays))}</td><td class="pdf-money">${money(loan.amount)}</td><td class="pdf-money">${money(loan.total)}</td></tr>`;
     }),
     receiptRows = data.receipts.map(
       (receipt) =>
@@ -1916,7 +1971,7 @@ function loanRow(loan) {
       firstInstallment === lastInstallment
         ? `${loan.installments} pagamentos de ${money(firstInstallment)}`
         : `${loan.installments} pagamentos de ${money(firstInstallment)} · último de ${money(lastInstallment)}`;
-  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${paymentSummary} · ${formatFrequency(loan.frequency || 30)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
+  return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${paymentSummary} · ${formatFrequency(loan.frequency || 30, loan.businessDays)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
   const activeLoans = state.loans.filter(
@@ -1996,8 +2051,9 @@ function calc() {
   const periods = Math.max(1, Number($("#loanInstallments").value) || 1);
   const mode = $("#loanInterestMode").value;
   const frequencyDays = selectedFrequencyDays(),
+    businessDays = selectedBusinessDays(),
     frequency = frequencyDays
-      ? formatFrequency(frequencyDays).toLowerCase()
+      ? formatFrequency(frequencyDays, businessDays).toLowerCase()
       : "personalizado";
   const total = roundCurrency(
     mode === "compound"
@@ -2024,6 +2080,7 @@ function calc() {
     total,
     installment,
     frequency: frequencyDays,
+    businessDays,
     interestMode: mode,
   };
 }
@@ -2092,6 +2149,7 @@ async function saveLoan(event) {
     interestMode: calculation.interestMode,
     installments: calculation.periods,
     frequency: calculation.frequency,
+    businessDays: calculation.businessDays,
     lateFee: readCurrencyInput($("#loanLateFee")),
     total: calculation.total,
     installment: calculation.installment,
@@ -2108,7 +2166,7 @@ async function saveLoan(event) {
   addHistory(
     "loan",
     index >= 0 ? "Empréstimo atualizado" : "Empréstimo criado",
-    `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)} · ${formatFrequency(loan.frequency)} · ${interestDescription(loan)} · total ${money(loan.total)}.`,
+    `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)} · ${formatFrequency(loan.frequency, loan.businessDays)} · ${interestDescription(loan)} · total ${money(loan.total)}.`,
   );
   const synced = await save();
   endSubmission(form, "loan");
@@ -2232,7 +2290,7 @@ function details(id) {
       interestGuide =
         index < loan.installments - 1
           ? `Pagar somente ${money(info.interestOnlyValue)} agora. O saldo de ${money(info.deferred)} será somado à próxima parcela, que ficará em ${money(info.nextDue)}.`
-          : `Pagar ${money(info.interestOnlyValue)} de juros e renovar esta parcela por mais ${Number(loan.frequency || 30)} dias. O saldo principal continuará em aberto até a quitação.`,
+          : `Pagar ${money(info.interestOnlyValue)} de juros e renovar esta parcela ${loan.businessDays ? "para o próximo dia útil" : `por mais ${Number(loan.frequency || 30)} dias`}. O saldo principal continuará em aberto até a quitação.`,
       partialGuide = partial
         ? index < loan.installments - 1
           ? `💡 Total recebido nesta parcela: ${money(partial.receivedTotal ?? partial.paidAmount)}. Após o último pagamento de ${money(partial.lastPayment ?? partial.paidAmount)}, o saldo ficou em ${money(partial.adjustedRemaining)} e foi somado à próxima parcela.`
@@ -2241,7 +2299,7 @@ function details(id) {
     return `<article class="installment-card ${visualStatus} ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${visualStatus}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por dia.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
   if (expandedInstallment?.startsWith(`${loan.id}:`)) {
     const installmentIndex = expandedInstallment.split(":")[1];
@@ -2313,9 +2371,11 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
           ? Number(infoBefore.deferred || 0)
           : Number(infoBefore.due || 0);
     if (isLastInterest) {
-      const renewedDate = dateFor(loan, installmentIndex);
-      renewedDate.setDate(
-        renewedDate.getDate() + Number(loan.frequency || 30),
+      const renewedDate = addScheduleIntervals(
+        dateFor(loan, installmentIndex),
+        loan.frequency || 30,
+        Boolean(loan.businessDays),
+        1,
       );
       loan.customDates = loan.customDates || {};
       loan.customDates[installment] = renewedDate.toISOString().slice(0, 10);
@@ -2384,15 +2444,20 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
         createdAt: paymentCreatedAt,
       };
     const paymentLabels = {
-      paid: "marcada como quitada",
-      interest: "marcada como somente juros",
-      missed: "marcada como não paga",
-      open: "deixada em aberto novamente",
-    };
+        paid: "marcada como quitada",
+        interest: "marcada como somente juros",
+        missed: "marcada como não paga",
+        open: "deixada em aberto novamente",
+      },
+      renewalDescription = isLastInterest
+        ? loan.businessDays
+          ? " e renovada para o próximo dia útil"
+          : ` e renovada por mais ${Number(loan.frequency || 30)} dias`
+        : "";
     addHistory(
       "payment",
       `Parcela ${Number(installment) + 1} alterada`,
-      `${loan.contract}: parcela ${paymentLabels[status]}${isLastInterest ? ` e renovada por mais ${Number(loan.frequency || 30)} dias` : ""}.`,
+      `${loan.contract}: parcela ${paymentLabels[status]}${renewalDescription}.`,
     );
     const syncPromise = save();
     render();
@@ -2608,12 +2673,17 @@ async function savePostpone(event) {
     snapshot = stateSnapshot(),
     loanId = $("#postponeLoanId").value,
     installment = $("#postponeInstallment").value,
-    next = $("#postponeDate").value,
+    requestedDate = $("#postponeDate").value,
     actionKey = `postpone:${loanId}:${installment}`;
-  if (!next) return toast("Escolha uma nova data.");
+  if (!requestedDate) return toast("Escolha uma nova data.");
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan)
     return toast("Este empréstimo não foi encontrado. Atualize a tela.");
+  const requestedDateValue = new Date(`${requestedDate}T12:00`),
+    next = loan.businessDays
+      ? dateInputValue(nextBusinessDayOrSame(requestedDateValue))
+      : requestedDate,
+    weekendAdjusted = next !== requestedDate;
   if (!beginSubmission(form, actionKey)) return;
   toast("Atualizando a data de vencimento...");
   try {
@@ -2634,7 +2704,9 @@ async function savePostpone(event) {
     details(loanId);
     toast(
       synced
-        ? "Data da parcela atualizada."
+        ? weekendAdjusted
+          ? "O final de semana foi pulado. Vencimento movido para segunda-feira."
+          : "Data da parcela atualizada."
         : "Data salva neste dispositivo. A sincronização será tentada novamente.",
       () => restoreSnapshot(snapshot, null, loanId),
     );

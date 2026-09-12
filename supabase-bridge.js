@@ -99,14 +99,17 @@
     custom_dates: {
       ...(loan.customDates || {}),
       _interestMode: loan.interestMode || undefined,
+      _businessDays: loan.businessDays || undefined,
     },
     archived: Boolean(loan.archived),
     created_at: loan.createdAt,
   });
   const fromLoanRow = (row) => {
     const customDates = { ...(row.custom_dates || {}) },
-      interestMode = customDates._interestMode;
+      interestMode = customDates._interestMode,
+      businessDays = Boolean(customDates._businessDays);
     delete customDates._interestMode;
+    delete customDates._businessDays;
     return {
       id: row.id,
       contract: row.contract,
@@ -114,6 +117,7 @@
       amount: Number(row.amount),
       rate: Number(row.rate),
       interestMode,
+      businessDays,
       installments: row.installments,
       frequency: row.frequency,
       lateFee: Number(row.late_fee || 0),
