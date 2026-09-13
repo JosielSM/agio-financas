@@ -11,6 +11,7 @@ as regras de acesso usando o token Firebase.
 3. Abra **SQL Editor** > **New query**, cole todo o arquivo `supabase-schema.sql` deste repositório e clique em **Run**.
 4. Para uma instalação nova, execute `supabase-schema.sql`. Para atualizar a instalação existente sem apagar dados, execute `supabase-firebase-migration.sql` conforme `FIREBASE_SETUP.md`.
 5. Execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas mensais e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
+6. Em uma instalação que já possui o painel, execute `supabase-auto-expiry-migration.sql`. Ela registra cada vencimento uma única vez e informa o proprietário no painel quando o acesso é bloqueado automaticamente por falta de pagamento.
 
 ## 2. Conectar o site ao Supabase
 
@@ -41,6 +42,8 @@ No painel é possível configurar a mensalidade e o PIX, acompanhar contas pende
 ativas, vencidas e bloqueadas, liberar períodos de 1 a 12 meses e gerar mensagens de
 cobrança para copiar ou abrir no WhatsApp. Para colaboradores, escolha **Vitalício —
 colaborador**: a conta fica sem vencimento, sem mensalidade e fora da receita prevista.
+No primeiro carregamento após um vencimento, o painel registra o bloqueio automático no
+histórico e mostra um aviso persistente com os usuários que precisam renovar.
 
 Para evitar conflito entre os dois PWAs, publique também o painel em um Worker separado:
 

@@ -31,9 +31,13 @@ create table if not exists public.platform_accounts (
   approved_at timestamptz,
   approved_by text,
   last_seen_at timestamptz,
+  expiry_notified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.platform_accounts
+  add column if not exists expiry_notified_at timestamptz;
 
 create index if not exists platform_accounts_status_idx
   on public.platform_accounts (status, paid_until);
@@ -68,6 +72,49 @@ create table if not exists public.platform_access_log (
   details jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+
+create or replace function public.register_platform_expiration()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status = 'active'
+    and new.paid_until is not null
+    and new.paid_until < current_date
+    and old.expiry_notified_at is null
+  then
+    new.expiry_notified_at := coalesce(new.expiry_notified_at, now());
+
+    insert into public.platform_access_log (
+      user_id, actor_id, action, action_label, details
+    ) values (
+      new.user_id,
+      coalesce(auth.jwt()->>'sub', 'system'),
+      'automatic_expiration',
+      'Acesso bloqueado automaticamente por pagamento vencido',
+      jsonb_build_object(
+        'reason', 'payment_overdue',
+        'paidUntil', new.paid_until,
+        'automatic', true
+      )
+    );
+  elsif new.status = 'active'
+    and (new.paid_until is null or new.paid_until >= current_date)
+  then
+    new.expiry_notified_at := null;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists platform_accounts_expiration_trigger
+  on public.platform_accounts;
+create trigger platform_accounts_expiration_trigger
+  before update on public.platform_accounts
+  for each row execute function public.register_platform_expiration();
 
 -- Contas já existentes ganham 30 dias para que a migração não interrompa ninguém.
 insert into public.platform_accounts (user_id, display_name, status, paid_until, last_seen_at)
@@ -117,6 +164,51 @@ as $$
         and status = 'active'
         and (paid_until is null or paid_until >= current_date)
     );
+$$;
+
+create or replace function public.admin_sync_expired_platform_accounts()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  expired_accounts jsonb := '[]'::jsonb;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso administrativo necessário';
+  end if;
+
+  with synchronized as (
+    update public.platform_accounts
+    set
+      expiry_notified_at = now(),
+      updated_at = now()
+    where status = 'active'
+      and paid_until is not null
+      and paid_until < current_date
+      and expiry_notified_at is null
+    returning user_id, display_name, email, paid_until
+  )
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'userId', user_id,
+        'name', coalesce(nullif(display_name, ''), nullif(email, ''), 'Conta sem nome'),
+        'email', email,
+        'paidUntil', paid_until
+      )
+    ),
+    '[]'::jsonb
+  )
+  into expired_accounts
+  from synchronized;
+
+  return jsonb_build_object(
+    'count', jsonb_array_length(expired_accounts),
+    'accounts', expired_accounts
+  );
+end;
 $$;
 
 create or replace function public.ensure_platform_account(
@@ -315,6 +407,7 @@ begin
       greatest(coalesce(paid_until, current_date), current_date)
       + make_interval(months => p_months)
     )::date,
+    expiry_notified_at = null,
     approved_at = now(),
     approved_by = actor_id,
     updated_at = now()
@@ -407,6 +500,7 @@ begin
     status = 'active',
     monthly_fee = 0,
     paid_until = null,
+    expiry_notified_at = null,
     approved_at = now(),
     approved_by = actor_id,
     updated_at = now()
@@ -579,6 +673,8 @@ grant select on public.platform_access_log to anon, authenticated;
 
 revoke all on function public.is_platform_admin() from public;
 revoke all on function public.has_active_platform_access() from public;
+revoke all on function public.admin_sync_expired_platform_accounts() from public;
+revoke all on function public.register_platform_expiration() from public;
 revoke all on function public.ensure_platform_account(text, text) from public;
 revoke all on function public.request_platform_access(text, text) from public;
 revoke all on function public.bootstrap_platform_admin(text) from public;
@@ -589,6 +685,7 @@ revoke all on function public.delete_my_account_data() from public;
 
 grant execute on function public.is_platform_admin() to anon, authenticated;
 grant execute on function public.has_active_platform_access() to anon, authenticated;
+grant execute on function public.admin_sync_expired_platform_accounts() to anon, authenticated;
 grant execute on function public.ensure_platform_account(text, text) to anon, authenticated;
 grant execute on function public.request_platform_access(text, text) to anon, authenticated;
 grant execute on function public.bootstrap_platform_admin(text) to anon, authenticated;

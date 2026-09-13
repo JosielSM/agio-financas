@@ -992,11 +992,11 @@ function accessContent(access) {
           button: "Reenviar solicitação",
         },
         expired: {
-          badge: "MENSALIDADE VENCIDA",
+          badge: "BLOQUEADO POR PAGAMENTO VENCIDO",
           icon: "!",
-          title: "Seu período de uso terminou",
+          title: "Seu acesso foi bloqueado automaticamente",
           message:
-            "A visualização continua disponível. Renove a mensalidade para voltar a cadastrar clientes, empréstimos e pagamentos.",
+            "A mensalidade venceu. Seus dados continuam visíveis, mas nenhuma alteração é permitida até a renovação do acesso.",
           button: "Solicitar renovação",
         },
         blocked: {

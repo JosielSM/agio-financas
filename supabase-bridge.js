@@ -224,6 +224,11 @@
     },
     async loadPlatformAdmin() {
       if (!client) throw new Error("O banco do painel não está conectado.");
+      const expirySyncResult = await client.rpc(
+        "admin_sync_expired_platform_accounts",
+      );
+      if (expirySyncResult.error && !missingFunction(expirySyncResult.error))
+        throw expirySyncResult.error;
       const [accountsResult, settingsResult, logResult, adminsResult] = await Promise.all([
         client.from("platform_accounts").select("*").order("created_at"),
         client.from("platform_settings").select("*").eq("id", 1).single(),
@@ -246,6 +251,9 @@
         settings: settingsResult.data,
         log: logResult.data || [],
         adminIds: (adminsResult.data || []).map((admin) => admin.user_id),
+        expirySync: expirySyncResult.error
+          ? { available: false, count: 0, accounts: [] }
+          : { available: true, ...(expirySyncResult.data || {}) },
       };
     },
     async savePlatformSettings(settings) {

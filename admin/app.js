@@ -206,9 +206,12 @@ function effectiveStatus(account) {
 const isLifetimeAccount = (account) =>
   effectiveStatus(account) === "active" && !account.paid_until;
 const statusLabel = (status) =>
-  ({ active: "Ativo", pending: "Pendente", expired: "Vencido", blocked: "Bloqueado" })[
-    status
-  ] || "Pendente";
+  ({
+    active: "Ativo",
+    pending: "Pendente",
+    expired: "Bloqueado por atraso",
+    blocked: "Bloqueio manual",
+  })[status] || "Pendente";
 const accountFee = (account) =>
   Number(account.monthly_fee ?? state.settings?.default_monthly_fee ?? 0);
 const dateLabel = (value) =>
@@ -252,6 +255,54 @@ function renderStats() {
     activeAccounts.reduce((total, account) => total + accountFee(account), 0),
   );
 }
+const expiryNoticeStorageKey = () =>
+  `credmais_admin_expiry_notices:${state.user?.id || "owner"}`;
+function expiredCustomerAccounts() {
+  return customerAccounts().filter(
+    (account) => effectiveStatus(account) === "expired",
+  );
+}
+function renderExpiryAlert() {
+  const accounts = expiredCustomerAccounts(),
+    alert = $("#expiryAlert");
+  alert.hidden = accounts.length === 0;
+  if (!accounts.length) return;
+  const names = accounts
+    .slice(0, 3)
+    .map((account) => account.display_name || account.email || "Conta sem nome"),
+    remaining = accounts.length - names.length;
+  $("#expiryAlertTitle").textContent = `${accounts.length} ${
+    accounts.length === 1 ? "acesso foi bloqueado" : "acessos foram bloqueados"
+  } automaticamente`;
+  $("#expiryAlertMessage").textContent = `${names.join(", ")}${
+    remaining > 0 ? ` e mais ${remaining}` : ""
+  }. Motivo: pagamento vencido. Os dados continuam visíveis, mas nenhuma alteração é permitida até a renovação.`;
+}
+function notifyAutomaticExpirations(expirySync = null) {
+  const expired = expiredCustomerAccounts(),
+    currentIds = expired.map((account) => account.user_id),
+    backendIds = new Set(
+      (expirySync?.accounts || []).map((account) => account.userId),
+    );
+  let previousIds = [];
+  try {
+    previousIds = JSON.parse(localStorage.getItem(expiryNoticeStorageKey()) || "[]");
+  } catch {
+    previousIds = [];
+  }
+  const previous = new Set(previousIds),
+    newlyBlocked = expired.filter(
+      (account) => backendIds.has(account.user_id) || !previous.has(account.user_id),
+    );
+  localStorage.setItem(expiryNoticeStorageKey(), JSON.stringify(currentIds));
+  if (!newlyBlocked.length) return false;
+  toast(
+    newlyBlocked.length === 1
+      ? `${newlyBlocked[0].display_name || newlyBlocked[0].email || "Um usuário"} foi bloqueado automaticamente por pagamento vencido.`
+      : `${newlyBlocked.length} usuários foram bloqueados automaticamente por pagamento vencido.`,
+  );
+  return true;
+}
 function needsAttention(account) {
   const status = effectiveStatus(account);
   if (status !== "active") return true;
@@ -262,6 +313,7 @@ function needsAttention(account) {
 }
 function renderOverview() {
   renderStats();
+  renderExpiryAlert();
   const attention = customerAccounts()
     .filter(needsAttention)
     .sort((first, second) => {
@@ -345,7 +397,8 @@ async function loadDashboard(notify = false) {
   renderOverview();
   renderAccounts();
   renderSettings();
-  if (notify) toast("Painel atualizado.");
+  const informedExpiration = notifyAutomaticExpirations(result.expirySync);
+  if (notify && !informedExpiration) toast("Painel atualizado.");
 }
 async function showDashboard() {
   $("#authView").hidden = true;
@@ -729,6 +782,14 @@ document.querySelectorAll("[data-charge-part]").forEach((input) =>
 );
 $("#settingsForm").addEventListener("submit", saveSettings);
 $("#refreshAccounts").onclick = () => loading($("#refreshAccounts"), () => loadDashboard(true));
+$("#openExpiredAccounts").onclick = () => {
+  state.filter = "expired";
+  document.querySelectorAll("[data-filter]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.filter === "expired"),
+  );
+  setSection("accounts");
+  renderAccounts();
+};
 $("#accountSearch").oninput = (event) => {
   state.search = event.target.value;
   renderAccounts();
