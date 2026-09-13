@@ -320,11 +320,9 @@ function renderAccounts() {
             email = escapeHtml(account.email || "E-mail não informado");
           return `<article class="account-row" data-manage-row="${userId}">
             <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}</b><small>${email}</small></div></div>
-            <div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div>
-            <div class="account-cell account-plan"><small>${lifetime ? "Tipo de acesso" : "Mensalidade"}</small><b>${lifetime ? "Colaborador" : money(accountFee(account))}</b></div>
-            <div class="account-cell account-status"><small>Status</small><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span><em>${accessDateLabel(account)}</em></div>
-            <div class="account-cell account-last-seen"><small>Último acesso</small><b>${dateTimeLabel(account.last_seen_at, "Ainda não acessou")}</b></div>
-            <div class="account-actions"><button data-manage="${userId}" aria-label="Ver ações de ${name}">Ver ações <span>›</span></button></div>
+            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `Vence: ${accessDateLabel(account)}`}</small></div>
+            <div class="account-compact-status"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span></div>
+            <div class="account-actions"><button data-manage="${userId}" aria-label="Abrir perfil e ações de ${name}" title="Abrir perfil">›</button></div>
           </article>`;
         })
         .join("")
@@ -422,6 +420,11 @@ function openManage(userId) {
   $("#chargeAccount").title = lifetime
     ? "Colaboradores vitalícios não possuem cobrança mensal."
     : "Gerar mensagem de cobrança";
+  const hasPhone = digits(account.phone).length >= 10;
+  $("#copyUserPhone").disabled = !hasPhone;
+  $("#contactUser").disabled = !hasPhone;
+  $("#copyUserPhone").title = hasPhone ? "Copiar número" : "WhatsApp não cadastrado";
+  $("#contactUser").title = hasPhone ? "Abrir conversa" : "WhatsApp não cadastrado";
   feedback("manageFeedback");
   syncManagePeriod();
   openModal("manageModal");
@@ -529,6 +532,57 @@ function billingMessage(account) {
     template,
   );
 }
+function splitBillingMessage(message) {
+  const blocks = String(message || "")
+    .replace(/\r/g, "")
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const greeting = blocks.shift() || "Olá! 👋";
+  const pixIndex = blocks.findIndex((block) => /pix|chave/i.test(block));
+  if (pixIndex >= 0)
+    return {
+      greeting,
+      details: blocks.slice(0, pixIndex).join("\n\n"),
+      pix: blocks[pixIndex],
+      closing: blocks.slice(pixIndex + 1).join("\n\n"),
+    };
+  return {
+    greeting,
+    details: blocks.shift() || "",
+    pix: blocks.shift() || "",
+    closing: blocks.join("\n\n"),
+  };
+}
+function syncChargePreview() {
+  $("#chargePreview").value = [
+    $("#chargeGreeting").value.trim(),
+    $("#chargeDetails").value.trim(),
+    $("#chargePix").value.trim(),
+    $("#chargeClosing").value.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+async function writeClipboard(value) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Alguns PWAs bloqueiam a API moderna; o método compatível abaixo mantém a ação disponível.
+    }
+  }
+  const temporary = document.createElement("textarea");
+  temporary.value = value;
+  temporary.style.position = "fixed";
+  temporary.style.opacity = "0";
+  document.body.appendChild(temporary);
+  temporary.select();
+  const copied = document.execCommand("copy");
+  temporary.remove();
+  if (!copied) throw new Error("COPY_NOT_SUPPORTED");
+}
 function openCharge(userId) {
   const account = state.accounts.find((item) => item.user_id === userId);
   if (!account) return toast("Esta conta não foi encontrada.");
@@ -536,33 +590,74 @@ function openCharge(userId) {
     return toast("Colaboradores vitalícios não possuem cobrança mensal.");
   state.chargedUserId = userId;
   $("#chargeName").textContent = `Cobrar ${account.display_name || "mensalidade"}`;
-  $("#chargePreview").value = billingMessage(account);
+  $("#chargeSubtitle").textContent = `${money(accountFee(account))} · vencimento ${dateLabel(account.paid_until || todayValue())}`;
+  const parts = splitBillingMessage(billingMessage(account));
+  $("#chargeGreeting").value = parts.greeting;
+  $("#chargeDetails").value = parts.details;
+  $("#chargePix").value = parts.pix;
+  $("#chargeClosing").value = parts.closing;
+  syncChargePreview();
   $("#sendCharge").disabled = digits(account.phone).length < 10;
   $("#sendCharge").title = $("#sendCharge").disabled
     ? "Cadastre o WhatsApp desta conta para enviar."
     : "Abrir WhatsApp";
+  feedback(
+    "chargeFeedback",
+    $("#sendCharge").disabled
+      ? "Cadastre o WhatsApp no perfil para habilitar o envio."
+      : "Mensagem pronta. Você pode editar qualquer bloco.",
+    $("#sendCharge").disabled ? "error" : "success",
+  );
   closeModals();
   openModal("chargeModal");
 }
 async function copyCharge() {
+  syncChargePreview();
   try {
-    await navigator.clipboard.writeText($("#chargePreview").value);
-    toast("Mensagem copiada.");
-  } catch {
-    $("#chargePreview").select();
-    document.execCommand("copy");
-    toast("Mensagem copiada.");
+    await writeClipboard($("#chargePreview").value);
+    feedback("chargeFeedback", "Mensagem premium copiada com sucesso.", "success");
+    toast("Mensagem de cobrança copiada.");
+  } catch (error) {
+    feedback("chargeFeedback", "Não foi possível copiar. Tente novamente.", "error");
   }
 }
 function sendCharge() {
   const account = state.accounts.find((item) => item.user_id === state.chargedUserId),
     phone = digits(account?.phone);
-  if (phone.length < 10) return toast("Cadastre um WhatsApp válido nesta conta.");
+  if (phone.length < 10) {
+    feedback("chargeFeedback", "Cadastre um WhatsApp válido no perfil desta conta.", "error");
+    return toast("WhatsApp não cadastrado.");
+  }
+  syncChargePreview();
+  feedback("chargeFeedback", "Abrindo a conversa no WhatsApp...", "success");
   window.open(
     `https://wa.me/55${phone}?text=${encodeURIComponent($("#chargePreview").value)}`,
     "_blank",
     "noopener",
   );
+}
+async function copyManagedContact(field) {
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    value = field === "email" ? account?.email : formatPhone(account?.phone || "");
+  if (!value) return toast(field === "email" ? "E-mail não informado." : "WhatsApp não cadastrado.");
+  try {
+    await writeClipboard(value);
+    feedback(
+      "manageFeedback",
+      field === "email" ? "E-mail copiado com sucesso." : "WhatsApp copiado com sucesso.",
+      "success",
+    );
+    toast(field === "email" ? "E-mail copiado." : "WhatsApp copiado.");
+  } catch {
+    feedback("manageFeedback", "Não foi possível copiar. Tente novamente.", "error");
+  }
+}
+function contactManagedUser() {
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    phone = digits(account?.phone);
+  if (phone.length < 10) return toast("Cadastre um WhatsApp válido nesta conta.");
+  feedback("manageFeedback", "Abrindo a conversa no WhatsApp...", "success");
+  window.open(`https://wa.me/55${phone}`, "_blank", "noopener");
 }
 async function saveSettings(event) {
   event.preventDefault();
@@ -621,8 +716,17 @@ $("#grantAccess").onclick = grantAccess;
 $("#manageMonths").onchange = syncManagePeriod;
 $("#toggleBlock").onclick = toggleBlock;
 $("#chargeAccount").onclick = () => openCharge(state.managedUserId);
+$("#copyUserEmail").onclick = () => copyManagedContact("email");
+$("#copyUserPhone").onclick = () => copyManagedContact("phone");
+$("#contactUser").onclick = contactManagedUser;
 $("#copyCharge").onclick = copyCharge;
 $("#sendCharge").onclick = sendCharge;
+document.querySelectorAll("[data-charge-part]").forEach((input) =>
+  input.addEventListener("input", () => {
+    syncChargePreview();
+    feedback("chargeFeedback", "Alteração aplicada à mensagem.", "success");
+  }),
+);
 $("#settingsForm").addEventListener("submit", saveSettings);
 $("#refreshAccounts").onclick = () => loading($("#refreshAccounts"), () => loadDashboard(true));
 $("#accountSearch").oninput = (event) => {
