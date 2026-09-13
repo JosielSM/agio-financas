@@ -99,16 +99,22 @@ button {
   grid-template-columns: 1fr 1fr;
 }
 .access-shell {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  min-height: 100dvh;
   padding: 28px;
   display: grid;
   place-items: center;
+  overflow-y: auto;
   background:
-    radial-gradient(circle at 15% 15%, #1ab77d24, transparent 34%),
-    radial-gradient(circle at 85% 80%, #3c78e51c, transparent 32%),
-    var(--bg);
+    radial-gradient(circle at 15% 15%, #1ab77d52, transparent 34%),
+    radial-gradient(circle at 85% 80%, #3c78e540, transparent 32%),
+    color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(9px);
 }
 .access-card {
+  position: relative;
   width: min(460px, 100%);
   padding: 30px;
   border: 1px solid var(--line);
@@ -116,6 +122,17 @@ button {
   background: var(--surface);
   box-shadow: 0 24px 70px #09261a1a;
   text-align: center;
+}
+.access-dismiss {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 20px;
 }
 .access-brand {
   display: flex;
@@ -189,6 +206,37 @@ button {
   color: var(--brand);
   font: 700 23px Outfit;
 }
+.access-payment {
+  margin: -8px 0 16px;
+  padding: 13px;
+  display: grid;
+  gap: 5px;
+  border: 1px dashed var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+}
+.access-payment > span,
+.access-payment > small {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: .5px;
+}
+.access-payment > b {
+  color: var(--text);
+  font-size: 13px;
+}
+.access-payment code {
+  padding: 8px;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--brand);
+  font: 700 12px DM Sans;
+}
+.access-payment button {
+  min-height: 36px;
+  margin-top: 3px;
+}
 .access-card form {
   display: grid;
   gap: 11px;
@@ -204,12 +252,95 @@ button {
   gap: 8px;
   margin-top: 10px;
 }
+.access-actions .primary {
+  grid-column: 1 / -1;
+}
 .access-actions button {
   min-height: 42px;
 }
 .access-security {
   margin-bottom: 0 !important;
   font-size: 10px !important;
+}
+.subscription-banner {
+  position: relative;
+  z-index: 6;
+  margin: 16px 28px 0 296px;
+  padding: 15px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #e1ad45;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff8e8, #fffdf8);
+  box-shadow: 0 10px 28px #8a5b1716;
+  color: #5d410c;
+}
+.subscription-banner-copy,
+.subscription-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.subscription-lock {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #ffe9b6;
+  font-size: 20px;
+}
+.subscription-banner strong,
+.subscription-banner p,
+.subscription-banner span {
+  margin: 0;
+}
+.subscription-banner p {
+  margin-top: 3px;
+  color: #7a6235;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.subscription-banner-actions > span {
+  display: grid;
+  min-width: 92px;
+  text-align: right;
+}
+.subscription-banner-actions small {
+  color: #8b7040;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.subscription-banner-actions b {
+  font: 700 16px Outfit;
+}
+.subscription-banner-actions button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.platform-read-only .requires-subscription {
+  position: relative;
+  opacity: .62;
+}
+.platform-read-only .requires-subscription::after {
+  content: "  🔒";
+  font-size: .78em;
+}
+.dark .subscription-banner {
+  border-color: #8b6b2d;
+  background: linear-gradient(135deg, #352c18, #29261e);
+  color: #ffe5a4;
+}
+.dark .subscription-lock {
+  background: #4a3917;
+}
+.dark .subscription-banner p,
+.dark .subscription-banner-actions small {
+  color: #d5c18e;
 }
 .auth-theme-toggle {
   position: fixed;
@@ -1462,6 +1593,29 @@ body.dark {
   }
   .access-actions {
     grid-template-columns: 1fr;
+  }
+  .access-actions .primary {
+    grid-column: auto;
+  }
+  .subscription-banner {
+    margin: 10px 10px 0;
+    padding: 13px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .subscription-banner-actions {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+  .subscription-banner-actions > span {
+    min-width: 74px;
+    text-align: left;
+  }
+  .subscription-banner-actions button {
+    padding-inline: 10px;
+    font-size: 11px;
   }
   .auth-shell {
     display: block;

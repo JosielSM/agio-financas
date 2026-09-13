@@ -52,6 +52,14 @@ O CredMais dos clientes continua no Worker `agio-financas`; o painel instalável
 Worker `credmais-controle`. Cadastre o domínio `credmais-controle.santosjosiel2003.workers.dev`
 nos domínios autorizados do Firebase para permitir login Google e recuperação de senha.
 
+## Modo de visualização sem assinatura
+
+Toda conta autenticada entra no painel completo. Contas pendentes, vencidas ou bloqueadas
+podem navegar e consultar seus próprios dados, mas cadastro, cobrança, empréstimos,
+pagamentos, edições, relatórios e exclusões exigem acesso ativo. Execute também
+`supabase-read-only-access-migration.sql` para separar no banco as permissões de leitura e
+escrita; assim, a proteção não depende apenas dos botões da interface.
+
 ## Checklist antes de uso real
 
 - RLS ativo nas duas tabelas.

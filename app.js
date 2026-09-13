@@ -4,6 +4,8 @@ const state = {
   clients: JSON.parse(localStorage.getItem("credmais_clients") || "[]"),
   loans: JSON.parse(localStorage.getItem("credmais_loans") || "[]"),
   history: JSON.parse(localStorage.getItem("credmais_history") || "[]"),
+  platformAccess: null,
+  accessPromptDismissed: false,
 };
 if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
   localStorage.setItem("credmais_cache_owner", state.user.id);
@@ -93,11 +95,20 @@ const initials = (name) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-const save = async () => {
+const save = async ({ allowReadOnly = false } = {}) => {
+  if (
+    !allowReadOnly &&
+    state.platformAccess?.enabled &&
+    !platformAccessAllowed(state.platformAccess)
+  )
+    throw new Error(
+      "Sua conta está em modo de visualização. Solicite a liberação para salvar alterações.",
+    );
   localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
   localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
   localStorage.setItem("credmais_history", JSON.stringify(state.history));
   if (state.user?.id) localStorage.setItem("credmais_cache_owner", state.user.id);
+  if (allowReadOnly && platformReadOnly()) return true;
   if (!window.credmaisBridge?.enabled) return true;
   try {
     await window.credmaisBridge.sync(
@@ -516,6 +527,8 @@ const stateSnapshot = () => ({
   loans: structuredClone(state.loans),
 });
 async function restoreSnapshot(snapshot, page = null, loanId = null) {
+  if (!requirePlatformAccess("desfazer esta alteração"))
+    throw new Error("Liberação necessária para desfazer esta alteração.");
   state.clients = structuredClone(snapshot.clients);
   state.loans = structuredClone(snapshot.loans);
   const synced = await save();
@@ -551,6 +564,7 @@ function endSubmission(form, key) {
   setFormLoading(form, false);
 }
 function openPix() {
+  if (!requirePlatformAccess("configurar os dados de cobrança")) return;
   $("#pixRecipientName").value =
     state.user?.pixRecipientName || state.user?.name || "";
   $("#pixKey").value = state.user?.pixKey || "";
@@ -845,7 +859,7 @@ async function changePassword(event) {
       "Senha alterada",
       "A senha de acesso da conta foi atualizada.",
     );
-    await save();
+    await save({ allowReadOnly: true });
     closeModals();
     form.reset();
     toast("Senha alterada com sucesso.");
@@ -861,6 +875,7 @@ async function changePassword(event) {
 }
 async function savePix(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("salvar os dados de cobrança")) return;
   const form = event.currentTarget,
     previousUser = { ...state.user },
     pixRecipientName = $("#pixRecipientName").value.trim(),
@@ -930,6 +945,107 @@ function platformAccessAllowed(access) {
   const paidUntil = new Date(`${access.paidUntil}T23:59:59`);
   return !Number.isNaN(paidUntil.getTime()) && paidUntil >= new Date();
 }
+const PLATFORM_MUTATION_SELECTOR = [
+  ".add-loan",
+  "#addClientBtn",
+  "#pixBtn",
+  "#monthlyReportBtn",
+  "[data-open-client]",
+  "[data-edit-client]",
+  "[data-delete-client]",
+  "[data-edit-loan]",
+  "[data-payment]",
+  "[data-postpone]",
+  "[data-partial]",
+  "[data-toggle-blacklist]",
+  "[data-archive-loan]",
+  "[data-delete-loan]",
+  "[data-whatsapp]",
+  "[data-contract-whatsapp]",
+].join(",");
+const PLATFORM_MUTATION_FORM_SELECTOR = [
+  "#clientForm",
+  "#loanForm",
+  "#postponeForm",
+  "#partialForm",
+  "#monthlyReportForm",
+  "#pixForm",
+].join(",");
+function platformReadOnly() {
+  return Boolean(
+    state.platformAccess?.enabled &&
+      !platformAccessAllowed(state.platformAccess),
+  );
+}
+function accessContent(access) {
+  const status = access?.status || "pending";
+  return {
+    status,
+    content:
+      {
+        pending: {
+          badge: "AGUARDANDO LIBERAÇÃO",
+          icon: "◷",
+          title: "Sua solicitação está pendente",
+          message:
+            "Você pode conhecer toda a plataforma. Para cadastrar, cobrar ou alterar dados, aguarde a liberação do administrador.",
+          button: "Reenviar solicitação",
+        },
+        expired: {
+          badge: "MENSALIDADE VENCIDA",
+          icon: "!",
+          title: "Seu período de uso terminou",
+          message:
+            "A visualização continua disponível. Renove a mensalidade para voltar a cadastrar clientes, empréstimos e pagamentos.",
+          button: "Solicitar renovação",
+        },
+        blocked: {
+          badge: "AÇÕES BLOQUEADAS",
+          icon: "×",
+          title: "Esta conta está em modo de visualização",
+          message:
+            "Você pode navegar pelo CredMais, mas precisa regularizar o acesso antes de realizar qualquer operação.",
+          button: "Avisar que quero regularizar",
+        },
+      }[status] || {
+        badge: "LIBERAÇÃO NECESSÁRIA",
+        icon: "◷",
+        title: "Conheça o CredMais",
+        message:
+          "Navegue normalmente pela plataforma e solicite a liberação quando quiser começar a usar as funcionalidades.",
+        button: "Solicitar liberação",
+      },
+  };
+}
+function applyPlatformRestrictions() {
+  const locked = platformReadOnly(),
+    banner = $("#subscriptionBanner");
+  document.body.classList.toggle("platform-read-only", locked);
+  if (banner) banner.hidden = !locked;
+  document.querySelectorAll(PLATFORM_MUTATION_SELECTOR).forEach((control) => {
+    control.classList.toggle("requires-subscription", locked);
+    if (locked) {
+      control.setAttribute("aria-disabled", "true");
+      if (!control.hasAttribute("data-subscription-title"))
+        control.dataset.subscriptionTitle = control.getAttribute("title") || "";
+      control.setAttribute("title", "Liberação necessária para usar esta função");
+    } else {
+      control.removeAttribute("aria-disabled");
+      if (control.hasAttribute("data-subscription-title")) {
+        if (control.dataset.subscriptionTitle)
+          control.setAttribute("title", control.dataset.subscriptionTitle);
+        else control.removeAttribute("title");
+        control.removeAttribute("data-subscription-title");
+      }
+    }
+  });
+}
+function requirePlatformAccess(action = "usar esta função") {
+  if (!platformReadOnly()) return true;
+  showAccessGate(state.platformAccess, { openPrompt: true });
+  toast(`Liberação necessária para ${action}.`);
+  return false;
+}
 async function resolvePlatformAccess() {
   if (!window.credmaisBridge?.platformAccess || !state.user?.id)
     return { enabled: false, status: "active" };
@@ -948,47 +1064,12 @@ async function resolvePlatformAccess() {
     throw error;
   }
 }
-function showAccessGate(access) {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
+function showAccessGate(access, { openPrompt = true } = {}) {
+  state.platformAccess = access;
   $("#authView").hidden = true;
-  $("#appView").hidden = true;
-  $("#accessView").hidden = false;
-  const status = access?.status || "pending",
-    content = {
-      pending: {
-        badge: "AGUARDANDO LIBERAÇÃO",
-        icon: "◷",
-        title: "Sua solicitação está pendente",
-        message:
-          "O administrador recebeu seu pedido e precisa liberar o período contratado.",
-        button: "Reenviar solicitação",
-      },
-      expired: {
-        badge: "MENSALIDADE VENCIDA",
-        icon: "!",
-        title: "Seu período de acesso terminou",
-        message:
-          "Solicite a renovação. Seus clientes e empréstimos continuam guardados com segurança.",
-        button: "Solicitar renovação",
-      },
-      blocked: {
-        badge: "ACESSO PAUSADO",
-        icon: "×",
-        title: "Esta conta está sem acesso",
-        message:
-          "Entre em contato com o administrador para regularizar sua assinatura.",
-        button: "Avisar que quero regularizar",
-      },
-    }[status] || {
-      badge: "LIBERAÇÃO NECESSÁRIA",
-      icon: "◷",
-      title: "Solicite acesso ao CredMais",
-      message: "Informe seu WhatsApp para o administrador liberar sua conta.",
-      button: "Solicitar liberação",
-    };
+  $("#appView").hidden = false;
+  $("#accessView").hidden = !openPrompt;
+  const { status, content } = accessContent(access);
   const statusBadge = $("#accessStatus");
   statusBadge.textContent = content.badge;
   statusBadge.className = `access-status ${status}`;
@@ -1003,12 +1084,43 @@ function showAccessGate(access) {
   $("#accessPaidUntil").textContent = access?.paidUntil
     ? `Último período liberado até ${new Date(`${access.paidUntil}T12:00`).toLocaleDateString("pt-BR")}.`
     : "A liberação será válida pelo período contratado.";
+  const paymentDetails = $("#accessPaymentDetails"),
+    billingPixKey = String(access?.billingPixKey || "").trim();
+  paymentDetails.hidden = !billingPixKey;
+  $("#accessBillingRecipient").textContent =
+    access?.billingRecipient || "CredMais";
+  $("#accessBillingPixType").textContent =
+    access?.billingPixType || "Chave PIX";
+  $("#accessBillingPixKey").textContent = billingPixKey;
+  $("#subscriptionBannerTitle").textContent = content.title;
+  $("#subscriptionBannerMessage").textContent = content.message;
+  $("#subscriptionBannerFee").textContent = money(
+    access?.monthlyFee ?? access?.defaultMonthlyFee ?? 0,
+  );
+  $("#subscriptionRequestButton").textContent = content.button;
+  applyPlatformRestrictions();
+  if (openPrompt) requestAnimationFrame(() => $("#accessDismiss").focus());
   setFeedback(
     "accessFeedback",
     access?.offline
       ? "Sem conexão. Exibindo a última situação salva neste aparelho."
       : "",
   );
+}
+function dismissAccessPrompt() {
+  $("#accessView").hidden = true;
+  state.accessPromptDismissed = true;
+  toast("Modo de visualização ativo. Use o aviso no topo para solicitar acesso.");
+}
+async function copyAccessPix() {
+  const pixKey = $("#accessBillingPixKey").textContent.trim();
+  if (!pixKey) return toast("A chave PIX ainda não foi configurada.");
+  try {
+    await navigator.clipboard.writeText(pixKey);
+    toast("Chave PIX copiada.");
+  } catch (_error) {
+    toast("Não foi possível copiar. Toque e segure a chave PIX para selecionar.");
+  }
 }
 async function requestPlatformAccess(event) {
   event.preventDefault();
@@ -1038,6 +1150,7 @@ async function requestPlatformAccess(event) {
       "success",
     );
   } catch (error) {
+    toast(error.message || "Não foi possível solicitar a liberação.");
     setFeedback(
       "accessFeedback",
       error.message || "Não foi possível solicitar a liberação.",
@@ -1048,37 +1161,47 @@ async function requestPlatformAccess(event) {
   }
 }
 async function refreshPlatformAccess() {
-  const button = $("#accessRefresh");
-  button.disabled = true;
-  button.textContent = "Atualizando...";
+  const buttons = [$("#accessRefresh"), $("#subscriptionRefreshButton")].filter(
+    Boolean,
+  );
+  buttons.forEach((button) => {
+    button.disabled = true;
+    button.dataset.originalText = button.textContent;
+    button.textContent = "Atualizando...";
+  });
   try {
     const access = await window.credmaisBridge.platformAccess(state.user);
     localStorage.setItem(
       platformAccessStorageKey(state.user.id),
       JSON.stringify(access),
     );
-    if (platformAccessAllowed(access)) await showApp();
+    if (platformAccessAllowed(access)) {
+      await showApp(access);
+      toast("Acesso liberado. Todas as funções estão disponíveis.");
+    }
     else {
-      showAccessGate(access);
+      showAccessGate(access, { openPrompt: true });
       setFeedback("accessFeedback", "Situação atualizada.", "success");
     }
   } catch (error) {
+    toast(error.message || "Não foi possível atualizar a situação agora.");
     setFeedback(
       "accessFeedback",
       error.message || "Não foi possível atualizar agora.",
       "error",
     );
   } finally {
-    button.disabled = false;
-    button.textContent = "Atualizar situação";
+    buttons.forEach((button) => {
+      button.disabled = false;
+      button.textContent = button.dataset.originalText || "Atualizar situação";
+      delete button.dataset.originalText;
+    });
   }
 }
-async function showApp() {
-  const access = await resolvePlatformAccess();
-  if (access?.enabled && !platformAccessAllowed(access)) {
-    showAccessGate(access);
-    return false;
-  }
+async function showApp(resolvedAccess = null) {
+  const access = resolvedAccess || (await resolvePlatformAccess()),
+    writeAllowed = platformAccessAllowed(access);
+  state.platformAccess = access;
   if (window.credmaisBridge?.enabled) {
     const cacheOwner = localStorage.getItem("credmais_cache_owner"),
       ownsCache = cacheOwner === state.user.id;
@@ -1101,31 +1224,59 @@ async function showApp() {
       localStorage.setItem("credmais_history", "[]");
       localStorage.setItem("credmais_cache_owner", state.user.id);
     }
-    try {
-      const pending = pendingSyncPayload(state.user.id, ownsCache);
-      if (pending) {
-        await window.credmaisBridge.sync(
-          state.user,
-          pending.clients,
-          pending.loans,
-          pending.history,
-        );
-        clearPendingSync(state.user.id);
+    if (writeAllowed) {
+      try {
+        const pending = pendingSyncPayload(state.user.id, ownsCache);
+        if (pending) {
+          await window.credmaisBridge.sync(
+            state.user,
+            pending.clients,
+            pending.loans,
+            pending.history,
+          );
+          clearPendingSync(state.user.id);
+        }
+        const cloud = await window.credmaisBridge.load();
+        state.clients = cloud.clients;
+        state.loans = cloud.loans;
+        state.history = cloud.history ?? state.history;
+        if (cloud.profile) {
+          state.user = { ...state.user, ...cloud.profile };
+          localStorage.setItem("credmais_user", JSON.stringify(state.user));
+        }
+        localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
+        localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
+        localStorage.setItem("credmais_history", JSON.stringify(state.history));
+        localStorage.setItem("credmais_cache_owner", state.user.id);
+      } catch (error) {
+        toast(`Usando os dados salvos neste dispositivo: ${error.message}`);
       }
-      const cloud = await window.credmaisBridge.load();
-      state.clients = cloud.clients;
-      state.loans = cloud.loans;
-      state.history = cloud.history ?? state.history;
-      if (cloud.profile) {
-        state.user = { ...state.user, ...cloud.profile };
-        localStorage.setItem("credmais_user", JSON.stringify(state.user));
+    } else {
+      try {
+        const cloud = await window.credmaisBridge.load(),
+          cloudHasData = Boolean(
+            cloud.clients.length ||
+              cloud.loans.length ||
+              (cloud.history || []).length,
+          ),
+          localHasData = Boolean(
+            state.clients.length || state.loans.length || state.history.length,
+          );
+        if (cloudHasData || !localHasData) {
+          state.clients = cloud.clients;
+          state.loans = cloud.loans;
+          state.history = cloud.history ?? state.history;
+          localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
+          localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
+          localStorage.setItem("credmais_history", JSON.stringify(state.history));
+        }
+        if (cloud.profile) {
+          state.user = { ...state.user, ...cloud.profile };
+          localStorage.setItem("credmais_user", JSON.stringify(state.user));
+        }
+      } catch (error) {
+        console.warn("Consulta em modo de visualização indisponível:", error.message);
       }
-      localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
-      localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
-      localStorage.setItem("credmais_history", JSON.stringify(state.history));
-      localStorage.setItem("credmais_cache_owner", state.user.id);
-    } catch (error) {
-      toast(`Usando os dados salvos neste dispositivo: ${error.message}`);
     }
   }
   $("#accessView").hidden = true;
@@ -1138,6 +1289,12 @@ async function showApp() {
   if ($(`#${requestedPage}Page`)) setPage(requestedPage);
   else setPage("dashboard");
   startAutoRefresh();
+  if (writeAllowed) {
+    $("#accessView").hidden = true;
+    $("#subscriptionBanner").hidden = true;
+    applyPlatformRestrictions();
+  } else showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
+  return true;
 }
 function hasOpenModal() {
   return Array.from(document.querySelectorAll(".modal")).some(
@@ -1150,6 +1307,7 @@ async function refreshFromCloud({ notify = false } = {}) {
     !window.credmaisBridge?.enabled ||
     !state.user?.id ||
     document.hidden ||
+    !$("#accessView").hidden ||
     hasOpenModal()
   )
     return false;
@@ -1157,9 +1315,13 @@ async function refreshFromCloud({ notify = false } = {}) {
   try {
     const access = await resolvePlatformAccess();
     if (access?.enabled && !platformAccessAllowed(access)) {
-      showAccessGate(access);
+      showAccessGate(access, { openPrompt: !$("#accessView").hidden });
       return false;
     }
+    const accessWasLocked = platformReadOnly();
+    state.platformAccess = access;
+    $("#accessView").hidden = true;
+    applyPlatformRestrictions();
     const pending = pendingSyncPayload(state.user.id),
       hadPendingSync = Boolean(pending);
     if (pending) {
@@ -1179,6 +1341,8 @@ async function refreshFromCloud({ notify = false } = {}) {
       JSON.stringify(state.history) !== JSON.stringify(nextHistory);
     if (!changed) {
       render();
+      if (accessWasLocked)
+        toast("Acesso liberado. Todas as funções estão disponíveis.");
       if (notify && hadPendingSync)
         toast("Dados pendentes sincronizados com sucesso.");
       return false;
@@ -1610,6 +1774,8 @@ async function confirmDelete() {
   }
 }
 function openClient(id) {
+  if (!requirePlatformAccess(id ? "editar clientes" : "cadastrar clientes"))
+    return;
   resetClientForm();
   if (id) {
     const client = state.clients.find((item) => item.id === id);
@@ -1653,6 +1819,8 @@ function prepareLoan(id) {
   updateLoanDuePreview();
 }
 function openLoan(id) {
+  if (!requirePlatformAccess(id ? "editar empréstimos" : "criar empréstimos"))
+    return;
   if (!state.clients.length) return openModal("loanModal");
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
@@ -1692,6 +1860,7 @@ function render() {
   renderPaid();
   renderHistory();
   renderBlacklist();
+  applyPlatformRestrictions();
 }
 const isLoanFullyPaid = (loan) =>
   Array.from({ length: loan.installments }, (_, index) =>
@@ -1867,6 +2036,7 @@ function updateReportPreview() {
   preview.innerHTML = `<div><span>Recebido</span><b>${money(data.received)}</b></div><div><span>Empréstimos</span><b>${data.loansCreated.length}</b></div><div><span>Atividades</span><b>${data.activities.length}</b></div>`;
 }
 function openMonthlyReport() {
+  if (!requirePlatformAccess("abrir o relatório mensal")) return;
   $("#reportMonth").value = reportMonthValue();
   updateReportPreview();
   $(".sidebar").classList.remove("open");
@@ -1934,6 +2104,7 @@ function buildMonthlyReport(period, data) {
 }
 async function downloadMonthlyReport(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("gerar o relatório mensal")) return;
   const form = event.currentTarget,
     period = reportPeriod($("#reportMonth").value);
   if (!period) return toast("Escolha um mês válido para gerar o relatório.");
@@ -2249,6 +2420,7 @@ function calc() {
 }
 async function saveClient(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("salvar clientes")) return;
   const form = event.currentTarget;
   const snapshot = stateSnapshot();
   const cpf = digits($("#clientCpf").value),
@@ -2295,6 +2467,7 @@ async function saveClient(event) {
 }
 async function saveLoan(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("salvar empréstimos")) return;
   const form = event.currentTarget;
   const snapshot = stateSnapshot();
   const calculation = calc();
@@ -2485,6 +2658,7 @@ function toggleDetailsActions(button) {
   button.textContent = willOpen ? "Fechar ações ×" : "Ações ⋮";
 }
 async function updatePayment(loanId, installment, status, triggerButton = null) {
+  if (!requirePlatformAccess("alterar parcelas")) return;
   const actionKey = "payment-action";
   if (submissionLocks.has(actionKey))
     return toast("Aguarde: outra alteração de parcela ainda está sendo salva.");
@@ -2661,6 +2835,7 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
   }
 }
 function openPostpone(loanId, installment) {
+  if (!requirePlatformAccess("adiar parcelas")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return toast("Este empréstimo não foi encontrado. Atualize a tela.");
   const client = state.clients.find((item) => item.id === loan.clientId),
@@ -2690,6 +2865,7 @@ function calculatePartialPayment() {
   return { due, paid, rate, remaining, adjusted };
 }
 function openPartialPayment(loanId, installment) {
+  if (!requirePlatformAccess("registrar pagamentos parciais")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return toast("Este empréstimo não foi encontrado. Atualize a tela.");
   const paymentStatus = paymentStateFor(loan, Number(installment));
@@ -2729,6 +2905,7 @@ function openPartialPayment(loanId, installment) {
 }
 async function savePartialPayment(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("registrar pagamentos parciais")) return;
   const form = event.currentTarget,
     snapshot = stateSnapshot(),
     loanId = $("#partialLoanId").value,
@@ -2836,6 +3013,7 @@ async function savePartialPayment(event) {
 }
 async function savePostpone(event) {
   event.preventDefault();
+  if (!requirePlatformAccess("alterar vencimentos")) return;
   const form = event.currentTarget,
     snapshot = stateSnapshot(),
     loanId = $("#postponeLoanId").value,
@@ -2887,6 +3065,7 @@ async function savePostpone(event) {
   }
 }
 async function toggleBlacklist(clientId, loanContext = null) {
+  if (!requirePlatformAccess("alterar a lista negra")) return;
   const client = state.clients.find((item) => item.id === clientId);
   if (!client) return;
   const actionKey = `blacklist:${clientId}`;
@@ -2935,6 +3114,7 @@ async function toggleBlacklist(clientId, loanContext = null) {
   }
 }
 async function archiveLoan(loanId) {
+  if (!requirePlatformAccess("arquivar empréstimos")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return toast("Este empréstimo não foi encontrado.");
   const actionKey = `archive:${loanId}`;
@@ -2983,6 +3163,7 @@ async function archiveLoan(loanId) {
   }
 }
 function requestDeleteClient(clientId) {
+  if (!requirePlatformAccess("excluir clientes")) return;
   const client = state.clients.find((item) => item.id === clientId);
   if (!client) return;
   const linkedLoans = state.loans.filter((loan) => loan.clientId === clientId);
@@ -3023,6 +3204,7 @@ async function deleteClient(clientId) {
   }
 }
 function requestDeleteLoan(loanId) {
+  if (!requirePlatformAccess("excluir empréstimos")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return;
   askDelete({
@@ -3056,6 +3238,7 @@ async function deleteLoan(loanId) {
   }
 }
 function openWhatsApp(loanId, installmentIndex) {
+  if (!requirePlatformAccess("enviar cobranças")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return toast("Este empréstimo não foi encontrado. Atualize a tela.");
   const client = state.clients.find((item) => item.id === loan.clientId),
@@ -3138,6 +3321,7 @@ function contractMessageFor(loan, client) {
   return `Olá, *${client.name}*! 👋\n\n📄 *RESUMO DO EMPRÉSTIMO*\n━━━━━━━━━━━━━━━━\n\n🧾 Contrato: *${loan.contract}*\n💵 Valor emprestado: *${money(loan.amount)}*\n📈 Cálculo: *${interestDescription(loan)}*\n➕ Valor dos juros: *${money(interestValue)}*\n💰 Total do contrato: *${money(loan.total)}*\n\n📦 Plano: *${contractInstallmentSummary(loan)}*\n🔁 Frequência: *${formatFrequency(loan.frequency || 30, loan.businessDays)}*\n📅 Primeiro vencimento: *${firstDue.toLocaleDateString("pt-BR")}*\n🏁 Último vencimento previsto: *${lastDue.toLocaleDateString("pt-BR")}*${scheduleRule}${lateFeeRule}${pixPayment}\n\n━━━━━━━━━━━━━━━━\n📌 Guarde esta mensagem para consultar as condições combinadas. Os lembretes de cada parcela serão enviados separadamente.\n\nAtenciosamente,\n*${senderName}*`;
 }
 function openContractWhatsApp(loanId) {
+  if (!requirePlatformAccess("enviar o contrato")) return;
   const loan = state.loans.find((item) => item.id === loanId);
   if (!loan) return toast("Este empréstimo não foi encontrado. Atualize a tela.");
   const client = state.clients.find((item) => item.id === loan.clientId),
@@ -3152,6 +3336,7 @@ function openContractWhatsApp(loanId) {
   );
 }
 function openContractShare(loanId) {
+  if (!requirePlatformAccess("compartilhar o contrato")) return;
   const loan = state.loans.find((item) => item.id === loanId),
     client = state.clients.find((item) => item.id === loan?.clientId);
   if (!loan || !client) return;
@@ -3188,6 +3373,32 @@ function toggleTheme() {
   const dark = !document.body.classList.contains("dark");
   applyTheme(dark);
 }
+document.addEventListener(
+  "click",
+  (event) => {
+    if (!platformReadOnly()) return;
+    const control = event.target.closest?.(PLATFORM_MUTATION_SELECTOR);
+    if (!control) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    requirePlatformAccess("usar esta função");
+  },
+  true,
+);
+document.addEventListener(
+  "submit",
+  (event) => {
+    if (
+      !platformReadOnly() ||
+      !event.target.matches(PLATFORM_MUTATION_FORM_SELECTOR)
+    )
+      return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    requirePlatformAccess("salvar esta alteração");
+  },
+  true,
+);
 $("#login").addEventListener("submit", login);
 $("#googleSignInButton").addEventListener("click", loginWithGoogle);
 $("#register").addEventListener("submit", register);
@@ -3290,6 +3501,12 @@ $("#accessPhone").addEventListener("input", (event) => {
   event.target.value = formatPhone(event.target.value);
 });
 $("#accessRefresh").onclick = refreshPlatformAccess;
+$("#accessDismiss").onclick = dismissAccessPrompt;
+$("#accessContinue").onclick = dismissAccessPrompt;
+$("#accessCopyPix").onclick = copyAccessPix;
+$("#subscriptionRequestButton").onclick = () =>
+  showAccessGate(state.platformAccess, { openPrompt: true });
+$("#subscriptionRefreshButton").onclick = refreshPlatformAccess;
 $("#accessLogout").onclick = async () => {
   if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
   localStorage.removeItem("credmais_user");
