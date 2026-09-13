@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-admin-v2";
+const CACHE_NAME = "credmais-admin-v3";
 const SHELL = [
   "/admin/",
   "/admin/index.html",

@@ -35,7 +35,19 @@
     <main>
       <section class="page active" id="overviewSection"><div class="welcome"><div><span class="eyebrow">CONTROLE DE ACESSO</span><h2>Olá, <span id="ownerGreeting">Administrador</span> 👋</h2><p>Acompanhe as contas que usam o CredMais.</p></div><button class="primary" data-section-target="accounts">Ver solicitações</button></div><div class="stats"><article><span class="stat-icon total">♙</span><p>Contas cadastradas</p><b id="statTotal">0</b></article><article><span class="stat-icon active">✓</span><p>Acessos ativos</p><b id="statActive">0</b></article><article><span class="stat-icon pending">◷</span><p>Pedidos pendentes</p><b id="statPending">0</b></article><article><span class="stat-icon revenue">R$</span><p>Mensalidade prevista</p><b id="statRevenue">R$ 0,00</b></article></div><div class="overview-grid"><section class="panel"><div class="panel-head"><div><h3>Contas que precisam de atenção</h3><p>Pendentes, vencidas ou próximas do vencimento.</p></div></div><div id="attentionList" class="attention-list"></div></section><section class="panel"><div class="panel-head"><div><h3>Atividade recente</h3><p>Liberações e bloqueios realizados.</p></div></div><div id="accessLog" class="access-log"></div></section></div></section>
 
-      <section class="page" id="accountsSection"><div class="page-head"><div><h2>Assinaturas</h2><p>Libere, renove ou pause o acesso de cada conta.</p></div><button class="outline" id="refreshAccounts">↻ Atualizar</button></div><div class="filters"><label class="search">⌕<input id="accountSearch" placeholder="Buscar por nome, e-mail ou WhatsApp"></label><div class="filter-buttons"><button class="active" data-filter="all">Todos</button><button data-filter="pending">Pendentes</button><button data-filter="active">Ativos</button><button data-filter="expired">Vencidos</button><button data-filter="blocked">Bloqueados</button></div></div><div class="accounts-list" id="accountsList"></div></section>
+      <section class="page" id="accountsSection">
+        <div class="page-head"><div><h2>Usuários e assinaturas</h2><p>Consulte o status e toque em uma conta para ver todas as ações.</p></div><button class="outline" id="refreshAccounts">↻ Atualizar</button></div>
+        <div class="accounts-toolbar">
+          <div class="filters">
+            <label class="search">⌕<input id="accountSearch" placeholder="Buscar por nome, e-mail ou WhatsApp" aria-label="Buscar usuário"></label>
+            <div class="filter-buttons" aria-label="Filtrar usuários">
+              <button class="active" data-filter="all">Todos</button><button data-filter="pending">Pendentes</button><button data-filter="active">Ativos</button><button data-filter="lifetime">Vitalícios</button><button data-filter="expired">Vencidos</button><button data-filter="blocked">Bloqueados</button>
+            </div>
+          </div>
+          <div class="accounts-summary"><b id="accountsResultCount">0 usuários</b><small>Selecione um usuário para liberar, renovar, cobrar ou bloquear.</small></div>
+        </div>
+        <div class="accounts-list" id="accountsList" aria-live="polite"></div>
+      </section>
 
       <section class="page" id="settingsSection"><div class="page-head"><div><h2>Configurações de cobrança</h2><p>Esses dados serão usados nas mensagens de mensalidade.</p></div></div><section class="panel settings-panel"><form id="settingsForm"><div class="form-grid"><label>Valor mensal padrão<input id="defaultMonthlyFee" inputmode="decimal" required></label><label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15"></label><label>Nome do recebedor<input id="billingRecipient" autocomplete="name"></label><label>Tipo da chave PIX<select id="billingPixType"><option>CPF</option><option>CNPJ</option><option>Celular</option><option>E-mail</option><option>Chave aleatória</option></select></label><label class="full">Chave PIX<input id="billingPixKey" autocomplete="off"></label><label class="full">Modelo da mensagem<textarea id="billingMessage" rows="9" required></textarea><small>Use: {nome}, {valor}, {vencimento}, {pix} e {recebedor}.</small></label></div><p class="feedback" id="settingsFeedback"></p><button class="primary" type="submit">Salvar configurações</button></form></section></section>
     </main>
@@ -43,7 +55,37 @@
   </div>
 
   <div class="backdrop" id="modalBackdrop" hidden></div>
-  <section class="modal" id="manageModal" hidden><button class="modal-close" data-close-modal>×</button><span class="eyebrow">GERENCIAR CONTA</span><h2 id="manageName">Conta</h2><p id="manageEmail" class="muted"></p><form id="manageForm"><input id="manageUserId" type="hidden"><div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15"></label><label>Mensalidade desta conta<input id="manageFee" inputmode="decimal" required></label><label class="full">Observações<textarea id="manageNotes" rows="3"></textarea></label><label>Período para liberar<select id="manageMonths"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">O período é somado ao acesso que ainda estiver válido.</small></label><div class="current-access"><span>Situação atual</span><b id="manageStatus">Pendente</b><small id="managePaidUntil"></small></div></div><p class="feedback" id="manageFeedback"></p><div class="modal-actions"><button class="outline" type="submit">Salvar dados</button><button class="primary" id="grantAccess" type="button">Liberar acesso</button></div><div class="secondary-actions"><button id="chargeAccount" type="button">Gerar cobrança</button><button class="danger-link" id="toggleBlock" type="button">Bloquear acesso</button></div></form></section>
+  <section class="modal account-detail-modal" id="manageModal" hidden aria-labelledby="manageName">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="manage-hero">
+      <span class="manage-avatar" id="manageAvatar">U</span>
+      <div><span class="eyebrow">PERFIL DO USUÁRIO</span><h2 id="manageName">Conta</h2><p id="manageEmail" class="muted"></p><span class="status pending" id="manageStatus">Pendente</span></div>
+    </header>
+    <div class="manage-summary">
+      <article><small>Acesso</small><b id="managePaidUntil">Não liberado</b></article>
+      <article><small>Último acesso</small><b id="manageLastSeen">Ainda não acessou</b></article>
+      <article><small>Solicitação</small><b id="manageRequestedAt">Não solicitou</b></article>
+      <article><small>Conta criada</small><b id="manageCreatedAt">Data indisponível</b></article>
+    </div>
+    <form id="manageForm">
+      <input id="manageUserId" type="hidden">
+      <section class="manage-section">
+        <div class="manage-section-title"><div><b>Dados e cobrança</b><small>Informações usadas no contato e na mensagem mensal.</small></div></div>
+        <div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15" placeholder="(00) 00000-0000"></label><label>Mensalidade desta conta<input id="manageFee" inputmode="decimal" required></label><label class="full">Observações<textarea id="manageNotes" rows="3" placeholder="Anotações internas sobre esta conta"></textarea></label></div>
+        <button class="outline wide-action" type="submit">Salvar dados do usuário</button>
+      </section>
+      <section class="manage-section access-section">
+        <div class="manage-section-title"><div><b>Liberar ou renovar acesso</b><small>Escolha um período. Para colaboradores, use o acesso vitalício.</small></div></div>
+        <label>Período para liberar<select id="manageMonths"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">O período é somado ao acesso que ainda estiver válido.</small></label>
+        <button class="primary wide-action" id="grantAccess" type="button">Liberar acesso</button>
+      </section>
+      <section class="manage-section quick-actions">
+        <div class="manage-section-title"><div><b>Outras ações</b><small>A cobrança abre uma mensagem pronta; o bloqueio pode ser revertido.</small></div></div>
+        <div class="secondary-actions"><button id="chargeAccount" type="button"><span>R$</span><b>Gerar cobrança</b></button><button class="danger-link" id="toggleBlock" type="button"><span>⊘</span><b>Bloquear acesso</b></button></div>
+      </section>
+      <p class="feedback" id="manageFeedback"></p>
+    </form>
+  </section>
   <section class="modal charge-modal" id="chargeModal" hidden><button class="modal-close" data-close-modal>×</button><span class="eyebrow">MENSAGEM DE COBRANÇA</span><h2 id="chargeName">Cobrar mensalidade</h2><p class="muted">Confira a mensagem antes de copiar ou abrir o WhatsApp.</p><textarea id="chargePreview" rows="13"></textarea><div class="modal-actions"><button class="outline" id="copyCharge" type="button">Copiar mensagem</button><button class="whatsapp-button" id="sendCharge" type="button">Enviar no WhatsApp</button></div></section>
   <div class="toast" id="adminToast"></div>
 

@@ -215,6 +215,24 @@ const dateLabel = (value) =>
   value ? new Date(`${value}T12:00`).toLocaleDateString("pt-BR") : "Não liberado";
 const accessDateLabel = (account) =>
   isLifetimeAccount(account) ? "Sem vencimento" : dateLabel(account.paid_until);
+const dateTimeLabel = (value, fallback = "Não informado") => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? fallback
+    : date.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+};
+const accountInitials = (account) => {
+  const source = (account.display_name || account.email || "U").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : source.slice(0, 2)).toUpperCase();
+};
 const todayValue = () => {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -270,18 +288,44 @@ function renderOverview() {
 }
 function renderAccounts() {
   const term = state.search.toLowerCase(),
-    accounts = customerAccounts().filter((account) => {
-      const status = effectiveStatus(account),
-        matchesFilter = state.filter === "all" || state.filter === status,
-        haystack = `${account.display_name || ""} ${account.email || ""} ${account.phone || ""}`.toLowerCase();
-      return matchesFilter && haystack.includes(term);
-    });
+    accounts = customerAccounts()
+      .filter((account) => {
+        const status = effectiveStatus(account),
+          lifetime = isLifetimeAccount(account),
+          matchesFilter =
+            state.filter === "all" ||
+            (state.filter === "lifetime" ? lifetime : state.filter === status),
+          haystack = `${account.display_name || ""} ${account.email || ""} ${account.phone || ""}`.toLowerCase();
+        return matchesFilter && haystack.includes(term);
+      })
+      .sort((first, second) => {
+        const order = { pending: 0, expired: 1, blocked: 2, active: 3 };
+        const difference = order[effectiveStatus(first)] - order[effectiveStatus(second)];
+        if (difference) return difference;
+        return String(first.display_name || first.email || "").localeCompare(
+          String(second.display_name || second.email || ""),
+          "pt-BR",
+        );
+      });
+  const resultCount = $("#accountsResultCount");
+  if (resultCount)
+    resultCount.textContent = `${accounts.length} ${accounts.length === 1 ? "usuário" : "usuários"}`;
   $("#accountsList").innerHTML = accounts.length
     ? accounts
         .map((account) => {
           const status = effectiveStatus(account),
             lifetime = isLifetimeAccount(account);
-          return `<article class="account-row"><div class="account-user"><b>${escapeHtml(account.display_name || "Conta sem nome")}</b><small>${escapeHtml(account.email || "E-mail não informado")}</small></div><div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div><div class="account-cell"><small>${lifetime ? "Colaborador" : "Mensalidade"}</small><b>${lifetime ? "Sem cobrança" : money(accountFee(account))}</b></div><div class="account-cell"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span><small>${accessDateLabel(account)}</small></div><div class="account-actions"><button data-manage="${escapeHtml(account.user_id)}">Gerenciar</button>${lifetime ? '<span class="lifetime-tag">Colaborador</span>' : `<button class="charge" data-charge="${escapeHtml(account.user_id)}">Cobrar</button>`}</div></article>`;
+          const userId = escapeHtml(account.user_id),
+            name = escapeHtml(account.display_name || "Conta sem nome"),
+            email = escapeHtml(account.email || "E-mail não informado");
+          return `<article class="account-row" data-manage-row="${userId}">
+            <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}</b><small>${email}</small></div></div>
+            <div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div>
+            <div class="account-cell account-plan"><small>${lifetime ? "Tipo de acesso" : "Mensalidade"}</small><b>${lifetime ? "Colaborador" : money(accountFee(account))}</b></div>
+            <div class="account-cell account-status"><small>Status</small><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span><em>${accessDateLabel(account)}</em></div>
+            <div class="account-cell account-last-seen"><small>Último acesso</small><b>${dateTimeLabel(account.last_seen_at, "Ainda não acessou")}</b></div>
+            <div class="account-actions"><button data-manage="${userId}" aria-label="Ver ações de ${name}">Ver ações <span>›</span></button></div>
+          </article>`;
         })
         .join("")
     : '<div class="panel empty">Nenhuma conta encontrada neste filtro.</div>';
@@ -334,7 +378,9 @@ function setSection(section) {
 }
 function openModal(id) {
   $("#modalBackdrop").hidden = false;
-  $(`#${id}`).hidden = false;
+  const modal = $(`#${id}`);
+  modal.hidden = false;
+  modal.scrollTop = 0;
   document.body.style.overflow = "hidden";
 }
 function closeModals() {
@@ -349,6 +395,7 @@ function openManage(userId) {
   $("#manageUserId").value = userId;
   $("#manageName").textContent = account.display_name || "Conta sem nome";
   $("#manageEmail").textContent = account.email || "E-mail não informado";
+  $("#manageAvatar").textContent = accountInitials(account);
   $("#managePhone").value = formatPhone(account.phone || "");
   setMoneyInput($("#manageFee"), accountFee(account));
   $("#manageNotes").value = account.notes || "";
@@ -356,13 +403,25 @@ function openManage(userId) {
   const lifetime = isLifetimeAccount(account);
   $("#manageMonths").value = lifetime ? "lifetime" : "1";
   $("#manageStatus").textContent = lifetime ? "Vitalício" : statusLabel(status);
+  $("#manageStatus").className = `status ${lifetime ? "lifetime" : status}`;
   $("#managePaidUntil").textContent = lifetime
-    ? "Acesso vitalício de colaborador, sem vencimento."
+    ? "Vitalício, sem vencimento"
     : account.paid_until
-    ? `Liberado até ${dateLabel(account.paid_until)}`
-    : "Ainda não possui período liberado.";
+      ? `Até ${dateLabel(account.paid_until)}`
+      : "Ainda não liberado";
+  $("#manageLastSeen").textContent = dateTimeLabel(account.last_seen_at, "Ainda não acessou");
+  $("#manageRequestedAt").textContent = dateTimeLabel(
+    account.access_requested_at,
+    "Não solicitou",
+  );
+  $("#manageCreatedAt").textContent = dateTimeLabel(account.created_at, "Data indisponível");
   $("#toggleBlock").textContent =
-    status === "blocked" ? "Reabrir solicitação" : "Bloquear acesso";
+    status === "blocked" ? "↻ Reabrir solicitação" : "⊘ Bloquear acesso";
+  $("#toggleBlock").classList.toggle("restore", status === "blocked");
+  $("#chargeAccount").disabled = lifetime;
+  $("#chargeAccount").title = lifetime
+    ? "Colaboradores vitalícios não possuem cobrança mensal."
+    : "Gerar mensagem de cobrança";
   feedback("manageFeedback");
   syncManagePeriod();
   openModal("manageModal");
@@ -582,26 +641,32 @@ $("#menuButton").onclick = () => document.querySelector(".admin-app aside").clas
 $("#modalBackdrop").onclick = closeModals;
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
-  if (!button) return;
-  if (button.dataset.authView) setAuthView(button.dataset.authView);
-  if (button.dataset.section) setSection(button.dataset.section);
-  if (button.dataset.sectionTarget) setSection(button.dataset.sectionTarget);
-  if (button.dataset.filter) {
-    state.filter = button.dataset.filter;
-    document.querySelectorAll("[data-filter]").forEach((item) =>
-      item.classList.toggle("active", item === button),
-    );
-    renderAccounts();
+  if (button) {
+    if (button.dataset.authView) setAuthView(button.dataset.authView);
+    if (button.dataset.section) setSection(button.dataset.section);
+    if (button.dataset.sectionTarget) setSection(button.dataset.sectionTarget);
+    if (button.dataset.filter) {
+      state.filter = button.dataset.filter;
+      document.querySelectorAll("[data-filter]").forEach((item) =>
+        item.classList.toggle("active", item === button),
+      );
+      renderAccounts();
+    }
+    if (button.dataset.manage) openManage(button.dataset.manage);
+    if (button.dataset.charge) openCharge(button.dataset.charge);
+    if (button.hasAttribute("data-close-modal")) closeModals();
   }
-  if (button.dataset.manage) openManage(button.dataset.manage);
-  if (button.dataset.charge) openCharge(button.dataset.charge);
-  if (button.hasAttribute("data-close-modal")) closeModals();
+  const accountRow = event.target.closest("[data-manage-row]");
+  if (accountRow && !button) openManage(accountRow.dataset.manageRow);
   const aside = document.querySelector(".admin-app aside");
   if (aside?.classList.contains("open") && !aside.contains(event.target) && !$("#menuButton").contains(event.target))
     aside.classList.remove("open");
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeModals();
+  if (event.key === "Escape") {
+    closeModals();
+    document.querySelector(".admin-app aside")?.classList.remove("open");
+  }
 });
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
