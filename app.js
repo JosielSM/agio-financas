@@ -2179,10 +2179,14 @@ async function saveLoan(event) {
       ? "Empréstimo atualizado com sucesso."
       : "Empréstimo cadastrado com sucesso.";
   toast(message, async () => {
-    if (index < 0 && window.credmaisBridge?.enabled)
-      await window.credmaisBridge.deleteLoan(loan.id);
+    if (index < 0) {
+      closeModals();
+      if (window.credmaisBridge?.enabled)
+        await window.credmaisBridge.deleteLoan(loan.id);
+    }
     await restoreSnapshot(snapshot, "loans");
   });
+  if (index < 0) openContractShare(loan.id);
 }
 function installmentInfo(loan, index) {
   let carry = 0;
@@ -2299,7 +2303,7 @@ function details(id) {
     return `<article class="installment-card ${visualStatus} ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${visualStatus}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small contract-message-action" data-contract-whatsapp="${escapeHtml(loan.id)}"><span>◉</span> Enviar resumo do contrato no WhatsApp</button><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
   if (expandedInstallment?.startsWith(`${loan.id}:`)) {
     const installmentIndex = expandedInstallment.split(":")[1];
@@ -2941,6 +2945,62 @@ function openWhatsApp(loanId, installmentIndex) {
     "noopener",
   );
 }
+function contractInstallmentSummary(loan) {
+  const installments = Math.max(1, Number(loan.installments) || 1),
+    firstValue = scheduledInstallmentFor(loan, 0),
+    lastValue = scheduledInstallmentFor(loan, installments - 1);
+  if (installments === 1) return `1 parcela de ${money(firstValue)}`;
+  if (firstValue === lastValue)
+    return `${installments} parcelas de ${money(firstValue)}`;
+  return `${installments - 1} parcelas de ${money(firstValue)} e a última de ${money(lastValue)}`;
+}
+function contractMessageFor(loan, client) {
+  const firstDue = dateFor(loan, 0),
+    lastDue = dateFor(loan, Math.max(0, Number(loan.installments) - 1)),
+    pixKey = state.user?.pixKey?.trim(),
+    pixRecipientName =
+      state.user?.pixRecipientName?.trim() || state.user?.name?.trim(),
+    senderName = pixRecipientName || "CredMais",
+    interestValue = roundCurrency(Number(loan.total) - Number(loan.amount)),
+    lateFee = Number(loan.lateFee || 0),
+    scheduleRule = loan.businessDays
+      ? "\n📆 Regra: *os vencimentos pulam sábados e domingos*."
+      : "",
+    lateFeeRule = lateFee
+      ? `\n⏰ Atraso: *${money(lateFee)} por ${loan.businessDays ? "dia útil" : "dia"}*.`
+      : "\n⏰ Atraso: *sem juros de atraso cadastrados*.",
+    pixPayment = pixKey
+      ? `\n\n💠 *DADOS PARA PAGAMENTO*\n👤 Recebedor: *${pixRecipientName || "Não informado"}*\n🔑 Chave ${state.user.pixType || "PIX"}:\n${pixKey}`
+      : "\n\n💳 Para realizar os pagamentos, solicite a chave PIX por este WhatsApp.";
+  return `Olá, *${client.name}*! 👋\n\n📄 *RESUMO DO EMPRÉSTIMO*\n━━━━━━━━━━━━━━━━\n\n🧾 Contrato: *${loan.contract}*\n💵 Valor emprestado: *${money(loan.amount)}*\n📈 Cálculo: *${interestDescription(loan)}*\n➕ Valor dos juros: *${money(interestValue)}*\n💰 Total do contrato: *${money(loan.total)}*\n\n📦 Plano: *${contractInstallmentSummary(loan)}*\n🔁 Frequência: *${formatFrequency(loan.frequency || 30, loan.businessDays)}*\n📅 Primeiro vencimento: *${firstDue.toLocaleDateString("pt-BR")}*\n🏁 Último vencimento previsto: *${lastDue.toLocaleDateString("pt-BR")}*${scheduleRule}${lateFeeRule}${pixPayment}\n\n━━━━━━━━━━━━━━━━\n📌 Guarde esta mensagem para consultar as condições combinadas. Os lembretes de cada parcela serão enviados separadamente.\n\nAtenciosamente,\n*${senderName}*`;
+}
+function openContractWhatsApp(loanId) {
+  const loan = state.loans.find((item) => item.id === loanId);
+  if (!loan) return toast("Este empréstimo não foi encontrado. Atualize a tela.");
+  const client = state.clients.find((item) => item.id === loan.clientId),
+    phone = digits(client?.phone);
+  if (!client) return toast("O cliente deste empréstimo não foi encontrado.");
+  if (phone.length < 10)
+    return toast("Este cliente não possui um telefone válido.");
+  window.open(
+    `https://wa.me/55${phone}?text=${encodeURIComponent(contractMessageFor(loan, client))}`,
+    "_blank",
+    "noopener",
+  );
+}
+function openContractShare(loanId) {
+  const loan = state.loans.find((item) => item.id === loanId),
+    client = state.clients.find((item) => item.id === loan?.clientId);
+  if (!loan || !client) return;
+  const firstDue = dateFor(loan, 0),
+    lastDue = dateFor(loan, Math.max(0, Number(loan.installments) - 1)),
+    scheduleNote = loan.businessDays
+      ? `<small><span>SEG–SEX</span> Finais de semana serão pulados</small>`
+      : "";
+  $("#contractSharePreview").innerHTML = `<div class="contract-share-client"><span>Cliente</span><b>${escapeHtml(client.name)}</b><small>${escapeHtml(loan.contract)}</small></div><div class="contract-share-values"><span><small>Valor emprestado</small><b>${money(loan.amount)}</b></span><span><small>Total do contrato</small><b>${money(loan.total)}</b></span></div><div class="contract-share-plan"><span>◫</span><div><b>${escapeHtml(contractInstallmentSummary(loan))}</b><small>${escapeHtml(formatFrequency(loan.frequency || 30, loan.businessDays))} · ${firstDue.toLocaleDateString("pt-BR")} até ${lastDue.toLocaleDateString("pt-BR")}</small>${scheduleNote}</div></div>`;
+  $("#contractShareButton").dataset.contractWhatsapp = loan.id;
+  openModal("contractShareModal");
+}
 function applyTheme(dark, persist = true) {
   document.body.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
@@ -3096,6 +3156,8 @@ document.addEventListener("click", (event) => {
   if (button.dataset.details) details(button.dataset.details);
   if (button.dataset.whatsapp)
     openWhatsApp(button.dataset.whatsapp, button.dataset.installment);
+  if (button.dataset.contractWhatsapp)
+    openContractWhatsApp(button.dataset.contractWhatsapp);
   if (button.dataset.editClient) {
     closeModals();
     openClient(button.dataset.editClient);

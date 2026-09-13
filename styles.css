@@ -1893,6 +1893,122 @@ body.dark {
 .details-actions-menu .delete-button {
   grid-column: 1 / -1;
 }
+.details-actions-menu .contract-message-action {
+  grid-column: 1 / -1;
+  border-color: #b9e4cd;
+  background: #e9f9f0;
+  color: #087c4d;
+}
+.dark .details-actions-menu .contract-message-action {
+  border-color: #2a684b;
+  background: #163e2c;
+  color: #bcf6d5;
+}
+.contract-share-modal {
+  max-width: 500px;
+}
+.contract-share-identity .modal-icon {
+  background: #def8ea;
+  color: #078553;
+}
+.contract-share-preview {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg);
+}
+.contract-share-client,
+.contract-share-client b,
+.contract-share-client small {
+  display: block;
+}
+.contract-share-client > span,
+.contract-share-values small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.contract-share-client b {
+  margin: 3px 0;
+  color: var(--text);
+  font: 700 17px Outfit;
+}
+.contract-share-client small {
+  color: var(--brand);
+  font-weight: 700;
+}
+.contract-share-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.contract-share-values > span {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--surface);
+}
+.contract-share-values b {
+  color: var(--text);
+  font: 700 14px Outfit;
+}
+.contract-share-plan {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.contract-share-plan > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--brand);
+}
+.contract-share-plan div,
+.contract-share-plan b,
+.contract-share-plan small {
+  display: block;
+}
+.contract-share-plan b {
+  color: var(--text);
+  font-size: 12px;
+}
+.contract-share-plan small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.contract-share-plan small span {
+  margin-right: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+.contract-share-actions {
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr);
+}
+.contract-share-button {
+  min-height: 43px;
+  border-radius: 9px;
+  background: #128c55;
+  color: #fff;
+  font-weight: 800;
+}
+.contract-share-button:hover {
+  background: #0e7848;
+}
 .installment-action {
   display: grid;
   grid-template-columns: 1fr auto;
