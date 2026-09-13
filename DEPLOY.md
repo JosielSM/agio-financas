@@ -39,7 +39,18 @@ confirmar esse código se torna proprietária; depois disso, o código é inutil
 
 No painel é possível configurar a mensalidade e o PIX, acompanhar contas pendentes,
 ativas, vencidas e bloqueadas, liberar períodos de 1 a 12 meses e gerar mensagens de
-cobrança para copiar ou abrir no WhatsApp.
+cobrança para copiar ou abrir no WhatsApp. Para colaboradores, escolha **Vitalício —
+colaborador**: a conta fica sem vencimento, sem mensalidade e fora da receita prevista.
+
+Para evitar conflito entre os dois PWAs, publique também o painel em um Worker separado:
+
+```bash
+npx wrangler deploy -c wrangler.admin.jsonc
+```
+
+O CredMais dos clientes continua no Worker `agio-financas`; o painel instalável usa o
+Worker `credmais-controle`. Cadastre o domínio `credmais-controle.santosjosiel2003.workers.dev`
+nos domínios autorizados do Firebase para permitir login Google e recuperação de senha.
 
 ## Checklist antes de uso real
 

@@ -275,6 +275,31 @@
       if (error) throw error;
       return data;
     },
+    async grantPlatformLifetime(userId) {
+      const { data, error } = await client.rpc("admin_grant_platform_lifetime", {
+        p_user_id: userId,
+      });
+      if (missingFunction(error)) {
+        const admin = await currentAuthUser();
+        const { data: fallbackData, error: fallbackError } = await client
+          .from("platform_accounts")
+          .update({
+            status: "active",
+            monthly_fee: 0,
+            paid_until: null,
+            approved_at: new Date().toISOString(),
+            approved_by: admin?.id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .select("*")
+          .single();
+        if (fallbackError) throw fallbackError;
+        return fallbackData;
+      }
+      if (error) throw error;
+      return data;
+    },
     async setPlatformAccountStatus(userId, status) {
       const { data, error } = await client.rpc("admin_set_platform_status", {
         p_user_id: userId,

@@ -1,9 +1,9 @@
 {
-  "id": "/admin/",
+  "id": "/credmais-controle-v1",
   "name": "CredMais Controle",
   "short_name": "CM Controle",
   "description": "Painel administrativo de assinaturas do CredMais.",
-  "start_url": "/admin/",
+  "start_url": "/admin/?origem=pwa-controle",
   "scope": "/admin/",
   "display": "standalone",
   "background_color": "#071d16",

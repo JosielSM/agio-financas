@@ -203,6 +203,8 @@ function effectiveStatus(account) {
   }
   return account.status || "pending";
 }
+const isLifetimeAccount = (account) =>
+  effectiveStatus(account) === "active" && !account.paid_until;
 const statusLabel = (status) =>
   ({ active: "Ativo", pending: "Pendente", expired: "Vencido", blocked: "Bloqueado" })[
     status
@@ -211,6 +213,8 @@ const accountFee = (account) =>
   Number(account.monthly_fee ?? state.settings?.default_monthly_fee ?? 0);
 const dateLabel = (value) =>
   value ? new Date(`${value}T12:00`).toLocaleDateString("pt-BR") : "Não liberado";
+const accessDateLabel = (account) =>
+  isLifetimeAccount(account) ? "Sem vencimento" : dateLabel(account.paid_until);
 const todayValue = () => {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -221,7 +225,7 @@ function renderStats() {
   const customers = customerAccounts(),
     statuses = customers.map(effectiveStatus),
     activeAccounts = customers.filter(
-      (account) => effectiveStatus(account) === "active",
+      (account) => effectiveStatus(account) === "active" && !isLifetimeAccount(account),
     );
   $("#statTotal").textContent = customers.length;
   $("#statActive").textContent = statuses.filter((status) => status === "active").length;
@@ -233,6 +237,7 @@ function renderStats() {
 function needsAttention(account) {
   const status = effectiveStatus(account);
   if (status !== "active") return true;
+  if (isLifetimeAccount(account)) return false;
   const end = new Date(`${account.paid_until}T12:00`),
     days = Math.ceil((end - new Date()) / 86400000);
   return days <= 7;
@@ -274,8 +279,9 @@ function renderAccounts() {
   $("#accountsList").innerHTML = accounts.length
     ? accounts
         .map((account) => {
-          const status = effectiveStatus(account);
-          return `<article class="account-row"><div class="account-user"><b>${escapeHtml(account.display_name || "Conta sem nome")}</b><small>${escapeHtml(account.email || "E-mail não informado")}</small></div><div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div><div class="account-cell"><small>Mensalidade</small><b>${money(accountFee(account))}</b></div><div class="account-cell"><span class="status ${status}">${statusLabel(status)}</span><small>${dateLabel(account.paid_until)}</small></div><div class="account-actions"><button data-manage="${escapeHtml(account.user_id)}">Gerenciar</button><button class="charge" data-charge="${escapeHtml(account.user_id)}">Cobrar</button></div></article>`;
+          const status = effectiveStatus(account),
+            lifetime = isLifetimeAccount(account);
+          return `<article class="account-row"><div class="account-user"><b>${escapeHtml(account.display_name || "Conta sem nome")}</b><small>${escapeHtml(account.email || "E-mail não informado")}</small></div><div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div><div class="account-cell"><small>${lifetime ? "Colaborador" : "Mensalidade"}</small><b>${lifetime ? "Sem cobrança" : money(accountFee(account))}</b></div><div class="account-cell"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span><small>${accessDateLabel(account)}</small></div><div class="account-actions"><button data-manage="${escapeHtml(account.user_id)}">Gerenciar</button>${lifetime ? '<span class="lifetime-tag">Colaborador</span>' : `<button class="charge" data-charge="${escapeHtml(account.user_id)}">Cobrar</button>`}</div></article>`;
         })
         .join("")
     : '<div class="panel empty">Nenhuma conta encontrada neste filtro.</div>';
@@ -346,16 +352,43 @@ function openManage(userId) {
   $("#managePhone").value = formatPhone(account.phone || "");
   setMoneyInput($("#manageFee"), accountFee(account));
   $("#manageNotes").value = account.notes || "";
-  $("#manageMonths").value = "1";
   const status = effectiveStatus(account);
-  $("#manageStatus").textContent = statusLabel(status);
-  $("#managePaidUntil").textContent = account.paid_until
+  const lifetime = isLifetimeAccount(account);
+  $("#manageMonths").value = lifetime ? "lifetime" : "1";
+  $("#manageStatus").textContent = lifetime ? "Vitalício" : statusLabel(status);
+  $("#managePaidUntil").textContent = lifetime
+    ? "Acesso vitalício de colaborador, sem vencimento."
+    : account.paid_until
     ? `Liberado até ${dateLabel(account.paid_until)}`
     : "Ainda não possui período liberado.";
   $("#toggleBlock").textContent =
     status === "blocked" ? "Reabrir solicitação" : "Bloquear acesso";
   feedback("manageFeedback");
+  syncManagePeriod();
   openModal("manageModal");
+}
+function syncManagePeriod() {
+  const lifetime = $("#manageMonths").value === "lifetime",
+    account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    feeInput = $("#manageFee");
+  if (lifetime) {
+    setMoneyInput(feeInput, 0);
+    feeInput.disabled = true;
+    $("#managePeriodHelp").textContent =
+      "Colaboradores ficam sem vencimento e sem cobrança mensal.";
+    $("#grantAccess").textContent = "Liberar vitalício";
+    return;
+  }
+  if (feeInput.disabled) {
+    const normalFee = Number(account?.monthly_fee) > 0
+      ? Number(account.monthly_fee)
+      : Number(state.settings?.default_monthly_fee || 0);
+    setMoneyInput(feeInput, normalFee);
+  }
+  feeInput.disabled = false;
+  $("#managePeriodHelp").textContent =
+    "O período é somado ao acesso que ainda estiver válido.";
+  $("#grantAccess").textContent = "Liberar acesso";
 }
 async function saveManagedAccount(showToast = true) {
   const account = await bridge.updatePlatformAccount(state.managedUserId, {
@@ -388,14 +421,22 @@ async function grantAccess() {
   await loading($("#grantAccess"), async () => {
     try {
       await saveManagedAccount(false);
-      await bridge.grantPlatformAccess(
-        state.managedUserId,
-        Number($("#manageMonths").value),
-        readMoneyInput($("#manageFee")),
-      );
+      const period = $("#manageMonths").value;
+      if (period === "lifetime")
+        await bridge.grantPlatformLifetime(state.managedUserId);
+      else
+        await bridge.grantPlatformAccess(
+          state.managedUserId,
+          Number(period),
+          readMoneyInput($("#manageFee")),
+        );
       closeModals();
       await loadDashboard();
-      toast("Acesso liberado pelo período escolhido.");
+      toast(
+        period === "lifetime"
+          ? "Acesso vitalício liberado para o colaborador."
+          : "Acesso liberado pelo período escolhido.",
+      );
     } catch (error) {
       feedback("manageFeedback", error.message || "Não foi possível liberar.", "error");
     }
@@ -432,6 +473,8 @@ function billingMessage(account) {
 function openCharge(userId) {
   const account = state.accounts.find((item) => item.user_id === userId);
   if (!account) return toast("Esta conta não foi encontrada.");
+  if (isLifetimeAccount(account))
+    return toast("Colaboradores vitalícios não possuem cobrança mensal.");
   state.chargedUserId = userId;
   $("#chargeName").textContent = `Cobrar ${account.display_name || "mensalidade"}`;
   $("#chargePreview").value = billingMessage(account);
@@ -516,6 +559,7 @@ $("#activationLogout").onclick = signOut;
 $("#adminLogout").onclick = signOut;
 $("#manageForm").addEventListener("submit", saveManage);
 $("#grantAccess").onclick = grantAccess;
+$("#manageMonths").onchange = syncManagePeriod;
 $("#toggleBlock").onclick = toggleBlock;
 $("#chargeAccount").onclick = () => openCharge(state.managedUserId);
 $("#copyCharge").onclick = copyCharge;
