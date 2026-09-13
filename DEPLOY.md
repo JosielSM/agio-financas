@@ -10,6 +10,7 @@ as regras de acesso usando o token Firebase.
 2. Escolha nome, região, senha forte do banco e aguarde a criação.
 3. Abra **SQL Editor** > **New query**, cole todo o arquivo `supabase-schema.sql` deste repositório e clique em **Run**.
 4. Para uma instalação nova, execute `supabase-schema.sql`. Para atualizar a instalação existente sem apagar dados, execute `supabase-firebase-migration.sql` conforme `FIREBASE_SETUP.md`.
+5. Execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas mensais e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
 
 ## 2. Conectar o site ao Supabase
 
@@ -29,6 +30,17 @@ As políticas RLS comparam `owner_id` ao `sub` do token e fazem com que cada usu
 5. Faça um novo deploy ou aguarde o próximo push para `main`. A URL seguirá o formato `https://agio-financas.<sua-conta>.workers.dev`.
 6. Volte à etapa 1.5 e cadastre exatamente essa URL no Supabase. A partir daí, todo push na branch `main` publicará a nova versão automaticamente.
 
+## Painel do proprietário
+
+O painel administrativo fica em `/admin/` na mesma URL publicada e também pode ser
+instalado como PWA. No primeiro acesso, crie ou entre em uma conta Firebase e use o
+código único de ativação entregue fora do repositório. Somente a primeira conta que
+confirmar esse código se torna proprietária; depois disso, o código é inutilizado.
+
+No painel é possível configurar a mensalidade e o PIX, acompanhar contas pendentes,
+ativas, vencidas e bloqueadas, liberar períodos de 1 a 12 meses e gerar mensagens de
+cobrança para copiar ou abrir no WhatsApp.
+
 ## Checklist antes de uso real
 
 - RLS ativo nas duas tabelas.
@@ -36,5 +48,7 @@ As políticas RLS comparam `owner_id` ao `sub` do token e fazem com que cada usu
 - Confirmação de e-mail ativada.
 - Senha forte para o projeto Supabase.
 - Dados de teste conferidos em um segundo usuário: ele não deve enxergar os clientes do primeiro.
+- Conta proprietária ativada em `/admin/` e não contabilizada como cliente pagante.
+- Conta de teste pendente até a liberação e bloqueada novamente após o vencimento.
 
 O envio automático de WhatsApp permanece fora desta versão. Ele exigirá uma API de servidor e credenciais próprias do WhatsApp Business.

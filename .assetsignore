@@ -15,3 +15,5 @@
 !vendor/html2pdf.bundle.min.js
 !icons/
 !icons/**
+!admin/
+!admin/**

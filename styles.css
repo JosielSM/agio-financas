@@ -98,6 +98,119 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
+.access-shell {
+  min-height: 100vh;
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 15% 15%, #1ab77d24, transparent 34%),
+    radial-gradient(circle at 85% 80%, #3c78e51c, transparent 32%),
+    var(--bg);
+}
+.access-card {
+  width: min(460px, 100%);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px #09261a1a;
+  text-align: center;
+}
+.access-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 22px;
+  color: var(--text);
+  font: 700 21px Outfit;
+}
+.access-status {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #fff1cf;
+  color: #8b5a00;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .6px;
+}
+.access-status.expired,
+.access-status.blocked {
+  background: #fee6e3;
+  color: #b63b37;
+}
+.dark .access-status {
+  background: #4a3917;
+  color: #ffe29a;
+}
+.dark .access-status.expired,
+.dark .access-status.blocked {
+  background: #4b2424;
+  color: #ffc4c0;
+}
+.access-icon {
+  width: 58px;
+  height: 58px;
+  margin: 16px auto 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--soft);
+  color: var(--brand);
+  font-size: 28px;
+}
+.access-card h1 {
+  margin: 0;
+  color: var(--text);
+  font: 700 26px Outfit;
+}
+.access-card > p {
+  margin: 9px auto 19px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.access-price {
+  display: grid;
+  gap: 3px;
+  margin: 18px 0;
+  padding: 14px;
+  border-radius: 13px;
+  background: var(--bg);
+}
+.access-price span,
+.access-price small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.access-price b {
+  color: var(--brand);
+  font: 700 23px Outfit;
+}
+.access-card form {
+  display: grid;
+  gap: 11px;
+  text-align: left;
+}
+.access-card form .primary {
+  width: 100%;
+  min-height: 46px;
+}
+.access-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.access-actions button {
+  min-height: 42px;
+}
+.access-security {
+  margin-bottom: 0 !important;
+  font-size: 10px !important;
+}
 .auth-theme-toggle {
   position: fixed;
   z-index: 5;
@@ -1339,6 +1452,17 @@ body.dark {
   }
 }
 @media (max-width: 680px) {
+  .access-shell {
+    min-height: 100dvh;
+    padding: 14px;
+  }
+  .access-card {
+    padding: 25px 19px;
+    border-radius: 18px;
+  }
+  .access-actions {
+    grid-template-columns: 1fr;
+  }
   .auth-shell {
     display: block;
   }

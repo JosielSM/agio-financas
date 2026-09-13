@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#075b43">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CredMais Controle">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <title>CredMais Controle | Administração</title>
+</head>
+<body>
+  <div class="loader" id="adminLoader"><div class="loader-mark">C</div><strong>CredMais Controle</strong><span></span></div>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar tema">☾</button>
+
+  <main class="auth-shell" id="authView">
+    <section class="auth-brand"><div class="brand-lockup"><span>C</span><b>CredMais <em>Controle</em></b></div><div><small>PAINEL DO PROPRIETÁRIO</small><h1>Assinaturas organizadas.<br>Controle na sua mão.</h1><p>Libere contas, acompanhe vencimentos e gerencie a cobrança mensal da plataforma.</p></div><ul><li>✓ Acesso exclusivo do administrador</li><li>✓ Liberação por mês</li><li>✓ Cobranças prontas para WhatsApp</li></ul></section>
+    <section class="auth-card">
+      <div id="loginView"><span class="eyebrow">ACESSO ADMINISTRATIVO</span><h2>Entre no painel</h2><p>Use a conta exclusiva do proprietário.</p><form id="adminLogin"><label>E-mail<input id="loginEmail" type="email" autocomplete="email" required></label><label>Senha<input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required></label><p class="feedback" id="loginFeedback"></p><button class="primary" type="submit">Entrar no painel →</button></form><div class="divider"><span>ou</span></div><button class="google-button" id="googleLogin" type="button"><b>G</b> Continuar com Google</button><div class="auth-links"><button data-auth-view="forgot">Esqueci minha senha</button><button data-auth-view="register">Criar conta administrativa</button></div></div>
+      <div id="registerView" hidden><span class="eyebrow">PRIMEIRO ACESSO</span><h2>Crie sua conta</h2><p>Depois de confirmar o e-mail, use o código único de ativação.</p><form id="adminRegister"><label>Seu nome<input id="registerName" autocomplete="name" minlength="2" required></label><label>E-mail<input id="registerEmail" type="email" autocomplete="email" required></label><label>Senha<input id="registerPassword" type="password" autocomplete="new-password" minlength="6" required></label><label>Confirmar senha<input id="registerPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required></label><p class="feedback" id="registerFeedback"></p><button class="primary" type="submit">Criar conta segura</button></form><button class="back-link" data-auth-view="login">← Voltar para entrar</button></div>
+      <div id="forgotView" hidden><span class="eyebrow">RECUPERAÇÃO</span><h2>Recupere sua senha</h2><p>Enviaremos o link seguro pelo Firebase.</p><form id="adminForgot"><label>E-mail<input id="forgotEmail" type="email" autocomplete="email" required></label><p class="feedback" id="forgotFeedback"></p><button class="primary" type="submit">Enviar e-mail</button></form><button class="back-link" data-auth-view="login">← Voltar para entrar</button></div>
+      <div id="activationView" hidden><span class="activation-icon">⌘</span><span class="eyebrow">ATIVAÇÃO DO PROPRIETÁRIO</span><h2>Proteja o seu painel</h2><p>Digite o código único entregue na configuração. Depois da primeira ativação, ele deixa de funcionar.</p><form id="adminActivation"><label>Código de ativação<input id="activationCode" autocomplete="one-time-code" spellcheck="false" required></label><p class="feedback" id="activationFeedback"></p><button class="primary" type="submit">Ativar como proprietário</button></form><button class="back-link" id="activationLogout" type="button">Sair desta conta</button></div>
+    </section>
+  </main>
+
+  <div class="admin-app" id="adminView" hidden>
+    <aside><div class="brand-lockup"><span>C</span><b>CredMais <em>Controle</em></b></div><nav><button class="active" data-section="overview"><i>⌂</i>Visão geral</button><button data-section="accounts"><i>♙</i>Assinaturas</button><button data-section="settings"><i>⚙</i>Configurações</button></nav><div class="aside-bottom"><button id="installAdmin"><i>⇩</i>Instalar painel</button><button id="adminLogout"><i>↪</i>Sair</button></div></aside>
+    <header><button class="menu-button" id="menuButton">☰</button><div><small>PAINEL DO PROPRIETÁRIO</small><h1 id="sectionTitle">Visão geral</h1></div><div class="owner"><span id="ownerInitial">A</span><div><b id="ownerName">Administrador</b><small>Conta protegida</small></div></div></header>
+    <main>
+      <section class="page active" id="overviewSection"><div class="welcome"><div><span class="eyebrow">CONTROLE DE ACESSO</span><h2>Olá, <span id="ownerGreeting">Administrador</span> 👋</h2><p>Acompanhe as contas que usam o CredMais.</p></div><button class="primary" data-section-target="accounts">Ver solicitações</button></div><div class="stats"><article><span class="stat-icon total">♙</span><p>Contas cadastradas</p><b id="statTotal">0</b></article><article><span class="stat-icon active">✓</span><p>Acessos ativos</p><b id="statActive">0</b></article><article><span class="stat-icon pending">◷</span><p>Pedidos pendentes</p><b id="statPending">0</b></article><article><span class="stat-icon revenue">R$</span><p>Mensalidade prevista</p><b id="statRevenue">R$ 0,00</b></article></div><div class="overview-grid"><section class="panel"><div class="panel-head"><div><h3>Contas que precisam de atenção</h3><p>Pendentes, vencidas ou próximas do vencimento.</p></div></div><div id="attentionList" class="attention-list"></div></section><section class="panel"><div class="panel-head"><div><h3>Atividade recente</h3><p>Liberações e bloqueios realizados.</p></div></div><div id="accessLog" class="access-log"></div></section></div></section>
+
+      <section class="page" id="accountsSection"><div class="page-head"><div><h2>Assinaturas</h2><p>Libere, renove ou pause o acesso de cada conta.</p></div><button class="outline" id="refreshAccounts">↻ Atualizar</button></div><div class="filters"><label class="search">⌕<input id="accountSearch" placeholder="Buscar por nome, e-mail ou WhatsApp"></label><div class="filter-buttons"><button class="active" data-filter="all">Todos</button><button data-filter="pending">Pendentes</button><button data-filter="active">Ativos</button><button data-filter="expired">Vencidos</button><button data-filter="blocked">Bloqueados</button></div></div><div class="accounts-list" id="accountsList"></div></section>
+
+      <section class="page" id="settingsSection"><div class="page-head"><div><h2>Configurações de cobrança</h2><p>Esses dados serão usados nas mensagens de mensalidade.</p></div></div><section class="panel settings-panel"><form id="settingsForm"><div class="form-grid"><label>Valor mensal padrão<input id="defaultMonthlyFee" inputmode="decimal" required></label><label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15"></label><label>Nome do recebedor<input id="billingRecipient" autocomplete="name"></label><label>Tipo da chave PIX<select id="billingPixType"><option>CPF</option><option>CNPJ</option><option>Celular</option><option>E-mail</option><option>Chave aleatória</option></select></label><label class="full">Chave PIX<input id="billingPixKey" autocomplete="off"></label><label class="full">Modelo da mensagem<textarea id="billingMessage" rows="9" required></textarea><small>Use: {nome}, {valor}, {vencimento}, {pix} e {recebedor}.</small></label></div><p class="feedback" id="settingsFeedback"></p><button class="primary" type="submit">Salvar configurações</button></form></section></section>
+    </main>
+    <nav class="bottom-nav"><button class="active" data-section="overview"><i>⌂</i><span>Início</span></button><button data-section="accounts"><i>♙</i><span>Assinaturas</span></button><button data-section="settings"><i>⚙</i><span>Ajustes</span></button></nav>
+  </div>
+
+  <div class="backdrop" id="modalBackdrop" hidden></div>
+  <section class="modal" id="manageModal" hidden><button class="modal-close" data-close-modal>×</button><span class="eyebrow">GERENCIAR CONTA</span><h2 id="manageName">Conta</h2><p id="manageEmail" class="muted"></p><form id="manageForm"><input id="manageUserId" type="hidden"><div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15"></label><label>Mensalidade desta conta<input id="manageFee" inputmode="decimal" required></label><label class="full">Observações<textarea id="manageNotes" rows="3"></textarea></label><label>Período para liberar<select id="manageMonths"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label><div class="current-access"><span>Situação atual</span><b id="manageStatus">Pendente</b><small id="managePaidUntil"></small></div></div><p class="feedback" id="manageFeedback"></p><div class="modal-actions"><button class="outline" type="submit">Salvar dados</button><button class="primary" id="grantAccess" type="button">Liberar acesso</button></div><div class="secondary-actions"><button id="chargeAccount" type="button">Gerar cobrança</button><button class="danger-link" id="toggleBlock" type="button">Bloquear acesso</button></div></form></section>
+  <section class="modal charge-modal" id="chargeModal" hidden><button class="modal-close" data-close-modal>×</button><span class="eyebrow">MENSAGEM DE COBRANÇA</span><h2 id="chargeName">Cobrar mensalidade</h2><p class="muted">Confira a mensagem antes de copiar ou abrir o WhatsApp.</p><textarea id="chargePreview" rows="13"></textarea><div class="modal-actions"><button class="outline" id="copyCharge" type="button">Copiar mensagem</button><button class="whatsapp-button" id="sendCharge" type="button">Enviar no WhatsApp</button></div></section>
+  <div class="toast" id="adminToast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../supabase-config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../firebase-bridge.js"></script>
+  <script src="../supabase-bridge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

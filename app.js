@@ -921,7 +921,164 @@ function setAuth(view) {
   if (view === "forgot")
     $("#forgotEmail").value = $("#loginEmail").value.trim();
 }
+const platformAccessStorageKey = (userId) =>
+  `credmais_platform_access:${String(userId || "")}`;
+function platformAccessAllowed(access) {
+  if (!access?.enabled || access.status === "admin") return true;
+  if (access.status !== "active") return false;
+  if (!access.paidUntil) return true;
+  const paidUntil = new Date(`${access.paidUntil}T23:59:59`);
+  return !Number.isNaN(paidUntil.getTime()) && paidUntil >= new Date();
+}
+async function resolvePlatformAccess() {
+  if (!window.credmaisBridge?.platformAccess || !state.user?.id)
+    return { enabled: false, status: "active" };
+  try {
+    const access = await window.credmaisBridge.platformAccess(state.user);
+    localStorage.setItem(
+      platformAccessStorageKey(state.user.id),
+      JSON.stringify(access),
+    );
+    return access;
+  } catch (error) {
+    const cached = JSON.parse(
+      localStorage.getItem(platformAccessStorageKey(state.user.id)) || "null",
+    );
+    if (cached) return { ...cached, offline: true };
+    throw error;
+  }
+}
+function showAccessGate(access) {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  $("#authView").hidden = true;
+  $("#appView").hidden = true;
+  $("#accessView").hidden = false;
+  const status = access?.status || "pending",
+    content = {
+      pending: {
+        badge: "AGUARDANDO LIBERAÇÃO",
+        icon: "◷",
+        title: "Sua solicitação está pendente",
+        message:
+          "O administrador recebeu seu pedido e precisa liberar o período contratado.",
+        button: "Reenviar solicitação",
+      },
+      expired: {
+        badge: "MENSALIDADE VENCIDA",
+        icon: "!",
+        title: "Seu período de acesso terminou",
+        message:
+          "Solicite a renovação. Seus clientes e empréstimos continuam guardados com segurança.",
+        button: "Solicitar renovação",
+      },
+      blocked: {
+        badge: "ACESSO PAUSADO",
+        icon: "×",
+        title: "Esta conta está sem acesso",
+        message:
+          "Entre em contato com o administrador para regularizar sua assinatura.",
+        button: "Avisar que quero regularizar",
+      },
+    }[status] || {
+      badge: "LIBERAÇÃO NECESSÁRIA",
+      icon: "◷",
+      title: "Solicite acesso ao CredMais",
+      message: "Informe seu WhatsApp para o administrador liberar sua conta.",
+      button: "Solicitar liberação",
+    };
+  const statusBadge = $("#accessStatus");
+  statusBadge.textContent = content.badge;
+  statusBadge.className = `access-status ${status}`;
+  $("#accessIcon").textContent = content.icon;
+  $("#accessTitle").textContent = content.title;
+  $("#accessMessage").textContent = content.message;
+  $("#accessRequestButton").textContent = content.button;
+  $("#accessPhone").value = formatPhone(access?.phone || "");
+  $("#accessMonthlyFee").textContent = money(
+    access?.monthlyFee ?? access?.defaultMonthlyFee ?? 0,
+  );
+  $("#accessPaidUntil").textContent = access?.paidUntil
+    ? `Último período liberado até ${new Date(`${access.paidUntil}T12:00`).toLocaleDateString("pt-BR")}.`
+    : "A liberação será válida pelo período contratado.";
+  setFeedback(
+    "accessFeedback",
+    access?.offline
+      ? "Sem conexão. Exibindo a última situação salva neste aparelho."
+      : "",
+  );
+}
+async function requestPlatformAccess(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    phone = formatPhone($("#accessPhone").value);
+  if (digits(phone).length < 10)
+    return setFeedback(
+      "accessFeedback",
+      "Informe um WhatsApp válido para o administrador falar com você.",
+      "error",
+    );
+  if (!beginSubmission(form, "platform-access")) return;
+  setFeedback("accessFeedback", "Enviando sua solicitação...");
+  try {
+    const access = await window.credmaisBridge.requestPlatformAccess(
+      state.user,
+      phone,
+    );
+    localStorage.setItem(
+      platformAccessStorageKey(state.user.id),
+      JSON.stringify(access),
+    );
+    showAccessGate(access);
+    setFeedback(
+      "accessFeedback",
+      "Solicitação enviada. Use “Atualizar situação” após a liberação.",
+      "success",
+    );
+  } catch (error) {
+    setFeedback(
+      "accessFeedback",
+      error.message || "Não foi possível solicitar a liberação.",
+      "error",
+    );
+  } finally {
+    endSubmission(form, "platform-access");
+  }
+}
+async function refreshPlatformAccess() {
+  const button = $("#accessRefresh");
+  button.disabled = true;
+  button.textContent = "Atualizando...";
+  try {
+    const access = await window.credmaisBridge.platformAccess(state.user);
+    localStorage.setItem(
+      platformAccessStorageKey(state.user.id),
+      JSON.stringify(access),
+    );
+    if (platformAccessAllowed(access)) await showApp();
+    else {
+      showAccessGate(access);
+      setFeedback("accessFeedback", "Situação atualizada.", "success");
+    }
+  } catch (error) {
+    setFeedback(
+      "accessFeedback",
+      error.message || "Não foi possível atualizar agora.",
+      "error",
+    );
+  } finally {
+    button.disabled = false;
+    button.textContent = "Atualizar situação";
+  }
+}
 async function showApp() {
+  const access = await resolvePlatformAccess();
+  if (access?.enabled && !platformAccessAllowed(access)) {
+    showAccessGate(access);
+    return false;
+  }
   if (window.credmaisBridge?.enabled) {
     const cacheOwner = localStorage.getItem("credmais_cache_owner"),
       ownsCache = cacheOwner === state.user.id;
@@ -971,6 +1128,7 @@ async function showApp() {
       toast(`Usando os dados salvos neste dispositivo: ${error.message}`);
     }
   }
+  $("#accessView").hidden = true;
   $("#authView").hidden = true;
   $("#appView").hidden = false;
   $("#userName").textContent = state.user.name;
@@ -997,6 +1155,11 @@ async function refreshFromCloud({ notify = false } = {}) {
     return false;
   refreshingFromCloud = true;
   try {
+    const access = await resolvePlatformAccess();
+    if (access?.enabled && !platformAccessAllowed(access)) {
+      showAccessGate(access);
+      return false;
+    }
     const pending = pendingSyncPayload(state.user.id),
       hadPendingSync = Boolean(pending);
     if (pending) {
@@ -3005,7 +3168,9 @@ function applyTheme(dark, persist = true) {
   document.body.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   const label = dark ? "Ativar modo claro" : "Ativar modo noturno";
-  [$("#headerTheme"), $("#authTheme")].filter(Boolean).forEach((button) => {
+  [$("#headerTheme"), $("#authTheme"), $("#accessTheme")]
+    .filter(Boolean)
+    .forEach((button) => {
     const icon = button.querySelector(".theme-icon");
     const text = button.querySelector(".theme-label");
     if (icon) icon.textContent = dark ? "☀" : "☾";
@@ -3013,7 +3178,7 @@ function applyTheme(dark, persist = true) {
     if (text) text.textContent = dark ? "Modo claro" : "Modo noturno";
     button.setAttribute("aria-label", label);
     button.title = label;
-  });
+    });
   const themeColor = document.querySelector('meta[name="theme-color"]');
   if (themeColor) themeColor.content = dark ? "#101714" : "#0e9f6e";
   if (persist)
@@ -3119,6 +3284,17 @@ $("#profilePhoto").onerror = () => {
 };
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;
+$("#accessTheme").onclick = toggleTheme;
+$("#accessRequestForm").addEventListener("submit", requestPlatformAccess);
+$("#accessPhone").addEventListener("input", (event) => {
+  event.target.value = formatPhone(event.target.value);
+});
+$("#accessRefresh").onclick = refreshPlatformAccess;
+$("#accessLogout").onclick = async () => {
+  if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
+  localStorage.removeItem("credmais_user");
+  location.reload();
+};
 $("#installAppBtn").onclick = openInstall;
 $("#confirmInstallBtn").onclick = installPWA;
 $("#logoutBtn").onclick = async () => {

@@ -1,0 +1,592 @@
+const $ = (selector) => document.querySelector(selector);
+const bridge = window.credmaisBridge;
+const state = {
+  user: null,
+  accounts: [],
+  settings: null,
+  log: [],
+  adminIds: [],
+  filter: "all",
+  search: "",
+  section: "overview",
+  managedUserId: null,
+  chargedUserId: null,
+};
+const DEFAULT_MESSAGE = `Olá, *{nome}*! 👋
+
+📌 *MENSALIDADE CREDMAIS*
+━━━━━━━━━━━━━━━━
+
+💳 Valor: *{valor}*
+📅 Vencimento: *{vencimento}*
+
+💠 *PAGAMENTO VIA PIX*
+👤 Recebedor: *{recebedor}*
+🔑 Chave PIX: {pix}
+
+Após o pagamento, envie o comprovante por aqui para a liberação do acesso.
+
+Atenciosamente,
+*CredMais*`;
+const digits = (value) => String(value || "").replace(/\D/g, "");
+const money = (value) =>
+  Number(value || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+const escapeHtml = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ],
+  );
+const formatPhone = (value) => {
+  const number = digits(value).slice(0, 11);
+  return number.length <= 10
+    ? number.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2")
+    : number.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+};
+function setMoneyInput(input, value) {
+  input.dataset.value = String(Math.max(0, Number(value) || 0));
+  input.value = money(input.dataset.value);
+}
+function readMoneyInput(input) {
+  return Number(input.dataset.value || 0);
+}
+function maskMoney(event) {
+  setMoneyInput(event.currentTarget, Number(digits(event.currentTarget.value) || 0) / 100);
+}
+function feedback(id, message = "", type = "") {
+  const element = $(`#${id}`);
+  element.textContent = message;
+  element.className = `feedback ${type}`;
+}
+function toast(message) {
+  const element = $("#adminToast");
+  element.textContent = message;
+  element.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => element.classList.remove("show"), 3200);
+}
+async function loading(button, action) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Aguarde...";
+  try {
+    return await action();
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+function setAuthView(name) {
+  ["login", "register", "forgot", "activation"].forEach((view) => {
+    $(`#${view}View`).hidden = view !== name;
+  });
+}
+async function signIn(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  feedback("loginFeedback");
+  await loading(button, async () => {
+    try {
+      state.user = await bridge.signIn($("#loginEmail").value, $("#loginPassword").value);
+      await authorize();
+    } catch (error) {
+      feedback("loginFeedback", error.message || "Não foi possível entrar.", "error");
+    }
+  });
+}
+async function signInGoogle() {
+  feedback("loginFeedback");
+  await loading($("#googleLogin"), async () => {
+    try {
+      state.user = await bridge.signInWithGoogle();
+      await authorize();
+    } catch (error) {
+      feedback("loginFeedback", error.message || "Não foi possível entrar com Google.", "error");
+    }
+  });
+}
+async function register(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    button = form.querySelector('[type="submit"]'),
+    name = $("#registerName").value.trim(),
+    email = $("#registerEmail").value.trim(),
+    password = $("#registerPassword").value,
+    confirmation = $("#registerPasswordConfirm").value;
+  if (password.length < 6)
+    return feedback("registerFeedback", "Use uma senha com pelo menos 6 caracteres.", "error");
+  if (password !== confirmation)
+    return feedback("registerFeedback", "As senhas não são iguais.", "error");
+  feedback("registerFeedback");
+  await loading(button, async () => {
+    try {
+      const result = await bridge.signUp(name, email, password);
+      form.reset();
+      setAuthView("login");
+      feedback(
+        "loginFeedback",
+        result.requiresVerification
+          ? "Conta criada. Confirme o e-mail recebido e depois entre no painel."
+          : "Conta criada. Entre para ativar o painel.",
+        "success",
+      );
+    } catch (error) {
+      feedback("registerFeedback", error.message || "Não foi possível criar a conta.", "error");
+    }
+  });
+}
+async function forgot(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  feedback("forgotFeedback");
+  await loading(button, async () => {
+    try {
+      await bridge.sendPasswordReset($("#forgotEmail").value.trim());
+      feedback("forgotFeedback", "E-mail enviado. Confira também a pasta Spam.", "success");
+    } catch (error) {
+      feedback("forgotFeedback", error.message || "Não foi possível enviar o e-mail.", "error");
+    }
+  });
+}
+async function authorize() {
+  try {
+    if (await bridge.isPlatformAdmin()) {
+      await showDashboard();
+      return;
+    }
+    $("#authView").hidden = false;
+    $("#adminView").hidden = true;
+    setAuthView("activation");
+  } catch (error) {
+    feedback("loginFeedback", error.message || "Não foi possível validar o administrador.", "error");
+    setAuthView("login");
+  }
+}
+async function activateAdmin(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  feedback("activationFeedback");
+  await loading(button, async () => {
+    try {
+      await bridge.bootstrapPlatformAdmin($("#activationCode").value);
+      $("#activationCode").value = "";
+      await showDashboard();
+      toast("Painel administrativo ativado com segurança.");
+    } catch (error) {
+      const message = String(error.message || "");
+      feedback(
+        "activationFeedback",
+        message.includes("ADMIN_ALREADY_CONFIGURED")
+          ? "Este painel já possui um proprietário. Entre com a conta administrativa correta."
+          : message.includes("INVALID_ACTIVATION_CODE")
+            ? "Código de ativação inválido. Confira e tente novamente."
+            : message || "Não foi possível ativar o painel.",
+        "error",
+      );
+    }
+  });
+}
+async function signOut() {
+  await bridge.signOut();
+  state.user = null;
+  location.reload();
+}
+function effectiveStatus(account) {
+  if (account.status === "active" && account.paid_until) {
+    const end = new Date(`${account.paid_until}T23:59:59`);
+    if (end < new Date()) return "expired";
+  }
+  return account.status || "pending";
+}
+const statusLabel = (status) =>
+  ({ active: "Ativo", pending: "Pendente", expired: "Vencido", blocked: "Bloqueado" })[
+    status
+  ] || "Pendente";
+const accountFee = (account) =>
+  Number(account.monthly_fee ?? state.settings?.default_monthly_fee ?? 0);
+const dateLabel = (value) =>
+  value ? new Date(`${value}T12:00`).toLocaleDateString("pt-BR") : "Não liberado";
+const todayValue = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+};
+const customerAccounts = () =>
+  state.accounts.filter((account) => !state.adminIds.includes(account.user_id));
+function renderStats() {
+  const customers = customerAccounts(),
+    statuses = customers.map(effectiveStatus),
+    activeAccounts = customers.filter(
+      (account) => effectiveStatus(account) === "active",
+    );
+  $("#statTotal").textContent = customers.length;
+  $("#statActive").textContent = statuses.filter((status) => status === "active").length;
+  $("#statPending").textContent = statuses.filter((status) => status === "pending").length;
+  $("#statRevenue").textContent = money(
+    activeAccounts.reduce((total, account) => total + accountFee(account), 0),
+  );
+}
+function needsAttention(account) {
+  const status = effectiveStatus(account);
+  if (status !== "active") return true;
+  const end = new Date(`${account.paid_until}T12:00`),
+    days = Math.ceil((end - new Date()) / 86400000);
+  return days <= 7;
+}
+function renderOverview() {
+  renderStats();
+  const attention = customerAccounts()
+    .filter(needsAttention)
+    .sort((first, second) => {
+      const order = { pending: 0, expired: 1, blocked: 2, active: 3 };
+      return order[effectiveStatus(first)] - order[effectiveStatus(second)];
+    })
+    .slice(0, 7);
+  $("#attentionList").innerHTML = attention.length
+    ? attention
+        .map((account) => {
+          const status = effectiveStatus(account);
+          return `<div class="attention-item"><div><b>${escapeHtml(account.display_name || account.email || "Conta sem nome")}</b><small>${statusLabel(status)}${account.paid_until ? ` · até ${dateLabel(account.paid_until)}` : ""}</small></div><button data-manage="${escapeHtml(account.user_id)}">Gerenciar</button></div>`;
+        })
+        .join("")
+    : '<div class="empty">Nenhuma conta precisa de atenção agora.</div>';
+  $("#accessLog").innerHTML = state.log.length
+    ? state.log
+        .map(
+          (item) =>
+            `<div class="log-item"><b>${escapeHtml(item.action_label || "Alteração de acesso")}</b><small>${escapeHtml(state.accounts.find((account) => account.user_id === item.user_id)?.display_name || "Conta")} · ${new Date(item.created_at).toLocaleString("pt-BR")}</small></div>`,
+        )
+        .join("")
+    : '<div class="empty">As próximas ações aparecerão aqui.</div>';
+}
+function renderAccounts() {
+  const term = state.search.toLowerCase(),
+    accounts = customerAccounts().filter((account) => {
+      const status = effectiveStatus(account),
+        matchesFilter = state.filter === "all" || state.filter === status,
+        haystack = `${account.display_name || ""} ${account.email || ""} ${account.phone || ""}`.toLowerCase();
+      return matchesFilter && haystack.includes(term);
+    });
+  $("#accountsList").innerHTML = accounts.length
+    ? accounts
+        .map((account) => {
+          const status = effectiveStatus(account);
+          return `<article class="account-row"><div class="account-user"><b>${escapeHtml(account.display_name || "Conta sem nome")}</b><small>${escapeHtml(account.email || "E-mail não informado")}</small></div><div class="account-cell account-phone"><small>WhatsApp</small><b>${escapeHtml(account.phone || "Não informado")}</b></div><div class="account-cell"><small>Mensalidade</small><b>${money(accountFee(account))}</b></div><div class="account-cell"><span class="status ${status}">${statusLabel(status)}</span><small>${dateLabel(account.paid_until)}</small></div><div class="account-actions"><button data-manage="${escapeHtml(account.user_id)}">Gerenciar</button><button class="charge" data-charge="${escapeHtml(account.user_id)}">Cobrar</button></div></article>`;
+        })
+        .join("")
+    : '<div class="panel empty">Nenhuma conta encontrada neste filtro.</div>';
+}
+function renderSettings() {
+  setMoneyInput($("#defaultMonthlyFee"), state.settings?.default_monthly_fee || 0);
+  $("#supportPhone").value = formatPhone(state.settings?.support_phone || "");
+  $("#billingRecipient").value = state.settings?.billing_recipient || "";
+  $("#billingPixType").value = state.settings?.billing_pix_type || "Chave aleatória";
+  $("#billingPixKey").value = state.settings?.billing_pix_key || "";
+  $("#billingMessage").value = state.settings?.billing_message || DEFAULT_MESSAGE;
+}
+async function loadDashboard(notify = false) {
+  const result = await bridge.loadPlatformAdmin();
+  state.accounts = result.accounts;
+  state.settings = result.settings;
+  state.log = result.log;
+  state.adminIds = result.adminIds || [];
+  renderOverview();
+  renderAccounts();
+  renderSettings();
+  if (notify) toast("Painel atualizado.");
+}
+async function showDashboard() {
+  $("#authView").hidden = true;
+  $("#adminView").hidden = false;
+  $("#ownerName").textContent = state.user?.name || "Administrador";
+  $("#ownerGreeting").textContent = (state.user?.name || "Administrador").split(" ")[0];
+  $("#ownerInitial").textContent = (state.user?.name || "A")[0].toUpperCase();
+  try {
+    await loadDashboard();
+  } catch (error) {
+    toast(error.message || "Não foi possível carregar o painel.");
+    throw error;
+  }
+}
+function setSection(section) {
+  state.section = section;
+  document.querySelectorAll(".page").forEach((page) => {
+    page.classList.toggle("active", page.id === `${section}Section`);
+  });
+  document.querySelectorAll("[data-section]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.section === section),
+  );
+  $("#sectionTitle").textContent =
+    ({ overview: "Visão geral", accounts: "Assinaturas", settings: "Configurações" })[
+      section
+    ];
+  document.querySelector(".admin-app aside").classList.remove("open");
+}
+function openModal(id) {
+  $("#modalBackdrop").hidden = false;
+  $(`#${id}`).hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function closeModals() {
+  document.querySelectorAll(".modal").forEach((modal) => (modal.hidden = true));
+  $("#modalBackdrop").hidden = true;
+  document.body.style.overflow = "";
+}
+function openManage(userId) {
+  const account = state.accounts.find((item) => item.user_id === userId);
+  if (!account) return toast("Esta conta não foi encontrada.");
+  state.managedUserId = userId;
+  $("#manageUserId").value = userId;
+  $("#manageName").textContent = account.display_name || "Conta sem nome";
+  $("#manageEmail").textContent = account.email || "E-mail não informado";
+  $("#managePhone").value = formatPhone(account.phone || "");
+  setMoneyInput($("#manageFee"), accountFee(account));
+  $("#manageNotes").value = account.notes || "";
+  $("#manageMonths").value = "1";
+  const status = effectiveStatus(account);
+  $("#manageStatus").textContent = statusLabel(status);
+  $("#managePaidUntil").textContent = account.paid_until
+    ? `Liberado até ${dateLabel(account.paid_until)}`
+    : "Ainda não possui período liberado.";
+  $("#toggleBlock").textContent =
+    status === "blocked" ? "Reabrir solicitação" : "Bloquear acesso";
+  feedback("manageFeedback");
+  openModal("manageModal");
+}
+async function saveManagedAccount(showToast = true) {
+  const account = await bridge.updatePlatformAccount(state.managedUserId, {
+    phone: formatPhone($("#managePhone").value),
+    notes: $("#manageNotes").value.trim(),
+    monthlyFee: readMoneyInput($("#manageFee")),
+  });
+  const index = state.accounts.findIndex((item) => item.user_id === account.user_id);
+  if (index >= 0) state.accounts[index] = account;
+  renderOverview();
+  renderAccounts();
+  if (showToast) toast("Dados da conta atualizados.");
+  return account;
+}
+async function saveManage(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  feedback("manageFeedback");
+  await loading(button, async () => {
+    try {
+      await saveManagedAccount();
+      closeModals();
+    } catch (error) {
+      feedback("manageFeedback", error.message || "Não foi possível salvar.", "error");
+    }
+  });
+}
+async function grantAccess() {
+  feedback("manageFeedback");
+  await loading($("#grantAccess"), async () => {
+    try {
+      await saveManagedAccount(false);
+      await bridge.grantPlatformAccess(
+        state.managedUserId,
+        Number($("#manageMonths").value),
+        readMoneyInput($("#manageFee")),
+      );
+      closeModals();
+      await loadDashboard();
+      toast("Acesso liberado pelo período escolhido.");
+    } catch (error) {
+      feedback("manageFeedback", error.message || "Não foi possível liberar.", "error");
+    }
+  });
+}
+async function toggleBlock() {
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    nextStatus = effectiveStatus(account) === "blocked" ? "pending" : "blocked";
+  await loading($("#toggleBlock"), async () => {
+    try {
+      await bridge.setPlatformAccountStatus(state.managedUserId, nextStatus);
+      closeModals();
+      await loadDashboard();
+      toast(nextStatus === "blocked" ? "Acesso bloqueado." : "Solicitação reaberta.");
+    } catch (error) {
+      feedback("manageFeedback", error.message || "Não foi possível alterar o acesso.", "error");
+    }
+  });
+}
+function billingMessage(account) {
+  const template = state.settings?.billing_message || DEFAULT_MESSAGE,
+    replacements = {
+      nome: account.display_name || account.email?.split("@")[0] || "cliente",
+      valor: money(accountFee(account)),
+      vencimento: dateLabel(account.paid_until || todayValue()),
+      pix: state.settings?.billing_pix_key || "Solicite a chave PIX",
+      recebedor: state.settings?.billing_recipient || "CredMais",
+    };
+  return Object.entries(replacements).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, value),
+    template,
+  );
+}
+function openCharge(userId) {
+  const account = state.accounts.find((item) => item.user_id === userId);
+  if (!account) return toast("Esta conta não foi encontrada.");
+  state.chargedUserId = userId;
+  $("#chargeName").textContent = `Cobrar ${account.display_name || "mensalidade"}`;
+  $("#chargePreview").value = billingMessage(account);
+  $("#sendCharge").disabled = digits(account.phone).length < 10;
+  $("#sendCharge").title = $("#sendCharge").disabled
+    ? "Cadastre o WhatsApp desta conta para enviar."
+    : "Abrir WhatsApp";
+  closeModals();
+  openModal("chargeModal");
+}
+async function copyCharge() {
+  try {
+    await navigator.clipboard.writeText($("#chargePreview").value);
+    toast("Mensagem copiada.");
+  } catch {
+    $("#chargePreview").select();
+    document.execCommand("copy");
+    toast("Mensagem copiada.");
+  }
+}
+function sendCharge() {
+  const account = state.accounts.find((item) => item.user_id === state.chargedUserId),
+    phone = digits(account?.phone);
+  if (phone.length < 10) return toast("Cadastre um WhatsApp válido nesta conta.");
+  window.open(
+    `https://wa.me/55${phone}?text=${encodeURIComponent($("#chargePreview").value)}`,
+    "_blank",
+    "noopener",
+  );
+}
+async function saveSettings(event) {
+  event.preventDefault();
+  const form = event.currentTarget,
+    button = form.querySelector('[type="submit"]');
+  feedback("settingsFeedback");
+  await loading(button, async () => {
+    try {
+      state.settings = await bridge.savePlatformSettings({
+        defaultMonthlyFee: readMoneyInput($("#defaultMonthlyFee")),
+        supportPhone: formatPhone($("#supportPhone").value),
+        billingRecipient: $("#billingRecipient").value.trim(),
+        billingPixKey: $("#billingPixKey").value.trim(),
+        billingPixType: $("#billingPixType").value,
+        billingMessage: $("#billingMessage").value.trim(),
+      });
+      renderOverview();
+      renderAccounts();
+      feedback("settingsFeedback", "Configurações salvas com sucesso.", "success");
+    } catch (error) {
+      feedback("settingsFeedback", error.message || "Não foi possível salvar.", "error");
+    }
+  });
+}
+let deferredInstallPrompt = null;
+async function installAdmin() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    return;
+  }
+  toast(
+    /iphone|ipad|ipod/i.test(navigator.userAgent)
+      ? "No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início."
+      : "Abra o menu do navegador e escolha Instalar aplicativo.",
+  );
+}
+function applyTheme(dark) {
+  document.body.classList.toggle("dark", dark);
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  $("#themeToggle").textContent = dark ? "☀" : "☾";
+  document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1713" : "#075b43";
+  localStorage.setItem("credmais_admin_theme", dark ? "dark" : "light");
+}
+
+$("#adminLogin").addEventListener("submit", signIn);
+$("#googleLogin").onclick = signInGoogle;
+$("#adminRegister").addEventListener("submit", register);
+$("#adminForgot").addEventListener("submit", forgot);
+$("#adminActivation").addEventListener("submit", activateAdmin);
+$("#activationLogout").onclick = signOut;
+$("#adminLogout").onclick = signOut;
+$("#manageForm").addEventListener("submit", saveManage);
+$("#grantAccess").onclick = grantAccess;
+$("#toggleBlock").onclick = toggleBlock;
+$("#chargeAccount").onclick = () => openCharge(state.managedUserId);
+$("#copyCharge").onclick = copyCharge;
+$("#sendCharge").onclick = sendCharge;
+$("#settingsForm").addEventListener("submit", saveSettings);
+$("#refreshAccounts").onclick = () => loading($("#refreshAccounts"), () => loadDashboard(true));
+$("#accountSearch").oninput = (event) => {
+  state.search = event.target.value;
+  renderAccounts();
+};
+[$("#defaultMonthlyFee"), $("#manageFee")].forEach((input) =>
+  input.addEventListener("input", maskMoney),
+);
+[$("#supportPhone"), $("#managePhone")].forEach((input) =>
+  input.addEventListener("input", (event) => (event.target.value = formatPhone(event.target.value))),
+);
+$("#themeToggle").onclick = () => applyTheme(!document.body.classList.contains("dark"));
+$("#installAdmin").onclick = installAdmin;
+$("#menuButton").onclick = () => document.querySelector(".admin-app aside").classList.toggle("open");
+$("#modalBackdrop").onclick = closeModals;
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  if (button.dataset.authView) setAuthView(button.dataset.authView);
+  if (button.dataset.section) setSection(button.dataset.section);
+  if (button.dataset.sectionTarget) setSection(button.dataset.sectionTarget);
+  if (button.dataset.filter) {
+    state.filter = button.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach((item) =>
+      item.classList.toggle("active", item === button),
+    );
+    renderAccounts();
+  }
+  if (button.dataset.manage) openManage(button.dataset.manage);
+  if (button.dataset.charge) openCharge(button.dataset.charge);
+  if (button.hasAttribute("data-close-modal")) closeModals();
+  const aside = document.querySelector(".admin-app aside");
+  if (aside?.classList.contains("open") && !aside.contains(event.target) && !$("#menuButton").contains(event.target))
+    aside.classList.remove("open");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeModals();
+});
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+});
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.register("./sw.js").catch((error) => console.warn(error));
+applyTheme(
+  localStorage.getItem("credmais_admin_theme")
+    ? localStorage.getItem("credmais_admin_theme") === "dark"
+    : window.matchMedia?.("(prefers-color-scheme: dark)").matches,
+);
+(async () => {
+  try {
+    state.user = await bridge.currentUser();
+    if (state.user) await authorize();
+  } catch (error) {
+    feedback("loginFeedback", error.message || "Não foi possível restaurar a sessão.", "error");
+  } finally {
+    setTimeout(() => $("#adminLoader").classList.add("hide"), 350);
+  }
+})();
+setInterval(() => {
+  const modalOpen = [...document.querySelectorAll(".modal")].some((modal) => !modal.hidden);
+  if (
+    !$("#adminView").hidden &&
+    !document.hidden &&
+    state.section !== "settings" &&
+    !modalOpen
+  )
+    loadDashboard().catch(() => {});
+}, 30000);

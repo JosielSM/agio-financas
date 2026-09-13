@@ -61,6 +61,8 @@
       : null;
   const missingRelation = (error) =>
     ["42P01", "PGRST205"].includes(error?.code);
+  const missingFunction = (error) =>
+    ["42883", "PGRST202"].includes(error?.code);
   async function loadProfile(user) {
     if (!client || !user?.id) return user;
     const { data, error } = await client
@@ -177,6 +179,124 @@
       throw new Error(
         "A confirmação por e-mail será ativada quando a migração para o Firebase for concluída.",
       );
+    },
+    async platformAccess(user, phone = "") {
+      if (!client || !firebaseAuth)
+        return { enabled: false, status: "active" };
+      const { data, error } = await client.rpc("ensure_platform_account", {
+        p_display_name: user?.name || "",
+        p_phone: phone || null,
+      });
+      if (missingFunction(error))
+        return { enabled: false, status: "active" };
+      if (error) throw error;
+      return data;
+    },
+    async requestPlatformAccess(user, phone) {
+      if (!client || !firebaseAuth)
+        throw new Error("A gestão de assinaturas ainda não está disponível.");
+      const { data, error } = await client.rpc("request_platform_access", {
+        p_display_name: user?.name || "",
+        p_phone: phone || "",
+      });
+      if (missingFunction(error))
+        throw new Error("O painel de assinaturas ainda precisa ser ativado no banco.");
+      if (error) throw error;
+      return data;
+    },
+    async isPlatformAdmin() {
+      if (!client || !firebaseAuth) return false;
+      const { data, error } = await client.rpc("is_platform_admin");
+      if (missingFunction(error)) return false;
+      if (error) throw error;
+      return Boolean(data);
+    },
+    async bootstrapPlatformAdmin(code) {
+      if (!client || !firebaseAuth)
+        throw new Error("O banco do painel ainda não está conectado.");
+      const { data, error } = await client.rpc("bootstrap_platform_admin", {
+        p_activation_code: String(code || "").trim(),
+      });
+      if (missingFunction(error))
+        throw new Error("Execute a migração do painel administrativo no Supabase.");
+      if (error) throw error;
+      return Boolean(data);
+    },
+    async loadPlatformAdmin() {
+      if (!client) throw new Error("O banco do painel não está conectado.");
+      const [accountsResult, settingsResult, logResult, adminsResult] = await Promise.all([
+        client.from("platform_accounts").select("*").order("created_at"),
+        client.from("platform_settings").select("*").eq("id", 1).single(),
+        client
+          .from("platform_access_log")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(12),
+        client.from("platform_admins").select("user_id"),
+      ]);
+      const error =
+        accountsResult.error || settingsResult.error || logResult.error || adminsResult.error;
+      if (error) {
+        if (missingRelation(error))
+          throw new Error("Execute a migração do painel administrativo no Supabase.");
+        throw error;
+      }
+      return {
+        accounts: accountsResult.data || [],
+        settings: settingsResult.data,
+        log: logResult.data || [],
+        adminIds: (adminsResult.data || []).map((admin) => admin.user_id),
+      };
+    },
+    async savePlatformSettings(settings) {
+      const { data, error } = await client
+        .from("platform_settings")
+        .update({
+          default_monthly_fee: settings.defaultMonthlyFee,
+          billing_recipient: settings.billingRecipient,
+          billing_pix_key: settings.billingPixKey,
+          billing_pix_type: settings.billingPixType,
+          billing_message: settings.billingMessage,
+          support_phone: settings.supportPhone,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async grantPlatformAccess(userId, months, monthlyFee) {
+      const { data, error } = await client.rpc("admin_grant_platform_access", {
+        p_user_id: userId,
+        p_months: Number(months),
+        p_monthly_fee: Number(monthlyFee),
+      });
+      if (error) throw error;
+      return data;
+    },
+    async setPlatformAccountStatus(userId, status) {
+      const { data, error } = await client.rpc("admin_set_platform_status", {
+        p_user_id: userId,
+        p_status: status,
+      });
+      if (error) throw error;
+      return data;
+    },
+    async updatePlatformAccount(userId, values) {
+      const { data, error } = await client
+        .from("platform_accounts")
+        .update({
+          phone: values.phone || "",
+          notes: values.notes || "",
+          monthly_fee: Number(values.monthlyFee),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
     },
     async updatePix(pixKey, pixType, pixRecipientName) {
       if (firebaseAuth) {
