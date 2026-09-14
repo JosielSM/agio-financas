@@ -77,7 +77,8 @@
       </section>
       <section class="manage-section access-section">
         <div class="manage-section-title"><div><b>Liberar ou renovar acesso</b><small>Escolha um período. Para colaboradores, use o acesso vitalício.</small></div></div>
-        <label>Período para liberar<select id="manageMonths"><option value="1">1 mês</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">A validade começa hoje e substitui a data anterior.</small></label>
+        <label>Período para liberar<select id="manageMonths"><option value="days:15">15 dias — teste rápido</option><option value="months:1" selected>1 mês</option><option value="months:2">2 meses</option><option value="months:3">3 meses</option><option value="months:6">6 meses</option><option value="months:12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">A validade começa hoje e substitui a data anterior.</small></label>
+        <fieldset class="grant-type-picker" id="grantTypeBlock"><legend>Esta liberação foi paga?</legend><div><label><input type="radio" name="manageGrantType" value="paid" checked><span><b>Pago</b><small>Dinheiro, PIX direto ou outro pagamento já recebido.</small></span></label><label><input type="radio" name="manageGrantType" value="free"><span><b>Gratuito / teste</b><small>Cortesia sem cobrança para a pessoa experimentar.</small></span></label></div><label class="grant-amount">Valor recebido<input id="manageGrantAmount" inputmode="decimal"><small id="manageGrantTypeHelp">O histórico registrará esta liberação como paga.</small></label></fieldset>
         <button class="primary wide-action" id="grantAccess" type="button">Liberar acesso</button>
       </section>
       <section class="manage-section quick-actions">

@@ -13,6 +13,7 @@ as regras de acesso usando o token Firebase.
 5. Execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas mensais e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
 6. Em uma instalação que já possui o painel, execute `supabase-auto-expiry-migration.sql`. Ela registra cada vencimento uma única vez e informa o proprietário no painel quando o acesso é bloqueado automaticamente por falta de pagamento.
 7. Execute `supabase-reset-renewal-date-migration.sql` para que cada liberação seja contada a partir do dia atual e substitua a validade anterior, sem acumular meses entre cliques.
+8. Execute `supabase-trial-access-migration.sql` para permitir liberações manuais pagas ou gratuitas, incluindo o período de teste de 15 dias, com registro no histórico.
 
 ## 2. Conectar o site ao Supabase
 

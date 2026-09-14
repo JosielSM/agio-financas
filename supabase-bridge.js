@@ -274,12 +274,31 @@
       if (error) throw error;
       return data;
     },
-    async grantPlatformAccess(userId, months, monthlyFee) {
-      const { data, error } = await client.rpc("admin_grant_platform_access", {
+    async grantPlatformAccess(
+      userId,
+      periodValue,
+      periodUnit,
+      monthlyFee,
+      accessType = "paid",
+      accessAmount = 0,
+    ) {
+      const { data, error } = await client.rpc("admin_grant_platform_access_v2", {
         p_user_id: userId,
-        p_months: Number(months),
+        p_period_value: Number(periodValue),
+        p_period_unit: periodUnit,
         p_monthly_fee: Number(monthlyFee),
+        p_access_type: accessType,
+        p_access_amount: Number(accessAmount),
       });
+      if (missingFunction(error) && periodUnit === "months" && accessType === "paid") {
+        const fallback = await client.rpc("admin_grant_platform_access", {
+          p_user_id: userId,
+          p_months: Number(periodValue),
+          p_monthly_fee: Number(monthlyFee),
+        });
+        if (fallback.error) throw fallback.error;
+        return fallback.data;
+      }
       if (error) throw error;
       return data;
     },

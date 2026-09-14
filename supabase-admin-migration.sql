@@ -26,6 +26,8 @@ create table if not exists public.platform_accounts (
   status text not null default 'pending' check (status in ('pending', 'active', 'blocked')),
   monthly_fee numeric(12,2) check (monthly_fee is null or monthly_fee >= 0),
   paid_until date,
+  access_type text not null default 'paid' check (access_type in ('paid', 'free', 'lifetime')),
+  access_amount numeric(12,2) not null default 0 check (access_amount >= 0),
   notes text not null default '',
   access_requested_at timestamptz,
   approved_at timestamptz,
@@ -38,6 +40,12 @@ create table if not exists public.platform_accounts (
 
 alter table public.platform_accounts
   add column if not exists expiry_notified_at timestamptz;
+alter table public.platform_accounts
+  add column if not exists access_type text not null default 'paid'
+  check (access_type in ('paid', 'free', 'lifetime'));
+alter table public.platform_accounts
+  add column if not exists access_amount numeric(12,2) not null default 0
+  check (access_amount >= 0);
 
 create index if not exists platform_accounts_status_idx
   on public.platform_accounts (status, paid_until);
@@ -404,6 +412,8 @@ begin
     status = 'active',
     monthly_fee = coalesce(p_monthly_fee, monthly_fee),
     paid_until = (current_date + make_interval(months => p_months))::date,
+    access_type = 'paid',
+    access_amount = coalesce(p_monthly_fee, monthly_fee, 0) * p_months,
     expiry_notified_at = null,
     approved_at = now(),
     approved_by = actor_id,
@@ -426,6 +436,99 @@ begin
       'months', p_months,
       'monthlyFee', updated_row.monthly_fee,
       'startsAt', current_date,
+      'replacedPreviousExpiration', true
+    )
+  );
+
+  return to_jsonb(updated_row);
+end;
+$$;
+
+create or replace function public.admin_grant_platform_access_v2(
+  p_user_id text,
+  p_period_value integer,
+  p_period_unit text,
+  p_monthly_fee numeric,
+  p_access_type text,
+  p_access_amount numeric
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id text := auth.jwt()->>'sub';
+  updated_row public.platform_accounts%rowtype;
+  expiration_date date;
+  period_label text;
+  access_label text;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso administrativo necessário';
+  end if;
+  if p_period_unit not in ('days', 'months') then
+    raise exception 'Unidade de período inválida';
+  end if;
+  if (p_period_unit = 'days' and (p_period_value < 1 or p_period_value > 365))
+    or (p_period_unit = 'months' and (p_period_value < 1 or p_period_value > 24)) then
+    raise exception 'Período de acesso inválido';
+  end if;
+  if p_access_type not in ('paid', 'free') then
+    raise exception 'Escolha se a liberação foi paga ou gratuita';
+  end if;
+  if p_monthly_fee is not null and p_monthly_fee < 0 then
+    raise exception 'A mensalidade não pode ser negativa';
+  end if;
+  if p_access_amount is not null and p_access_amount < 0 then
+    raise exception 'O valor recebido não pode ser negativo';
+  end if;
+
+  expiration_date := case
+    when p_period_unit = 'days' then current_date + p_period_value
+    else (current_date + make_interval(months => p_period_value))::date
+  end;
+  period_label := case
+    when p_period_unit = 'days' then p_period_value || case when p_period_value = 1 then ' dia' else ' dias' end
+    else p_period_value || case when p_period_value = 1 then ' mês' else ' meses' end
+  end;
+  access_label := case when p_access_type = 'free' then 'Teste gratuito' else 'Acesso pago' end;
+
+  update public.platform_accounts
+  set
+    status = 'active',
+    monthly_fee = coalesce(p_monthly_fee, monthly_fee),
+    paid_until = expiration_date,
+    access_type = p_access_type,
+    access_amount = case when p_access_type = 'free' then 0 else coalesce(p_access_amount, 0) end,
+    expiry_notified_at = null,
+    approved_at = now(),
+    approved_by = actor_id,
+    updated_at = now()
+  where user_id = p_user_id
+  returning * into updated_row;
+
+  if updated_row.user_id is null then
+    raise exception 'Conta não encontrada';
+  end if;
+
+  insert into public.platform_access_log (
+    user_id, actor_id, action, action_label, details
+  ) values (
+    p_user_id,
+    actor_id,
+    case when p_access_type = 'free' then 'grant_free' else 'grant_paid' end,
+    access_label || ' de ' || period_label || ' liberado até ' || to_char(updated_row.paid_until, 'DD/MM/YYYY'),
+    jsonb_build_object(
+      'periodValue', p_period_value,
+      'periodUnit', p_period_unit,
+      'periodLabel', period_label,
+      'accessType', p_access_type,
+      'amount', updated_row.access_amount,
+      'monthlyFee', updated_row.monthly_fee,
+      'startsAt', current_date,
+      'paidUntil', updated_row.paid_until,
+      'paymentMethod', 'manual',
       'replacedPreviousExpiration', true
     )
   );
@@ -502,6 +605,8 @@ begin
     status = 'active',
     monthly_fee = 0,
     paid_until = null,
+    access_type = 'lifetime',
+    access_amount = 0,
     expiry_notified_at = null,
     approved_at = now(),
     approved_by = actor_id,
@@ -681,6 +786,7 @@ revoke all on function public.ensure_platform_account(text, text) from public;
 revoke all on function public.request_platform_access(text, text) from public;
 revoke all on function public.bootstrap_platform_admin(text) from public;
 revoke all on function public.admin_grant_platform_access(text, integer, numeric) from public;
+revoke all on function public.admin_grant_platform_access_v2(text, integer, text, numeric, text, numeric) from public;
 revoke all on function public.admin_set_platform_status(text, text) from public;
 revoke all on function public.admin_grant_platform_lifetime(text) from public;
 revoke all on function public.delete_my_account_data() from public;
@@ -692,6 +798,7 @@ grant execute on function public.ensure_platform_account(text, text) to anon, au
 grant execute on function public.request_platform_access(text, text) to anon, authenticated;
 grant execute on function public.bootstrap_platform_admin(text) to anon, authenticated;
 grant execute on function public.admin_grant_platform_access(text, integer, numeric) to anon, authenticated;
+grant execute on function public.admin_grant_platform_access_v2(text, integer, text, numeric, text, numeric) to anon, authenticated;
 grant execute on function public.admin_set_platform_status(text, text) to anon, authenticated;
 grant execute on function public.admin_grant_platform_lifetime(text) to anon, authenticated;
 grant execute on function public.delete_my_account_data() to anon, authenticated;
