@@ -240,6 +240,18 @@ const todayValue = () => {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 };
+function accessDateFromToday(months) {
+  const today = new Date(),
+    targetMonth = today.getMonth() + Number(months),
+    lastDay = new Date(today.getFullYear(), targetMonth + 1, 0).getDate(),
+    result = new Date(
+      today.getFullYear(),
+      targetMonth,
+      Math.min(today.getDate(), lastDay),
+      12,
+    );
+  return result.toLocaleDateString("pt-BR");
+}
 const customerAccounts = () =>
   state.accounts.filter((account) => !state.adminIds.includes(account.user_id));
 function renderStats() {
@@ -501,8 +513,8 @@ function syncManagePeriod() {
     setMoneyInput(feeInput, normalFee);
   }
   feeInput.disabled = false;
-  $("#managePeriodHelp").textContent =
-    "O período é somado ao acesso que ainda estiver válido.";
+  const months = Number($("#manageMonths").value);
+  $("#managePeriodHelp").textContent = `A validade será definida até ${accessDateFromToday(months)}, contando a partir de hoje. Uma nova liberação substituirá a data anterior.`;
   $("#grantAccess").textContent = "Liberar acesso";
 }
 async function saveManagedAccount(showToast = true) {
@@ -537,10 +549,11 @@ async function grantAccess() {
     try {
       await saveManagedAccount(false);
       const period = $("#manageMonths").value;
+      let updatedAccount;
       if (period === "lifetime")
-        await bridge.grantPlatformLifetime(state.managedUserId);
+        updatedAccount = await bridge.grantPlatformLifetime(state.managedUserId);
       else
-        await bridge.grantPlatformAccess(
+        updatedAccount = await bridge.grantPlatformAccess(
           state.managedUserId,
           Number(period),
           readMoneyInput($("#manageFee")),
@@ -550,7 +563,7 @@ async function grantAccess() {
       toast(
         period === "lifetime"
           ? "Acesso vitalício liberado para o colaborador."
-          : "Acesso liberado pelo período escolhido.",
+          : `Acesso liberado até ${dateLabel(updatedAccount.paid_until)}, contando a partir de hoje.`,
       );
     } catch (error) {
       feedback("manageFeedback", error.message || "Não foi possível liberar.", "error");

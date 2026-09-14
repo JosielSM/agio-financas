@@ -403,10 +403,7 @@ begin
   set
     status = 'active',
     monthly_fee = coalesce(p_monthly_fee, monthly_fee),
-    paid_until = (
-      greatest(coalesce(paid_until, current_date), current_date)
-      + make_interval(months => p_months)
-    )::date,
+    paid_until = (current_date + make_interval(months => p_months))::date,
     expiry_notified_at = null,
     approved_at = now(),
     approved_by = actor_id,
@@ -425,7 +422,12 @@ begin
     actor_id,
     'grant',
     'Acesso liberado até ' || to_char(updated_row.paid_until, 'DD/MM/YYYY'),
-    jsonb_build_object('months', p_months, 'monthlyFee', updated_row.monthly_fee)
+    jsonb_build_object(
+      'months', p_months,
+      'monthlyFee', updated_row.monthly_fee,
+      'startsAt', current_date,
+      'replacedPreviousExpiration', true
+    )
   );
 
   return to_jsonb(updated_row);
