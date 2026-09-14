@@ -163,6 +163,8 @@ async function authorize() {
     $("#adminView").hidden = true;
     setAuthView("activation");
   } catch (error) {
+    $("#authView").hidden = false;
+    $("#adminView").hidden = true;
     feedback("loginFeedback", error.message || "Não foi possível validar o administrador.", "error");
     setAuthView("login");
   }
@@ -438,17 +440,17 @@ async function loadDashboard(notify = false) {
   if (notify && !informedExpiration) toast("Painel atualizado.");
 }
 async function showDashboard() {
-  $("#authView").hidden = true;
-  $("#adminView").hidden = false;
-  $("#ownerName").textContent = state.user?.name || "Administrador";
-  $("#ownerGreeting").textContent = (state.user?.name || "Administrador").split(" ")[0];
-  $("#ownerInitial").textContent = (state.user?.name || "A")[0].toUpperCase();
   try {
     await loadDashboard();
   } catch (error) {
     toast(error.message || "Não foi possível carregar o painel.");
     throw error;
   }
+  $("#ownerName").textContent = state.user?.name || "Administrador";
+  $("#ownerGreeting").textContent = (state.user?.name || "Administrador").split(" ")[0];
+  $("#ownerInitial").textContent = (state.user?.name || "A")[0].toUpperCase();
+  $("#authView").hidden = true;
+  $("#adminView").hidden = false;
 }
 function setSection(section) {
   state.section = section;
@@ -591,12 +593,18 @@ async function grantAccess() {
   feedback("manageFeedback");
   await loading($("#grantAccess"), async () => {
     try {
-      await saveManagedAccount(false);
       const period = selectedAccessPeriod(),
-        accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid";
+        accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
+        accountDetails = {
+          phone: formatPhone($("#managePhone").value),
+          notes: $("#manageNotes").value.trim(),
+        };
       let updatedAccount;
       if (period.lifetime)
-        updatedAccount = await bridge.grantPlatformLifetime(state.managedUserId);
+        updatedAccount = await bridge.grantPlatformLifetime(
+          state.managedUserId,
+          accountDetails,
+        );
       else
         updatedAccount = await bridge.grantPlatformAccess(
           state.managedUserId,
@@ -605,6 +613,7 @@ async function grantAccess() {
           readMoneyInput($("#manageFee")),
           accessType,
           readMoneyInput($("#manageGrantAmount")),
+          accountDetails,
         );
       closeModals();
       await loadDashboard();

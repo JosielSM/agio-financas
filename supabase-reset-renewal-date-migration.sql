@@ -1,6 +1,9 @@
 -- Atualiza somente a regra de liberação de acesso. Não altera contas nem datas existentes.
 -- Depois desta migração, cada nova liberação substitui a validade anterior e começa hoje.
 
+alter table public.platform_accounts
+  add column if not exists expiry_notified_at timestamptz;
+
 create or replace function public.admin_grant_platform_access(
   p_user_id text,
   p_months integer default 1,
@@ -18,7 +21,7 @@ begin
   if not public.is_platform_admin() then
     raise exception 'Acesso administrativo necessário';
   end if;
-  if p_months < 1 or p_months > 24 then
+  if p_months is null or p_months < 1 or p_months > 24 then
     raise exception 'Escolha um período entre 1 e 24 meses';
   end if;
   if p_monthly_fee is not null and p_monthly_fee < 0 then

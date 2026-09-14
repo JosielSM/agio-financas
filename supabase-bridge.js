@@ -63,6 +63,20 @@
     ["42P01", "PGRST205"].includes(error?.code);
   const missingFunction = (error) =>
     ["42883", "PGRST202"].includes(error?.code);
+  const accessSchemaError = (error) =>
+    ["42703", "PGRST204"].includes(error?.code) ||
+    /expiry_notified_at|access_type|access_amount/i.test(error?.message || "");
+  const accessError = (error) => {
+    if (missingFunction(error))
+      return new Error(
+        "A atualização segura das assinaturas ainda não foi instalada no banco.",
+      );
+    if (accessSchemaError(error))
+      return new Error(
+        "A estrutura de assinaturas está sendo atualizada. Atualize o painel e tente novamente.",
+      );
+    return error;
+  };
   async function loadProfile(user) {
     if (!client || !user?.id) return user;
     const { data, error } = await client
@@ -141,7 +155,8 @@
       return loadProfile(await currentAuthUser());
     },
     async signIn(email, password) {
-      if (firebaseAuth) return firebaseAuth.signIn(email, password);
+      if (firebaseAuth)
+        return loadProfile(await firebaseAuth.signIn(email, password));
       const { data, error } = await client.auth.signInWithPassword({
         email,
         password,
@@ -152,7 +167,7 @@
     async signInWithGoogle() {
       if (!firebaseAuth)
         throw new Error("O acesso com Google depende do Firebase.");
-      return firebaseAuth.signInWithGoogle();
+      return loadProfile(await firebaseAuth.signInWithGoogle());
     },
     async signUp(name, email, password) {
       if (firebaseAuth) return firebaseAuth.signUp(name, email, password);
@@ -181,7 +196,7 @@
       );
     },
     async platformAccess(user, phone = "") {
-      if (!client || !firebaseAuth)
+      if (!client)
         return { enabled: false, status: "active" };
       const { data, error } = await client.rpc("ensure_platform_account", {
         p_display_name: user?.name || "",
@@ -193,7 +208,7 @@
       return data;
     },
     async requestPlatformAccess(user, phone) {
-      if (!client || !firebaseAuth)
+      if (!client)
         throw new Error("A gestão de assinaturas ainda não está disponível.");
       const { data, error } = await client.rpc("request_platform_access", {
         p_display_name: user?.name || "",
@@ -205,14 +220,14 @@
       return data;
     },
     async isPlatformAdmin() {
-      if (!client || !firebaseAuth) return false;
+      if (!client) return false;
       const { data, error } = await client.rpc("is_platform_admin");
       if (missingFunction(error)) return false;
       if (error) throw error;
       return Boolean(data);
     },
     async bootstrapPlatformAdmin(code) {
-      if (!client || !firebaseAuth)
+      if (!client)
         throw new Error("O banco do painel ainda não está conectado.");
       const { data, error } = await client.rpc("bootstrap_platform_admin", {
         p_activation_code: String(code || "").trim(),
@@ -281,50 +296,56 @@
       monthlyFee,
       accessType = "paid",
       accessAmount = 0,
+      accountDetails = {},
     ) {
-      const { data, error } = await client.rpc("admin_grant_platform_access_v2", {
+      const { data, error } = await client.rpc("admin_grant_platform_access_v3", {
         p_user_id: userId,
         p_period_value: Number(periodValue),
         p_period_unit: periodUnit,
         p_monthly_fee: Number(monthlyFee),
         p_access_type: accessType,
         p_access_amount: Number(accessAmount),
+        p_phone: accountDetails.phone || "",
+        p_notes: accountDetails.notes || "",
       });
+      if (missingFunction(error)) {
+        const compatible = await client.rpc("admin_grant_platform_access_v2", {
+          p_user_id: userId,
+          p_period_value: Number(periodValue),
+          p_period_unit: periodUnit,
+          p_monthly_fee: Number(monthlyFee),
+          p_access_type: accessType,
+          p_access_amount: Number(accessAmount),
+        });
+        if (!compatible.error) return compatible.data;
+        if (!missingFunction(compatible.error)) throw accessError(compatible.error);
+      }
       if (missingFunction(error) && periodUnit === "months" && accessType === "paid") {
         const fallback = await client.rpc("admin_grant_platform_access", {
           p_user_id: userId,
           p_months: Number(periodValue),
           p_monthly_fee: Number(monthlyFee),
         });
-        if (fallback.error) throw fallback.error;
+        if (fallback.error) throw accessError(fallback.error);
         return fallback.data;
       }
-      if (error) throw error;
+      if (error) throw accessError(error);
       return data;
     },
-    async grantPlatformLifetime(userId) {
-      const { data, error } = await client.rpc("admin_grant_platform_lifetime", {
+    async grantPlatformLifetime(userId, accountDetails = {}) {
+      const { data, error } = await client.rpc("admin_grant_platform_lifetime_v2", {
         p_user_id: userId,
+        p_phone: accountDetails.phone || "",
+        p_notes: accountDetails.notes || "",
       });
       if (missingFunction(error)) {
-        const admin = await currentAuthUser();
-        const { data: fallbackData, error: fallbackError } = await client
-          .from("platform_accounts")
-          .update({
-            status: "active",
-            monthly_fee: 0,
-            paid_until: null,
-            approved_at: new Date().toISOString(),
-            approved_by: admin?.id || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", userId)
-          .select("*")
-          .single();
-        if (fallbackError) throw fallbackError;
-        return fallbackData;
+        const compatible = await client.rpc("admin_grant_platform_lifetime", {
+          p_user_id: userId,
+        });
+        if (compatible.error) throw accessError(compatible.error);
+        return compatible.data;
       }
-      if (error) throw error;
+      if (error) throw accessError(error);
       return data;
     },
     async setPlatformAccountStatus(userId, status) {

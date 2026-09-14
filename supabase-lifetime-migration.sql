@@ -2,6 +2,9 @@
 -- Execute este arquivo uma vez no SQL Editor do Supabase.
 begin;
 
+alter table public.platform_accounts
+  add column if not exists expiry_notified_at timestamptz;
+
 create or replace function public.admin_grant_platform_lifetime(
   p_user_id text
 )

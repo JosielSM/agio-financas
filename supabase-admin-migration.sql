@@ -400,7 +400,13 @@ begin
   if not public.is_platform_admin() then
     raise exception 'Acesso administrativo necessário';
   end if;
-  if p_months < 1 or p_months > 24 then
+  if p_user_id is null or btrim(p_user_id) = '' then
+    raise exception 'Conta inválida';
+  end if;
+  if exists (select 1 from public.platform_admins where user_id = p_user_id) then
+    raise exception 'A conta proprietária já possui acesso permanente';
+  end if;
+  if p_months is null or p_months < 1 or p_months > 24 then
     raise exception 'Escolha um período entre 1 e 24 meses';
   end if;
   if p_monthly_fee is not null and p_monthly_fee < 0 then
@@ -444,13 +450,15 @@ begin
 end;
 $$;
 
-create or replace function public.admin_grant_platform_access_v2(
+create or replace function public.admin_grant_platform_access_v3(
   p_user_id text,
   p_period_value integer,
   p_period_unit text,
   p_monthly_fee numeric,
   p_access_type text,
-  p_access_amount numeric
+  p_access_amount numeric,
+  p_phone text default null,
+  p_notes text default null
 )
 returns jsonb
 language plpgsql
@@ -467,14 +475,21 @@ begin
   if not public.is_platform_admin() then
     raise exception 'Acesso administrativo necessário';
   end if;
-  if p_period_unit not in ('days', 'months') then
+  if p_user_id is null or btrim(p_user_id) = '' then
+    raise exception 'Conta inválida';
+  end if;
+  if exists (select 1 from public.platform_admins where user_id = p_user_id) then
+    raise exception 'A conta proprietária já possui acesso permanente';
+  end if;
+  if p_period_unit is null or p_period_unit not in ('days', 'months') then
     raise exception 'Unidade de período inválida';
   end if;
-  if (p_period_unit = 'days' and (p_period_value < 1 or p_period_value > 365))
+  if p_period_value is null
+    or (p_period_unit = 'days' and (p_period_value < 1 or p_period_value > 365))
     or (p_period_unit = 'months' and (p_period_value < 1 or p_period_value > 24)) then
     raise exception 'Período de acesso inválido';
   end if;
-  if p_access_type not in ('paid', 'free') then
+  if p_access_type is null or p_access_type not in ('paid', 'free') then
     raise exception 'Escolha se a liberação foi paga ou gratuita';
   end if;
   if p_monthly_fee is not null and p_monthly_fee < 0 then
@@ -497,6 +512,8 @@ begin
   update public.platform_accounts
   set
     status = 'active',
+    phone = case when p_phone is null then phone else p_phone end,
+    notes = case when p_notes is null then notes else p_notes end,
     monthly_fee = coalesce(p_monthly_fee, monthly_fee),
     paid_until = expiration_date,
     access_type = p_access_type,
@@ -534,6 +551,27 @@ begin
   );
 
   return to_jsonb(updated_row);
+end;
+$$;
+
+create or replace function public.admin_grant_platform_access_v2(
+  p_user_id text,
+  p_period_value integer,
+  p_period_unit text,
+  p_monthly_fee numeric,
+  p_access_type text,
+  p_access_amount numeric
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return public.admin_grant_platform_access_v3(
+    p_user_id, p_period_value, p_period_unit, p_monthly_fee,
+    p_access_type, p_access_amount, null, null
+  );
 end;
 $$;
 
@@ -581,8 +619,10 @@ begin
 end;
 $$;
 
-create or replace function public.admin_grant_platform_lifetime(
-  p_user_id text
+create or replace function public.admin_grant_platform_lifetime_v2(
+  p_user_id text,
+  p_phone text default null,
+  p_notes text default null
 )
 returns jsonb
 language plpgsql
@@ -603,6 +643,8 @@ begin
   update public.platform_accounts
   set
     status = 'active',
+    phone = case when p_phone is null then phone else p_phone end,
+    notes = case when p_notes is null then notes else p_notes end,
     monthly_fee = 0,
     paid_until = null,
     access_type = 'lifetime',
@@ -629,6 +671,17 @@ begin
   );
 
   return to_jsonb(updated_row);
+end;
+$$;
+
+create or replace function public.admin_grant_platform_lifetime(p_user_id text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return public.admin_grant_platform_lifetime_v2(p_user_id, null, null);
 end;
 $$;
 
@@ -787,8 +840,10 @@ revoke all on function public.request_platform_access(text, text) from public;
 revoke all on function public.bootstrap_platform_admin(text) from public;
 revoke all on function public.admin_grant_platform_access(text, integer, numeric) from public;
 revoke all on function public.admin_grant_platform_access_v2(text, integer, text, numeric, text, numeric) from public;
+revoke all on function public.admin_grant_platform_access_v3(text, integer, text, numeric, text, numeric, text, text) from public;
 revoke all on function public.admin_set_platform_status(text, text) from public;
 revoke all on function public.admin_grant_platform_lifetime(text) from public;
+revoke all on function public.admin_grant_platform_lifetime_v2(text, text, text) from public;
 revoke all on function public.delete_my_account_data() from public;
 
 grant execute on function public.is_platform_admin() to anon, authenticated;
@@ -799,8 +854,10 @@ grant execute on function public.request_platform_access(text, text) to anon, au
 grant execute on function public.bootstrap_platform_admin(text) to anon, authenticated;
 grant execute on function public.admin_grant_platform_access(text, integer, numeric) to anon, authenticated;
 grant execute on function public.admin_grant_platform_access_v2(text, integer, text, numeric, text, numeric) to anon, authenticated;
+grant execute on function public.admin_grant_platform_access_v3(text, integer, text, numeric, text, numeric, text, text) to anon, authenticated;
 grant execute on function public.admin_set_platform_status(text, text) to anon, authenticated;
 grant execute on function public.admin_grant_platform_lifetime(text) to anon, authenticated;
+grant execute on function public.admin_grant_platform_lifetime_v2(text, text, text) to anon, authenticated;
 grant execute on function public.delete_my_account_data() to anon, authenticated;
 
 commit;

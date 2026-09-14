@@ -4,6 +4,9 @@
 begin;
 
 alter table public.platform_accounts
+  add column if not exists expiry_notified_at timestamptz;
+
+alter table public.platform_accounts
   add column if not exists access_type text not null default 'paid'
   check (access_type in ('paid', 'free', 'lifetime'));
 
@@ -38,14 +41,21 @@ begin
   if not public.is_platform_admin() then
     raise exception 'Acesso administrativo necessário';
   end if;
-  if p_period_unit not in ('days', 'months') then
+  if p_user_id is null or btrim(p_user_id) = '' then
+    raise exception 'Conta inválida';
+  end if;
+  if exists (select 1 from public.platform_admins where user_id = p_user_id) then
+    raise exception 'A conta proprietária já possui acesso permanente';
+  end if;
+  if p_period_unit is null or p_period_unit not in ('days', 'months') then
     raise exception 'Unidade de período inválida';
   end if;
-  if (p_period_unit = 'days' and (p_period_value < 1 or p_period_value > 365))
+  if p_period_value is null
+    or (p_period_unit = 'days' and (p_period_value < 1 or p_period_value > 365))
     or (p_period_unit = 'months' and (p_period_value < 1 or p_period_value > 24)) then
     raise exception 'Período de acesso inválido';
   end if;
-  if p_access_type not in ('paid', 'free') then
+  if p_access_type is null or p_access_type not in ('paid', 'free') then
     raise exception 'Escolha se a liberação foi paga ou gratuita';
   end if;
   if p_monthly_fee is not null and p_monthly_fee < 0 then

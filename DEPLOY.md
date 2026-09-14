@@ -10,10 +10,9 @@ as regras de acesso usando o token Firebase.
 2. Escolha nome, região, senha forte do banco e aguarde a criação.
 3. Abra **SQL Editor** > **New query**, cole todo o arquivo `supabase-schema.sql` deste repositório e clique em **Run**.
 4. Para uma instalação nova, execute `supabase-schema.sql`. Para atualizar a instalação existente sem apagar dados, execute `supabase-firebase-migration.sql` conforme `FIREBASE_SETUP.md`.
-5. Execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas mensais e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
-6. Em uma instalação que já possui o painel, execute `supabase-auto-expiry-migration.sql`. Ela registra cada vencimento uma única vez e informa o proprietário no painel quando o acesso é bloqueado automaticamente por falta de pagamento.
-7. Execute `supabase-reset-renewal-date-migration.sql` para que cada liberação seja contada a partir do dia atual e substitua a validade anterior, sem acumular meses entre cliques.
-8. Execute `supabase-trial-access-migration.sql` para permitir liberações manuais pagas ou gratuitas, incluindo o período de teste de 15 dias, com registro no histórico.
+5. Em uma instalação nova, execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas, os testes gratuitos e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
+6. Em uma instalação que já possui o painel, execute somente `supabase-access-integrity-migration.sql`. Essa migração transacional e repetível instala qualquer coluna ausente, atualiza as funções de liberação e valida a proteção RLS sem apagar contas, vencimentos ou históricos.
+7. Os arquivos `supabase-auto-expiry-migration.sql`, `supabase-reset-renewal-date-migration.sql` e `supabase-trial-access-migration.sql` permanecem apenas para registrar as atualizações antigas. Não é necessário executá-los depois da migração de integridade.
 
 ## 2. Conectar o site ao Supabase
 

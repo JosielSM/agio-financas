@@ -142,7 +142,12 @@
       const instance = await requireAuth();
       const user = instance.currentUser;
       if (!user) return null;
-      await user.reload();
+      try {
+        await user.reload();
+      } catch (error) {
+        if (error?.code !== "auth/network-request-failed" || !user.emailVerified)
+          throw friendlyError(error, "Não foi possível restaurar sua sessão.");
+      }
       if (!allowUnverified && !instance.currentUser.emailVerified) {
         await instance.signOut();
         return null;
