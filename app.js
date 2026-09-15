@@ -137,11 +137,14 @@ const save = async ({ allowReadOnly = false } = {}) => {
   }
   let liveAccess;
   try {
-    liveAccess = await window.credmaisBridge.platformAccess(state.user);
+    liveAccess = rememberVerifiedPlatformAccess(
+      await window.credmaisBridge.platformAccess(state.user),
+    );
   } catch (error) {
+    showOfflineMode(offlinePlatformAccess(error));
     throw new Error(
       error?.message ||
-        "Não foi possível validar sua assinatura. Nenhuma alteração foi salva.",
+        "Sem conexão para confirmar seu acesso. Nenhuma alteração foi salva.",
     );
   }
   state.platformAccess = liveAccess;
@@ -1023,6 +1026,55 @@ function setAuth(view) {
 }
 const platformAccessStorageKey = (userId) =>
   `credmais_platform_access:${String(userId || "")}`;
+function cachedPlatformAccess(userId = state.user?.id) {
+  if (!userId) return null;
+  try {
+    return JSON.parse(
+      localStorage.getItem(platformAccessStorageKey(userId)) || "null",
+    );
+  } catch (error) {
+    console.warn("Situação de acesso salva inválida:", error.message);
+    try {
+      localStorage.removeItem(platformAccessStorageKey(userId));
+    } catch (storageError) {
+      console.warn("Não foi possível limpar o cache de acesso:", storageError.message);
+    }
+    return null;
+  }
+}
+function rememberVerifiedPlatformAccess(access) {
+  const verified = {
+    ...access,
+    offline: false,
+    connectionState: "online",
+    verifiedAt: new Date().toISOString(),
+  };
+  if (state.user?.id)
+    try {
+      localStorage.setItem(
+        platformAccessStorageKey(state.user.id),
+        JSON.stringify(verified),
+      );
+    } catch (error) {
+      console.warn("Não foi possível atualizar o cache de acesso:", error.message);
+    }
+  return verified;
+}
+function offlinePlatformAccess(error = null) {
+  const cached = cachedPlatformAccess();
+  return {
+    ...(cached || {
+      enabled: true,
+      status: "unknown",
+      monthlyFee: 0,
+      defaultMonthlyFee: 0,
+    }),
+    enabled: true,
+    offline: true,
+    connectionState: navigator.onLine === false ? "offline" : "unavailable",
+    connectionMessage: error?.message || "",
+  };
+}
 function platformAccessAllowed(access) {
   if (access?.offline) return false;
   if (!access?.enabled || access.status === "admin") return true;
@@ -1064,11 +1116,16 @@ const PLATFORM_MUTATION_FORM_SELECTOR = [
   "#monthlyReportForm",
   "#pixForm",
 ].join(",");
-function platformReadOnly() {
+function platformOfflineReadOnly(access = state.platformAccess) {
+  return Boolean(access?.enabled && access?.offline);
+}
+function platformPaymentLocked(access = state.platformAccess) {
   return Boolean(
-    state.platformAccess?.enabled &&
-      !platformAccessAllowed(state.platformAccess),
+    access?.enabled && !access?.offline && !platformAccessAllowed(access),
   );
+}
+function platformReadOnly() {
+  return platformOfflineReadOnly() || platformPaymentLocked();
 }
 function activeFreeTrial(access = state.platformAccess) {
   return Boolean(
@@ -1144,17 +1201,27 @@ function accessContent(access) {
   };
 }
 function applyPlatformRestrictions() {
-  const locked = platformReadOnly(),
-    banner = $("#subscriptionBanner");
+  const offline = platformOfflineReadOnly(),
+    paymentLocked = platformPaymentLocked(),
+    locked = offline || paymentLocked,
+    banner = $("#subscriptionBanner"),
+    offlineBanner = $("#offlineBanner");
   document.body.classList.toggle("platform-read-only", locked);
-  if (banner) banner.hidden = !locked;
+  document.body.classList.toggle("platform-offline", offline);
+  if (banner) banner.hidden = !paymentLocked;
+  if (offlineBanner) offlineBanner.hidden = !offline;
   document.querySelectorAll(PLATFORM_MUTATION_SELECTOR).forEach((control) => {
     control.classList.toggle("requires-subscription", locked);
     if (locked) {
       control.setAttribute("aria-disabled", "true");
       if (!control.hasAttribute("data-subscription-title"))
         control.dataset.subscriptionTitle = control.getAttribute("title") || "";
-      control.setAttribute("title", "Liberação necessária para usar esta função");
+      control.setAttribute(
+        "title",
+        offline
+          ? "Conecte-se à internet para usar esta função"
+          : "Liberação necessária para usar esta função",
+      );
     } else {
       control.removeAttribute("aria-disabled");
       if (control.hasAttribute("data-subscription-title")) {
@@ -1168,6 +1235,11 @@ function applyPlatformRestrictions() {
 }
 function requirePlatformAccess(action = "usar esta função") {
   if (!platformReadOnly()) return true;
+  if (platformOfflineReadOnly()) {
+    showOfflineMode(state.platformAccess);
+    toast(`Você está offline. Conecte-se à internet para ${action}.`);
+    return false;
+  }
   showAccessGate(state.platformAccess, { openPrompt: true });
   toast(`Liberação necessária para ${action}.`);
   return false;
@@ -1175,25 +1247,40 @@ function requirePlatformAccess(action = "usar esta função") {
 async function resolvePlatformAccess() {
   if (!window.credmaisBridge?.platformAccess || !state.user?.id)
     return { enabled: false, status: "active" };
+  if (navigator.onLine === false) return offlinePlatformAccess();
   try {
-    const access = await window.credmaisBridge.platformAccess(state.user);
-    localStorage.setItem(
-      platformAccessStorageKey(state.user.id),
-      JSON.stringify(access),
+    return rememberVerifiedPlatformAccess(
+      await window.credmaisBridge.platformAccess(state.user),
     );
-    return access;
   } catch (error) {
-    const cached = JSON.parse(
-      localStorage.getItem(platformAccessStorageKey(state.user.id)) || "null",
-    );
-    if (cached) return { ...cached, offline: true };
-    throw error;
+    return offlinePlatformAccess(error);
   }
 }
+function showOfflineMode(access = offlinePlatformAccess()) {
+  state.platformAccess = { ...access, enabled: true, offline: true };
+  $("#authView").hidden = true;
+  $("#appView").hidden = false;
+  $("#accessView").hidden = true;
+  $("#subscriptionBanner").hidden = true;
+  $("#trialBanner").hidden = true;
+  const message = $("#offlineBannerMessage");
+  if (message)
+    message.textContent =
+      state.platformAccess.connectionState === "offline"
+        ? "Este aparelho está sem internet. Seus dados continuam disponíveis para consulta e nenhuma alteração será feita até a conexão voltar."
+        : "Não foi possível confirmar o acesso agora. Seus dados continuam disponíveis para consulta e tentaremos novamente automaticamente.";
+  applyPlatformRestrictions();
+}
 function showAccessGate(access, { openPrompt = true } = {}) {
+  if (access?.offline) {
+    showOfflineMode(access);
+    return;
+  }
   state.platformAccess = access;
   $("#authView").hidden = true;
   $("#appView").hidden = false;
+  const offlineBanner = $("#offlineBanner");
+  if (offlineBanner) offlineBanner.hidden = true;
   $("#accessView").hidden = !openPrompt;
   const { status, content } = accessContent(access);
   const statusBadge = $("#accessStatus");
@@ -1482,16 +1569,14 @@ async function refreshPlatformAccess() {
     button.textContent = "Atualizando...";
   });
   try {
-    const access = await window.credmaisBridge.platformAccess(state.user);
-    localStorage.setItem(
-      platformAccessStorageKey(state.user.id),
-      JSON.stringify(access),
-    );
-    if (platformAccessAllowed(access)) {
+    const access = await resolvePlatformAccess();
+    if (access?.offline) {
+      showOfflineMode(access);
+      toast("A conexão ainda não foi restabelecida. Continuamos em modo de consulta.");
+    } else if (platformAccessAllowed(access)) {
       await showApp(access);
       toast("Acesso liberado. Todas as funções estão disponíveis.");
-    }
-    else {
+    } else {
       showAccessGate(access, { openPrompt: true });
       setFeedback("accessFeedback", "Situação atualizada.", "success");
     }
@@ -1536,7 +1621,9 @@ async function showApp(resolvedAccess = null) {
       localStorage.setItem("credmais_history", "[]");
       localStorage.setItem("credmais_cache_owner", state.user.id);
     }
-    if (writeAllowed) {
+    if (access?.offline) {
+      console.info("Modo offline: mantendo os dados salvos neste aparelho.");
+    } else if (writeAllowed) {
       try {
         const pending = pendingSyncPayload(state.user.id, ownsCache);
         if (pending) {
@@ -1605,8 +1692,11 @@ async function showApp(resolvedAccess = null) {
   if (writeAllowed) {
     $("#accessView").hidden = true;
     $("#subscriptionBanner").hidden = true;
+    const offlineBanner = $("#offlineBanner");
+    if (offlineBanner) offlineBanner.hidden = true;
     applyPlatformRestrictions();
-  } else showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
+  } else if (access?.offline) showOfflineMode(access);
+  else showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
   void handleBillingReturn();
   return true;
 }
@@ -1621,22 +1711,30 @@ async function refreshFromCloud({ notify = false } = {}) {
     !window.credmaisBridge?.enabled ||
     !state.user?.id ||
     document.hidden ||
-    !$("#accessView").hidden ||
     hasOpenModal()
   )
     return false;
   refreshingFromCloud = true;
   try {
+    const wasOffline = platformOfflineReadOnly(),
+      accessWasPaymentLocked = platformPaymentLocked();
     const access = await resolvePlatformAccess();
-    if (access?.enabled && !platformAccessAllowed(access)) {
-      renderTrialBanner(access);
-      showAccessGate(access, { openPrompt: !$("#accessView").hidden });
+    if (access?.offline) {
+      showOfflineMode(access);
+      if (notify && !wasOffline)
+        toast("Conexão indisponível. O CredMais entrou em modo de consulta.");
       return false;
     }
-    const accessWasLocked = platformReadOnly();
+    if (access?.enabled && !platformAccessAllowed(access)) {
+      renderTrialBanner(access);
+      showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
+      return false;
+    }
     state.platformAccess = access;
     renderTrialBanner(access);
     $("#accessView").hidden = true;
+    const offlineBanner = $("#offlineBanner");
+    if (offlineBanner) offlineBanner.hidden = true;
     applyPlatformRestrictions();
     const pending = pendingSyncPayload(state.user.id),
       hadPendingSync = Boolean(pending);
@@ -1657,9 +1755,11 @@ async function refreshFromCloud({ notify = false } = {}) {
       JSON.stringify(state.history) !== JSON.stringify(nextHistory);
     if (!changed) {
       render();
-      if (accessWasLocked)
+      if (wasOffline)
+        toast("Conexão restabelecida. Seu acesso continua liberado.");
+      else if (accessWasPaymentLocked)
         toast("Acesso liberado. Todas as funções estão disponíveis.");
-      if (notify && hadPendingSync)
+      else if (notify && hadPendingSync)
         toast("Dados pendentes sincronizados com sucesso.");
       return false;
     }
@@ -1670,7 +1770,9 @@ async function refreshFromCloud({ notify = false } = {}) {
     localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
     localStorage.setItem("credmais_history", JSON.stringify(state.history));
     render();
-    if (notify)
+    if (wasOffline)
+      toast("Conexão restabelecida. Dados atualizados e acesso liberado.");
+    else if (notify)
       toast(
         hadPendingSync
           ? "Dados pendentes sincronizados e atualizados."
@@ -3851,6 +3953,20 @@ $("#accessPhone").addEventListener("input", (event) => {
   event.target.value = formatPhone(event.target.value);
 });
 $("#accessRefresh").onclick = refreshPlatformAccess;
+const offlineRefreshButton = $("#offlineRefreshButton");
+if (offlineRefreshButton)
+  offlineRefreshButton.onclick = async () => {
+    offlineRefreshButton.disabled = true;
+    offlineRefreshButton.textContent = "Verificando...";
+    try {
+      await refreshFromCloud({ notify: true });
+      if (state.platformAccess?.offline)
+        toast("A conexão ainda não foi restabelecida. Seus dados seguem protegidos.");
+    } finally {
+      offlineRefreshButton.disabled = false;
+      offlineRefreshButton.textContent = "Tentar novamente";
+    }
+  };
 $("#accessDismiss").onclick = dismissAccessPrompt;
 $("#accessContinue").onclick = dismissAccessPrompt;
 document.querySelectorAll("[data-payment-months]").forEach((button) => {
@@ -3958,6 +4074,11 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshFromCloud({ notify: true });
 });
 window.addEventListener("online", () => refreshFromCloud({ notify: true }));
+window.addEventListener("offline", () => {
+  if (!state.user?.id) return;
+  showOfflineMode(offlinePlatformAccess());
+  toast("Sem internet. O CredMais está disponível somente para consulta.");
+});
 window.addEventListener("hashchange", () => {
   const page = location.hash.slice(1);
   if ($(`#${page}Page`)) setPage(page);
