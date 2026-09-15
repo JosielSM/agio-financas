@@ -64,3 +64,18 @@ test("security policy blocks framing and browser capabilities", () => {
   assert.match(CONTENT_SECURITY_POLICY, /object-src 'none'/);
   assert.doesNotMatch(CONTENT_SECURITY_POLICY, /script-src[^;]*'unsafe-inline'/);
 });
+
+test("security policy permits only the Google endpoints required by Firebase Auth", () => {
+  assert.match(
+    CONTENT_SECURITY_POLICY,
+    /script-src[^;]*https:\/\/apis\.google\.com/,
+  );
+  assert.match(
+    CONTENT_SECURITY_POLICY,
+    /connect-src[^;]*https:\/\/accounts\.google\.com/,
+  );
+  assert.match(
+    CONTENT_SECURITY_POLICY,
+    /frame-src[^;]*https:\/\/accounts\.google\.com/,
+  );
+});

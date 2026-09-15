@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-admin-v9";
+const CACHE_NAME = "credmais-admin-v12";
 const SHELL = [
   "/admin/",
   "/admin/index.html",
@@ -9,6 +9,9 @@ const SHELL = [
   "/firebase-bridge.js",
   "/supabase-config.js",
   "/supabase-bridge.js",
+  "/vendor/firebase-app-compat.js",
+  "/vendor/firebase-auth-compat.js",
+  "/vendor/supabase.min.js",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
@@ -36,6 +39,24 @@ self.addEventListener("activate", (event) => {
 });
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put("/admin/index.html", copy)),
+            );
+          }
+          return response;
+        })
+        .catch(() => caches.match("/admin/index.html")),
+    );
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -49,6 +70,6 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/admin/index.html"))),
+      .catch(() => caches.match(event.request)),
   );
 });

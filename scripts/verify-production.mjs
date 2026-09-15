@@ -34,7 +34,9 @@ for (const [origin, application] of [
 const mainPage = await request(`${MAIN}/`);
 assert.equal(mainPage.response.status, 200);
 assert.match(mainPage.body, /CredMais/);
-assert.match(mainPage.body, /@supabase\/supabase-js@2\.116\.0/);
+assert.match(mainPage.body, /vendor\/supabase\.min\.js/);
+assert.match(mainPage.body, /vendor\/firebase-auth-compat\.js/);
+assert.doesNotMatch(mainPage.body, /<script[^>]+(?:gstatic|jsdelivr)/i);
 assert.doesNotMatch(
   mainPage.body,
   /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script>/i,
@@ -45,7 +47,27 @@ const adminPage = await request(`${ADMIN}/admin/`);
 assert.equal(adminPage.response.status, 200);
 assert.match(adminPage.body, /CredMais Controle/);
 assert.doesNotMatch(adminPage.body, /Criar conta administrativa/i);
+assert.match(adminPage.body, /vendor\/supabase\.min\.js/);
+assert.match(adminPage.body, /vendor\/firebase-auth-compat\.js/);
+assert.doesNotMatch(adminPage.body, /<script[^>]+(?:gstatic|jsdelivr)/i);
 verifySecurityHeaders(adminPage.response);
+
+for (const origin of [MAIN, ADMIN]) {
+  for (const asset of [
+    "/vendor/firebase-app-compat.js",
+    "/vendor/firebase-auth-compat.js",
+    "/vendor/supabase.min.js",
+  ]) {
+    const sdk = await request(`${origin}${asset}`);
+    assert.equal(sdk.response.status, 200, `${origin}${asset} is unavailable`);
+    assert.match(
+      sdk.response.headers.get("content-type") || "",
+      /javascript/,
+      `${origin}${asset} has an invalid content type`,
+    );
+    assert.ok(sdk.body.length > 20_000, `${origin}${asset} is incomplete`);
+  }
+}
 
 const adminRedirect = await request(`${ADMIN}/`, { redirect: "manual" });
 assert.equal(adminRedirect.response.status, 302);

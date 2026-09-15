@@ -1,6 +1,6 @@
 import { handleBillingRequest } from "./mercado-pago.js";
 
-const APP_VERSION = "2026.09.14.1";
+const APP_VERSION = "2026.09.15.1";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -8,11 +8,11 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com",
+  "script-src 'self' https://apis.google.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://accounts.google.com https://apis.google.com",
   "frame-src https://accounts.google.com https://*.firebaseapp.com",
   "manifest-src 'self'",
   "worker-src 'self' blob:",

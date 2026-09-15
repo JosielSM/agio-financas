@@ -25,6 +25,8 @@
     "auth/invalid-credential":
       "E-mail ou senha incorretos. Se sua conta foi migrada, use “Esqueci minha senha” ou entre com o Google.",
     "auth/invalid-email": "Informe um e-mail válido.",
+    "auth/internal-error":
+      "O serviço de login não conseguiu iniciar. Atualize a página e tente novamente.",
     "auth/network-request-failed":
       "Não foi possível conectar. Confira sua internet e tente novamente.",
     "auth/operation-not-allowed":
@@ -42,6 +44,10 @@
       "Por segurança, saia e entre novamente antes de alterar a senha.",
     "auth/too-many-requests":
       "Muitas tentativas foram feitas. Aguarde alguns minutos e tente novamente.",
+    "auth/web-storage-unsupported":
+      "O navegador bloqueou o armazenamento da sessão. Permita cookies e dados do site para o CredMais.",
+    "auth/sdk-not-loaded":
+      "O serviço de login não carregou. Atualize a página e confira sua conexão.",
     "auth/unauthorized-domain":
       "Este endereço do CredMais ainda não está autorizado no Firebase.",
     "auth/user-mismatch":
@@ -54,9 +60,11 @@
   };
 
   function friendlyError(error, fallback = "Não foi possível concluir a autenticação.") {
+    if (error?.credmaisFriendly) return error;
     const translated = new Error(errorMessages[error?.code] || fallback);
     translated.code = error?.code || "auth/unknown";
     translated.original = error;
+    translated.credmaisFriendly = true;
     return translated;
   }
 
@@ -92,6 +100,39 @@
     };
   }
 
+  async function configurePersistence(instance) {
+    const persistenceOptions = [
+      window.firebase.auth.Auth.Persistence.LOCAL,
+      window.firebase.auth.Auth.Persistence.SESSION,
+      window.firebase.auth.Auth.Persistence.NONE,
+    ];
+    let lastError = null;
+    for (const persistence of persistenceOptions) {
+      try {
+        await instance.setPersistence(persistence);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+
+  function waitForInitialUser(instance) {
+    return new Promise((resolve, reject) => {
+      const unsubscribe = instance.onAuthStateChanged(
+        (user) => {
+          unsubscribe();
+          resolve(user);
+        },
+        (error) => {
+          unsubscribe();
+          reject(error);
+        },
+      );
+    });
+  }
+
   let ready = Promise.resolve(null);
   if (configured && window.firebase?.initializeApp) {
     try {
@@ -100,27 +141,17 @@
         window.firebase.initializeApp(config, "credmais");
       auth = app.auth();
       auth.languageCode = "pt-BR";
-      ready = auth
-        .setPersistence(window.firebase.auth.Auth.Persistence.LOCAL)
-        .then(
-          () =>
-            new Promise((resolve, reject) => {
-              const unsubscribe = auth.onAuthStateChanged(
-                (user) => {
-                  unsubscribe();
-                  resolve(user);
-                },
-                (error) => {
-                  unsubscribe();
-                  reject(error);
-                },
-              );
-            }),
-        );
+      ready = configurePersistence(auth).then(() => waitForInitialUser(auth));
     } catch (error) {
       initializationError = error;
       console.error("Falha ao iniciar Firebase Authentication:", error);
     }
+  } else if (configured) {
+    initializationError = Object.assign(
+      new Error("Firebase Authentication SDK não carregado."),
+      { code: "auth/sdk-not-loaded" },
+    );
+    console.error("Falha ao iniciar Firebase Authentication: SDK não carregado.");
   }
 
   const enabled = Boolean(auth && !initializationError);
@@ -190,6 +221,10 @@
         await credential.user.getIdToken(true);
         return userData(credential.user);
       } catch (error) {
+        console.error(
+          "Falha no login Google:",
+          error?.code || "auth/unknown",
+        );
         throw friendlyError(error, "Não foi possível entrar com o Google.");
       }
     },

@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v20";
+const CACHE_NAME = "credmais-shell-v22";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -10,6 +10,9 @@ const APP_SHELL = [
   "/firebase-bridge.js",
   "/supabase-config.js",
   "/supabase-bridge.js",
+  "/vendor/firebase-app-compat.js",
+  "/vendor/firebase-auth-compat.js",
+  "/vendor/supabase.min.js",
   "/vendor/html2pdf.bundle.min.js",
   "/manifest.webmanifest",
   "/offline.html",

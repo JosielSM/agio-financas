@@ -9,6 +9,11 @@
 - Dados financeiros: PostgreSQL/Supabase
 - Autenticação: Firebase Authentication
 
+Os SDKs usados no navegador são versões fixas e auto-hospedadas em `vendor/`.
+Isso evita indisponibilidade do login por falha de CDN ou cache do PWA. Atualize esses
+arquivos somente junto com a versão documentada e execute `npm run check` e
+`npm run verify:production` antes de publicar.
+
 `firebase-config.js` contém apenas identificadores públicos do aplicativo Web. Chaves
 privadas, credenciais de conta de serviço e tokens administrativos nunca podem ser
 incluídos no repositório ou enviados ao navegador.

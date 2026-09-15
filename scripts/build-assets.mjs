@@ -10,6 +10,9 @@ const shared = [
   "firebase-bridge.js",
   "supabase-config.js",
   "supabase-bridge.js",
+  "vendor/firebase-app-compat.js",
+  "vendor/firebase-auth-compat.js",
+  "vendor/supabase.min.js",
   "icons",
 ];
 const main = [
