@@ -1,4 +1,6 @@
-const APP_VERSION = "2026.09.14";
+import { handleBillingRequest } from "./mercado-pago.js";
+
+const APP_VERSION = "2026.09.14.1";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -83,6 +85,11 @@ async function handleRequest(request, env) {
       application: env.APP_KIND === "admin" ? "credmais-controle" : "credmais",
       version: APP_VERSION,
     });
+  }
+
+  if (env.APP_KIND !== "admin") {
+    const billingResponse = await handleBillingRequest(request, env);
+    if (billingResponse) return billingResponse;
   }
 
   if (url.pathname.startsWith("/api/")) {

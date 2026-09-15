@@ -105,7 +105,8 @@ button {
   min-height: 100dvh;
   padding: 28px;
   display: grid;
-  place-items: center;
+  align-items: start;
+  justify-items: center;
   overflow-y: auto;
   background:
     radial-gradient(circle at 15% 15%, #1ab77d52, transparent 34%),
@@ -205,6 +206,188 @@ button {
 .access-price b {
   color: var(--brand);
   font: 700 23px Outfit;
+}
+.automatic-payment {
+  position: relative;
+  margin: 0 0 16px;
+  padding: 15px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  border-radius: 15px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--soft) 72%, var(--surface)),
+    var(--surface)
+  );
+  text-align: left;
+}
+.automatic-payment.is-sandbox::after {
+  content: "TESTE";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #fff1cf;
+  color: #8b5a00;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .6px;
+}
+.automatic-payment-head {
+  display: grid;
+  gap: 3px;
+  padding-right: 38px;
+}
+.automatic-payment-head > span {
+  color: var(--brand);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .7px;
+}
+.automatic-payment-head > strong {
+  color: var(--text);
+  font: 700 16px Outfit;
+}
+.automatic-payment-head > small,
+.automatic-payment-security {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.payment-plan-list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+.payment-plan {
+  min-width: 0;
+  padding: 8px 4px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
+.payment-plan b {
+  font-size: 10px;
+}
+.payment-plan small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.payment-plan:hover,
+.payment-plan.active {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--brand);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.payment-plan.active small {
+  color: var(--brand);
+}
+.payment-plan:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.automatic-payment-total {
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+}
+.automatic-payment-total b {
+  color: var(--text);
+  font: 700 15px Outfit;
+}
+.automatic-payment-actions {
+  display: grid;
+  gap: 7px;
+}
+.mercado-pay-button,
+.subscription-pay-button {
+  width: 100%;
+  min-height: 47px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  text-align: left;
+}
+.mercado-pay-button {
+  background: #1689e8;
+  color: #fff;
+  box-shadow: 0 8px 18px #1689e82b;
+}
+.mercado-pay-button:hover {
+  background: #0879d3;
+}
+.subscription-pay-button {
+  border: 1px solid #1689e8;
+  background: color-mix(in srgb, #1689e8 7%, var(--surface));
+  color: #0879d3;
+}
+.mercado-pay-button > span:first-child,
+.subscription-pay-button > span:first-child {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #ffffff24;
+  font-size: 15px;
+}
+.subscription-pay-button > span:first-child {
+  background: #1689e817;
+}
+.mercado-pay-button > span:last-child,
+.subscription-pay-button > span:last-child {
+  display: grid;
+  gap: 1px;
+}
+.mercado-pay-button b,
+.subscription-pay-button b {
+  font-size: 11px;
+}
+.mercado-pay-button small,
+.subscription-pay-button small {
+  color: inherit;
+  font-size: 8px;
+  opacity: .85;
+}
+.mercado-pay-button:disabled,
+.subscription-pay-button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(.35);
+  opacity: .55;
+}
+.automatic-payment .form-feedback {
+  min-height: 0;
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 9px;
+}
+.automatic-payment-security {
+  display: block;
+  margin-top: 8px;
+  text-align: center;
+}
+.dark .automatic-payment.is-sandbox::after {
+  background: #4a3917;
+  color: #ffe29a;
+}
+.dark .subscription-pay-button {
+  color: #8ccaff;
 }
 .access-payment {
   margin: -8px 0 16px;
@@ -1626,6 +1809,15 @@ body.dark {
   }
   .access-payment-actions {
     grid-template-columns: 1fr;
+  }
+  .payment-plan-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .payment-plan {
+    padding: 8px 6px;
+  }
+  .payment-plan small {
+    font-size: 9px;
   }
   .subscription-banner {
     margin: 10px 10px 0;

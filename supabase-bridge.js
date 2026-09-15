@@ -98,6 +98,37 @@
     if (error) throw error;
     return supabaseUserData(data.user);
   }
+  async function currentApiToken() {
+    if (firebaseAuth) return firebaseAuth.getAccessToken(false);
+    if (!client) return null;
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    return data.session?.access_token || null;
+  }
+  async function billingApi(path, options = {}) {
+    const headers = { Accept: "application/json" };
+    if (options.auth) {
+      const token = await currentApiToken();
+      if (!token) throw new Error("Entre novamente para continuar.");
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (options.body) headers["Content-Type"] = "application/json";
+    const response = await fetch(path, {
+      method: options.method || "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      credentials: "same-origin",
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(
+        result?.message || "Não foi possível acessar o pagamento automático.",
+      );
+      error.code = result?.error || "BILLING_REQUEST_FAILED";
+      throw error;
+    }
+    return result;
+  }
   const toLoanRow = (loan, ownerId) => ({
     id: loan.id,
     owner_id: ownerId,
@@ -224,6 +255,19 @@
         throw new Error("O painel de assinaturas ainda precisa ser ativado no banco.");
       if (error) throw error;
       return data;
+    },
+    async billingConfig() {
+      return billingApi("/api/billing/config");
+    },
+    async createBillingCheckout(months, mode = "one_time") {
+      return billingApi("/api/billing/checkout", {
+        method: "POST",
+        auth: true,
+        body: { months: Number(months), mode },
+      });
+    },
+    async billingStatus() {
+      return billingApi("/api/billing/status", { auth: true });
     },
     async isPlatformAdmin() {
       if (!client) return false;

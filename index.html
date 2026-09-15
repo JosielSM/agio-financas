@@ -43,6 +43,20 @@
       <h1 id="accessTitle">Sua solicitação está pendente</h1>
       <p id="accessMessage">O administrador precisa liberar seu acesso antes de você começar a usar a plataforma.</p>
       <div class="access-price"><span>Mensalidade informada</span><b id="accessMonthlyFee">R$ 0,00</b><small id="accessPaidUntil">A liberação será válida pelo período contratado.</small></div>
+      <section class="automatic-payment" id="automaticPayment" aria-labelledby="automaticPaymentTitle">
+        <div class="automatic-payment-head"><span>⚡ PAGAMENTO SEGURO</span><strong id="automaticPaymentTitle">Liberação automática</strong><small>Pague pelo Mercado Pago e o acesso será liberado após a confirmação.</small></div>
+        <div class="payment-plan-list" id="paymentPlanList" role="radiogroup" aria-label="Período do acesso">
+          <button class="payment-plan active" type="button" data-payment-months="1" aria-pressed="true"><b>1 mês</b><small id="paymentPlan1Price">R$ 0,00</small></button>
+          <button class="payment-plan" type="button" data-payment-months="2" aria-pressed="false"><b>2 meses</b><small id="paymentPlan2Price">R$ 0,00</small></button>
+          <button class="payment-plan" type="button" data-payment-months="3" aria-pressed="false"><b>3 meses</b><small id="paymentPlan3Price">R$ 0,00</small></button>
+          <button class="payment-plan" type="button" data-payment-months="6" aria-pressed="false"><b>6 meses</b><small id="paymentPlan6Price">R$ 0,00</small></button>
+          <button class="payment-plan" type="button" data-payment-months="12" aria-pressed="false"><b>12 meses</b><small id="paymentPlan12Price">R$ 0,00</small></button>
+        </div>
+        <div class="automatic-payment-total"><span>Total do período</span><b id="automaticPaymentTotal">R$ 0,00</b></div>
+        <div class="automatic-payment-actions"><button class="mercado-pay-button" id="automaticPaymentButton" type="button"><span>▣</span><span><b>Pagar agora</b><small>PIX ou cartão pelo Mercado Pago</small></span></button><button class="subscription-pay-button" id="automaticSubscriptionButton" type="button"><span>↻</span><span><b>Assinar mensalmente</b><small>Renovação automática no cartão</small></span></button></div>
+        <p class="form-feedback" id="automaticPaymentFeedback" aria-live="polite"></p>
+        <small class="automatic-payment-security">🔒 O CredMais não recebe nem armazena os dados do seu cartão.</small>
+      </section>
       <div class="access-payment" id="accessPaymentDetails" hidden><span>PAGAMENTO VIA PIX</span><b id="accessBillingRecipient">CredMais</b><small id="accessBillingPixType">Chave PIX</small><code id="accessBillingPixKey"></code><div class="access-payment-actions"><button class="outline" id="accessCopyPix" type="button">Copiar chave PIX</button><button class="access-receipt-button" id="accessSendReceipt" type="button"><span>💬</span> Enviar comprovante</button></div><small class="access-receipt-help" id="accessReceiptHelp">Depois de pagar, abra o WhatsApp e envie a imagem do comprovante.</small></div>
       <form id="accessRequestForm">
         <label>Seu WhatsApp para contato<input id="accessPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="15" placeholder="(00) 00000-0000" required></label>

@@ -6,9 +6,9 @@ arquivos, cache, manifesto ou escopo de PWA.
 
 ## 1. Banco de dados
 
-Para a instalação de produção existente, use somente a migração versionada
-`supabase/migrations/20260914214500_production_hardening.sql`. As migrações antigas
-permanecem no repositório apenas como histórico e não devem ser reaplicadas.
+Para a instalação de produção existente, use as migrações versionadas da pasta
+`supabase/migrations`. Os arquivos SQL antigos na raiz permanecem no repositório
+apenas como histórico e não devem ser reaplicados manualmente.
 
 Antes de executar:
 
@@ -110,9 +110,10 @@ valida o administrador no servidor e grava auditoria. O vencimento é calculado 
 da data atual para a nova concessão; meses não são somados silenciosamente ao prazo
 anterior.
 
-Esta versão aceita usuários pagantes com confirmação e liberação administrativa.
-Pagamento automático exige um provedor com API de servidor, webhook assinado,
-idempotência e credenciais próprias; não deve ser simulado no frontend.
+Esta versão mantém a confirmação e liberação administrativa e também aceita
+pagamento automático pelo Mercado Pago. A integração usa API de servidor, webhook
+assinado e idempotência; consulte `MERCADO_PAGO_SETUP.md` antes de habilitar as
+credenciais reais.
 
 ## Checklist de entrada em produção
 
@@ -127,5 +128,7 @@ idempotência e credenciais próprias; não deve ser simulado no frontend.
 - Logout remove dados financeiros locais e o modo offline não permite escrita.
 - Os dois PWAs instalam separadamente em Android e iPhone.
 - Cabeçalhos de segurança e `/api/health` conferidos nas duas URLs.
+- Mercado Pago testado em sandbox, inclusive webhook repetido, rejeição e estorno.
+- Chaves Mercado Pago e Supabase `service_role` presentes apenas nos Secrets do Worker.
 - Backup, política de privacidade, termos de uso, canal de suporte e rotina de incidentes
   definidos antes de cobrar clientes reais.
