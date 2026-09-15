@@ -1,77 +1,131 @@
-# Publicação: Firebase Authentication + Supabase + Cloudflare
+# Publicação segura do CredMais
 
-Para ativar cadastro, confirmação de e-mail e recuperação de senha pelo Firebase,
-siga primeiro `FIREBASE_SETUP.md`. O Supabase continua como banco de dados e aplica
-as regras de acesso usando o token Firebase.
+O CredMais usa Firebase Authentication, PostgreSQL/Supabase e dois Workers Cloudflare
+independentes. O aplicativo dos clientes e o painel administrativo não compartilham
+arquivos, cache, manifesto ou escopo de PWA.
 
-## 1. Criar e proteger o banco
+## 1. Banco de dados
 
-1. Crie uma conta em https://supabase.com e clique em **New project**.
-2. Escolha nome, região, senha forte do banco e aguarde a criação.
-3. Abra **SQL Editor** > **New query**, cole todo o arquivo `supabase-schema.sql` deste repositório e clique em **Run**.
-4. Para uma instalação nova, execute `supabase-schema.sql`. Para atualizar a instalação existente sem apagar dados, execute `supabase-firebase-migration.sql` conforme `FIREBASE_SETUP.md`.
-5. Em uma instalação nova, execute `supabase-admin-migration.sql` para criar o painel do proprietário, as assinaturas, os testes gratuitos e o bloqueio de acesso no próprio banco. Essa migração preserva os dados financeiros e concede 30 dias às contas já existentes.
-6. Em uma instalação que já possui o painel, execute somente `supabase-access-integrity-migration.sql`. Essa migração transacional e repetível instala qualquer coluna ausente, atualiza as funções de liberação e valida a proteção RLS sem apagar contas, vencimentos ou históricos.
-7. Os arquivos `supabase-auto-expiry-migration.sql`, `supabase-reset-renewal-date-migration.sql` e `supabase-trial-access-migration.sql` permanecem apenas para registrar as atualizações antigas. Não é necessário executá-los depois da migração de integridade.
+Para a instalação de produção existente, use somente a migração versionada
+`supabase/migrations/20260914214500_production_hardening.sql`. As migrações antigas
+permanecem no repositório apenas como histórico e não devem ser reaplicadas.
 
-## 2. Conectar o site ao Supabase
+Antes de executar:
 
-1. Em **Project Settings** > **API**, copie a **Project URL** e a **Publishable key** (ou `anon` key).
-2. Abra `supabase-config.js` e preencha `url` e `publishableKey`.
-3. Nunca use nem publique a chave `service_role`: ela ignora as regras de segurança do banco.
-4. O Supabase permanece responsável pelo PostgreSQL. A autenticação passa ao Firebase somente depois que `firebase-config.js` estiver preenchido; enquanto estiver vazio, o login Supabase atual permanece ativo durante a migração.
+1. Crie um backup ou snapshot do banco no painel Supabase.
+2. Confirme que o projeto selecionado é o CredMais.
+3. Execute `npx supabase@2.117.0 db push --linked --include-all --skip-vault`.
+   A migração usa transação e aborta integralmente se alguma validação falhar.
+4. Execute `npx supabase@2.117.0 db query --linked --file
+   supabase-production-verification.sql` e confirme o resultado
+   `credmais_production_database_verified`.
 
-As políticas RLS comparam `owner_id` ao `sub` do token e fazem com que cada usuário autenticado só acesse as próprias linhas.
+A migração mantém os dados existentes e aplica, entre outras proteções:
 
-## 3. Publicar no Cloudflare Workers
+- vínculo composto entre empréstimo, cliente e proprietário;
+- RLS apenas para leitura das próprias linhas;
+- escrita financeira exclusivamente por funções transacionais validadas;
+- bloqueio de alterações financeiras quando a assinatura não está ativa;
+- auditoria imutável das alterações de clientes, empréstimos e perfil;
+- operações administrativas auditadas;
+- desativação definitiva da função pública de criação do primeiro administrador;
+- `search_path` seguro nas funções privilegiadas e privilégios mínimos.
 
-1. No painel Cloudflare, abra **Workers & Pages** e selecione o Worker `agio-financas` já criado.
-2. Abra **Settings** > **Builds** e confirme que o repositório GitHub está conectado à branch `main`.
-3. Mantenha o comando de deploy como `npx wrangler deploy`.
-4. A configuração `wrangler.jsonc` e `.assetsignore` deste repositório faz com que somente os arquivos do site sejam publicados; arquivos Git, SQL e documentação ficam fora do site público.
-5. Faça um novo deploy ou aguarde o próximo push para `main`. A URL seguirá o formato `https://agio-financas.<sua-conta>.workers.dev`.
-6. Volte à etapa 1.5 e cadastre exatamente essa URL no Supabase. A partir daí, todo push na branch `main` publicará a nova versão automaticamente.
+Nunca coloque a chave `service_role`, senha do banco, token administrativo ou segredo
+de pagamento no navegador, no Git ou em variável pública. O frontend utiliza somente
+a URL e a chave pública existentes em `supabase-config.js`.
 
-## Painel do proprietário
+## 2. Autenticação Firebase
 
-O painel administrativo fica em `/admin/` na mesma URL publicada e também pode ser
-instalado como PWA. No primeiro acesso, crie ou entre em uma conta Firebase e use o
-código único de ativação entregue fora do repositório. Somente a primeira conta que
-confirmar esse código se torna proprietária; depois disso, o código é inutilizado.
+Siga `FIREBASE_SETUP.md`. O Supabase valida o token Firebase e usa o `sub` como
+identidade do proprietário. Cadastro, confirmação de e-mail, login Google e
+recuperação de senha permanecem no Firebase.
 
-No painel é possível configurar a mensalidade e o PIX, acompanhar contas pendentes,
-ativas, vencidas e bloqueadas, liberar períodos de 1 a 12 meses e gerar mensagens de
-cobrança para copiar ou abrir no WhatsApp. Para colaboradores, escolha **Vitalício —
-colaborador**: a conta fica sem vencimento, sem mensalidade e fora da receita prevista.
-No primeiro carregamento após um vencimento, o painel registra o bloqueio automático no
-histórico e mostra um aviso persistente com os usuários que precisam renovar.
+Contas autenticadas podem visualizar o aplicativo, mas qualquer cadastro, edição,
+pagamento, empréstimo, exclusão ou sincronização exige assinatura ativa verificada
+novamente no servidor. O modo offline nunca concede acesso de escrita.
 
-Para evitar conflito entre os dois PWAs, publique também o painel em um Worker separado:
+## 3. Build e testes
+
+Requer Node.js 20 ou superior:
 
 ```bash
-npx wrangler deploy -c wrangler.admin.jsonc
+npm run check
 ```
 
-O CredMais dos clientes continua no Worker `agio-financas`; o painel instalável usa o
-Worker `credmais-controle`. Cadastre o domínio `credmais-controle.santosjosiel2003.workers.dev`
-nos domínios autorizados do Firebase para permitir login Google e recuperação de senha.
+O comando executa o build isolado e os testes de segurança. Os artefatos são criados
+em `dist/main` e `dist/admin`; SQL, documentação e código administrativo não são
+publicados no aplicativo dos clientes.
 
-## Modo de visualização sem assinatura
+Depois do deploy, execute também:
 
-Toda conta autenticada entra no painel completo. Contas pendentes, vencidas ou bloqueadas
-podem navegar e consultar seus próprios dados, mas cadastro, cobrança, empréstimos,
-pagamentos, edições, relatórios e exclusões exigem acesso ativo. Execute também
-`supabase-read-only-access-migration.sql` para separar no banco as permissões de leitura e
-escrita; assim, a proteção não depende apenas dos botões da interface.
+```bash
+npm run verify:production
+npm run verify:database-public
+npm run verify:auth-boundary
+npm run verify:access-control
+```
 
-## Checklist antes de uso real
+O teste de autenticação cria e apaga automaticamente uma conta temporária. O teste de
+liberação roda dentro de uma transação encerrada com `ROLLBACK`, sem preservar os dados
+simulados.
 
-- RLS ativo nas duas tabelas.
-- Apenas a Publishable/anon key está no site.
-- Confirmação de e-mail ativada.
-- Senha forte para o projeto Supabase.
-- Dados de teste conferidos em um segundo usuário: ele não deve enxergar os clientes do primeiro.
-- Conta proprietária ativada em `/admin/` e não contabilizada como cliente pagante.
-- Conta de teste pendente até a liberação e bloqueada novamente após o vencimento.
+## 4. Deploy dos dois aplicativos
 
-O envio automático de WhatsApp permanece fora desta versão. Ele exigirá uma API de servidor e credenciais próprias do WhatsApp Business.
+Aplicativo dos clientes:
+
+```bash
+npm run deploy:main
+```
+
+Painel do proprietário:
+
+```bash
+npm run deploy:admin
+```
+
+O Worker atende primeiro todas as requisições e adiciona CSP, HSTS, proteção contra
+MIME sniffing, enquadramento e permissões desnecessárias. Rotas `/api/*` desconhecidas
+falham fechadas; POST em arquivos estáticos é recusado.
+
+Produção atual:
+
+- Clientes: `https://agio-financas.santosjosiel2003.workers.dev/`
+- Administração: `https://credmais-controle.santosjosiel2003.workers.dev/admin/`
+
+Cadastre ambos os domínios no Firebase Authentication. Cada Worker possui manifesto,
+service worker, nome e escopo próprios, permitindo instalar os dois PWAs no mesmo
+celular sem conflito.
+
+## 5. Administração de assinaturas
+
+Somente uma conta já registrada como administradora no banco consegue entrar no
+painel. Não existe cadastro ou código de bootstrap pelo site público. A criação ou
+recuperação de outro administrador deve ser feita diretamente no banco por uma pessoa
+autorizada, com registro operacional.
+
+O painel permite liberar 15 dias, períodos mensais, acesso gratuito, pago ou vitalício,
+bloquear e renovar contas. Toda mudança crítica passa por uma função administrativa,
+valida o administrador no servidor e grava auditoria. O vencimento é calculado a partir
+da data atual para a nova concessão; meses não são somados silenciosamente ao prazo
+anterior.
+
+Esta versão aceita usuários pagantes com confirmação e liberação administrativa.
+Pagamento automático exige um provedor com API de servidor, webhook assinado,
+idempotência e credenciais próprias; não deve ser simulado no frontend.
+
+## Checklist de entrada em produção
+
+- `npm run check` sem falhas.
+- Migração de produção aplicada e validada no projeto correto.
+- Conta proprietária existente e login administrativo testado.
+- Dois usuários de teste não conseguem ler nem alterar dados um do outro.
+- Usuário pendente visualiza o sistema, mas não consegue gravar alterações.
+- Usuário ativo cadastra cliente e empréstimo sem duplicação.
+- Usuário vencido é bloqueado pelo banco e o painel registra o estado.
+- Login Google, confirmação de e-mail e recuperação de senha testados.
+- Logout remove dados financeiros locais e o modo offline não permite escrita.
+- Os dois PWAs instalam separadamente em Android e iPhone.
+- Cabeçalhos de segurança e `/api/health` conferidos nas duas URLs.
+- Backup, política de privacidade, termos de uso, canal de suporte e rotina de incidentes
+  definidos antes de cobrar clientes reais.

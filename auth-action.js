@@ -27,7 +27,8 @@
         "Este link é inválido ou já foi utilizado. Solicite um novo e-mail.",
       "auth/user-disabled": "Esta conta foi desativada.",
       "auth/user-not-found": "A conta deste link não foi encontrada.",
-      "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
+      "auth/weak-password":
+        "Use ao menos 10 caracteres, com letra maiúscula, minúscula e número.",
     };
     return messages[error?.code] || "Não foi possível validar este link. Tente novamente.";
   }
@@ -63,7 +64,7 @@
         $("#actionLoading").hidden = true;
         $("#resetAction").hidden = false;
         $("#resetAccount").textContent =
-          `Crie uma nova senha para ${email}. Ela deve ter pelo menos 6 caracteres.`;
+          `Crie uma nova senha para ${email}. Use 10 caracteres ou mais, com maiúscula, minúscula e número.`;
       } else if (mode === "recoverEmail") {
         await auth.applyActionCode(actionCode);
         showMessage(
@@ -87,8 +88,14 @@
     const form = event.currentTarget;
     const password = $("#actionPassword").value;
     const confirmation = $("#actionPasswordConfirm").value;
-    if (password.length < 6) {
-      $("#actionFeedback").textContent = "Use pelo menos 6 caracteres.";
+    if (
+      password.length < 10 ||
+      !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) ||
+      !/\d/.test(password)
+    ) {
+      $("#actionFeedback").textContent =
+        "Use 10 caracteres ou mais, com maiúscula, minúscula e número.";
       $("#actionFeedback").className = "form-feedback error";
       return;
     }

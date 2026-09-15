@@ -1,0 +1,21 @@
+{
+  "name": "credmais",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-assets.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run build && npm run test",
+    "verify:production": "node scripts/verify-production.mjs",
+    "verify:database-public": "node scripts/verify-public-boundary.mjs",
+    "verify:auth-boundary": "node scripts/verify-auth-boundary.mjs",
+    "verify:access-control": "npx supabase@2.117.0 db query --linked --file supabase-access-control-verification.sql --agent no --output table",
+    "deploy": "npm run check && npx wrangler@4.131.2 deploy",
+    "deploy:main": "npm run deploy",
+    "deploy:admin": "npm run check && npx wrangler@4.131.2 deploy -c wrangler.admin.jsonc"
+  }
+}

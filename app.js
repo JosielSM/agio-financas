@@ -1,9 +1,20 @@
 const $ = (selector) => document.querySelector(selector);
+const initialUser = JSON.parse(localStorage.getItem("credmais_user") || "null");
+const initialCacheOwner = localStorage.getItem("credmais_cache_owner");
+const ownsInitialCache = Boolean(
+  initialUser?.id && initialCacheOwner === initialUser.id,
+);
 const state = {
-  user: JSON.parse(localStorage.getItem("credmais_user") || "null"),
-  clients: JSON.parse(localStorage.getItem("credmais_clients") || "[]"),
-  loans: JSON.parse(localStorage.getItem("credmais_loans") || "[]"),
-  history: JSON.parse(localStorage.getItem("credmais_history") || "[]"),
+  user: initialUser,
+  clients: ownsInitialCache
+    ? JSON.parse(localStorage.getItem("credmais_clients") || "[]")
+    : [],
+  loans: ownsInitialCache
+    ? JSON.parse(localStorage.getItem("credmais_loans") || "[]")
+    : [],
+  history: ownsInitialCache
+    ? JSON.parse(localStorage.getItem("credmais_history") || "[]")
+    : [],
   platformAccess: null,
   accessPromptDismissed: false,
 };
@@ -18,6 +29,13 @@ let renderedMonthKey = null;
 let refreshingFromCloud = false;
 let deferredInstallPrompt = null;
 const submissionLocks = new Set();
+const STRONG_PASSWORD_MESSAGE =
+  "Use ao menos 10 caracteres, com letra maiúscula, minúscula e número.";
+const strongPassword = (password) =>
+  password.length >= 10 &&
+  /[a-z]/.test(password) &&
+  /[A-Z]/.test(password) &&
+  /\d/.test(password);
 const money = (value) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
@@ -104,12 +122,27 @@ const save = async ({ allowReadOnly = false } = {}) => {
     throw new Error(
       "Sua conta está em modo de visualização. Solicite a liberação para salvar alterações.",
     );
-  localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
-  localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
-  localStorage.setItem("credmais_history", JSON.stringify(state.history));
-  if (state.user?.id) localStorage.setItem("credmais_cache_owner", state.user.id);
   if (allowReadOnly && platformReadOnly()) return true;
-  if (!window.credmaisBridge?.enabled) return true;
+  if (!window.credmaisBridge?.enabled) {
+    persistWorkspaceCache();
+    return true;
+  }
+  let liveAccess;
+  try {
+    liveAccess = await window.credmaisBridge.platformAccess(state.user);
+  } catch (error) {
+    throw new Error(
+      error?.message ||
+        "Não foi possível validar sua assinatura. Nenhuma alteração foi salva.",
+    );
+  }
+  state.platformAccess = liveAccess;
+  if (!platformAccessAllowed(liveAccess)) {
+    applyPlatformRestrictions();
+    throw new Error(
+      "Sua assinatura não permite alterações. Nenhuma alteração foi salva.",
+    );
+  }
   try {
     await window.credmaisBridge.sync(
       state.user,
@@ -117,14 +150,22 @@ const save = async ({ allowReadOnly = false } = {}) => {
       state.loans,
       state.history,
     );
+    persistWorkspaceCache();
     clearPendingSync(state.user.id);
     return true;
   } catch (error) {
     rememberPendingSync(state.user.id);
+    persistWorkspaceCache();
     console.error("Falha ao sincronizar Supabase:", error.message);
     return false;
   }
 };
+function persistWorkspaceCache() {
+  localStorage.setItem("credmais_clients", JSON.stringify(state.clients));
+  localStorage.setItem("credmais_loans", JSON.stringify(state.loans));
+  localStorage.setItem("credmais_history", JSON.stringify(state.history));
+  if (state.user?.id) localStorage.setItem("credmais_cache_owner", state.user.id);
+}
 function addHistory(category, title, description) {
   state.history.push({
     id: crypto.randomUUID(),
@@ -525,12 +566,14 @@ function toast(message, undoAction = null) {
 const stateSnapshot = () => ({
   clients: structuredClone(state.clients),
   loans: structuredClone(state.loans),
+  history: structuredClone(state.history),
 });
 async function restoreSnapshot(snapshot, page = null, loanId = null) {
   if (!requirePlatformAccess("desfazer esta alteração"))
     throw new Error("Liberação necessária para desfazer esta alteração.");
   state.clients = structuredClone(snapshot.clients);
   state.loans = structuredClone(snapshot.loans);
+  state.history = structuredClone(snapshot.history);
   const synced = await save();
   render();
   if (page) setPage(page);
@@ -671,7 +714,7 @@ async function linkProfileGoogle() {
       "Conta Google vinculada",
       `A conta Google ${state.user.email} foi vinculada ao perfil.`,
     );
-    await save();
+    await save({ allowReadOnly: true });
     openProfile();
     toast("Conta Google vinculada com sucesso.");
   } catch (error) {
@@ -698,7 +741,7 @@ async function sendProfilePasswordReset() {
       "Recuperação de senha solicitada",
       `O link de recuperação foi enviado para ${state.user.email}.`,
     );
-    await save();
+    await save({ allowReadOnly: true });
     toast("E-mail de recuperação enviado. Confira também a pasta Spam.");
   } catch (error) {
     toast(error.message || "Não foi possível enviar o e-mail de recuperação.");
@@ -745,6 +788,7 @@ function openDeleteAccount() {
 }
 function clearDeletedAccountData(userId) {
   clearPendingSync(userId);
+  localStorage.removeItem(platformAccessStorageKey(userId));
   [
     "credmais_user",
     "credmais_account",
@@ -752,6 +796,25 @@ function clearDeletedAccountData(userId) {
     "credmais_loans",
     "credmais_history",
     "credmais_cache_owner",
+  ].forEach((key) => localStorage.removeItem(key));
+  state.user = null;
+  state.clients = [];
+  state.loans = [];
+  state.history = [];
+}
+function clearSignedOutData() {
+  const userId = state.user?.id;
+  if (userId) {
+    clearPendingSync(userId);
+    localStorage.removeItem(platformAccessStorageKey(userId));
+  }
+  [
+    "credmais_user",
+    "credmais_clients",
+    "credmais_loans",
+    "credmais_history",
+    "credmais_cache_owner",
+    "credmais_sync_pending",
   ].forEach((key) => localStorage.removeItem(key));
   state.user = null;
   state.clients = [];
@@ -815,10 +878,10 @@ async function changePassword(event) {
   const form = event.currentTarget,
     newPassword = $("#newPassword").value,
     confirmation = $("#confirmNewPassword").value;
-  if (newPassword.length < 6)
+  if (!strongPassword(newPassword))
     return setFeedback(
       "passwordChangeFeedback",
-      "A nova senha precisa ter pelo menos 6 caracteres.",
+      STRONG_PASSWORD_MESSAGE,
       "error",
     );
   if (newPassword !== confirmation)
@@ -919,11 +982,11 @@ async function savePix(event) {
 function validateRegistration() {
   const password = $("#registerPassword").value,
     confirm = $("#registerPasswordConfirm").value;
-  const enough = password.length >= 6,
+  const enough = strongPassword(password),
     matches = Boolean(confirm) && password === confirm;
   $("#passwordRule").classList.toggle("valid", enough);
   $("#passwordRule").textContent =
-    `${enough ? "✓" : "○"} Use pelo menos 6 caracteres`;
+    `${enough ? "✓" : "○"} 10 caracteres, maiúscula, minúscula e número`;
   $("#passwordMatch").classList.toggle("valid", matches);
   $("#passwordMatch").textContent =
     `${matches ? "✓" : "○"} As senhas precisam ser iguais`;
@@ -939,6 +1002,7 @@ function setAuth(view) {
 const platformAccessStorageKey = (userId) =>
   `credmais_platform_access:${String(userId || "")}`;
 function platformAccessAllowed(access) {
+  if (access?.offline) return false;
   if (!access?.enabled || access.status === "admin") return true;
   if (access.status !== "active") return false;
   if (!access.paidUntil) return true;
@@ -2494,21 +2558,30 @@ async function saveClient(event) {
     index >= 0 ? "Cliente atualizado" : "Cliente cadastrado",
     `${client.name} teve o cadastro ${index >= 0 ? "alterado" : "criado"}.`,
   );
-  const synced = await save();
-  endSubmission(form, "client");
-  closeModals();
-  render();
-  const message =
-    !synced
-      ? "Cliente salvo neste dispositivo. A sincronização será tentada novamente."
-      : index >= 0
-      ? "Cliente atualizado com sucesso."
-      : "Cliente cadastrado com sucesso.";
-  toast(message, async () => {
-    if (index < 0 && window.credmaisBridge?.enabled)
-      await window.credmaisBridge.deleteClient(client.id);
-    await restoreSnapshot(snapshot, "clients");
-  });
+  try {
+    const synced = await save();
+    closeModals();
+    render();
+    const message =
+      !synced
+        ? "Cliente salvo neste dispositivo. A sincronização será tentada novamente."
+        : index >= 0
+          ? "Cliente atualizado com sucesso."
+          : "Cliente cadastrado com sucesso.";
+    toast(message, async () => {
+      if (index < 0 && window.credmaisBridge?.enabled)
+        await window.credmaisBridge.deleteClient(client.id);
+      await restoreSnapshot(snapshot, "clients");
+    });
+  } catch (error) {
+    state.clients = structuredClone(snapshot.clients);
+    state.loans = structuredClone(snapshot.loans);
+    state.history = structuredClone(snapshot.history);
+    render();
+    toast(error.message || "Não foi possível salvar o cliente.");
+  } finally {
+    endSubmission(form, "client");
+  }
 }
 async function saveLoan(event) {
   event.preventDefault();
@@ -2549,25 +2622,34 @@ async function saveLoan(event) {
     index >= 0 ? "Empréstimo atualizado" : "Empréstimo criado",
     `${loan.contract} · ${loanClient?.name || "Cliente"} · ${money(loan.amount)} · ${formatFrequency(loan.frequency, loan.businessDays)} · ${interestDescription(loan)} · total ${money(loan.total)}.`,
   );
-  const synced = await save();
-  endSubmission(form, "loan");
-  closeModals();
-  setPage("loans");
-  const message =
-    !synced
-      ? "Empréstimo salvo neste dispositivo. A sincronização será tentada novamente."
-      : index >= 0
-      ? "Empréstimo atualizado com sucesso."
-      : "Empréstimo cadastrado com sucesso.";
-  toast(message, async () => {
-    if (index < 0) {
-      closeModals();
-      if (window.credmaisBridge?.enabled)
-        await window.credmaisBridge.deleteLoan(loan.id);
-    }
-    await restoreSnapshot(snapshot, "loans");
-  });
-  if (index < 0) openContractShare(loan.id);
+  try {
+    const synced = await save();
+    closeModals();
+    setPage("loans");
+    const message =
+      !synced
+        ? "Empréstimo salvo neste dispositivo. A sincronização será tentada novamente."
+        : index >= 0
+          ? "Empréstimo atualizado com sucesso."
+          : "Empréstimo cadastrado com sucesso.";
+    toast(message, async () => {
+      if (index < 0) {
+        closeModals();
+        if (window.credmaisBridge?.enabled)
+          await window.credmaisBridge.deleteLoan(loan.id);
+      }
+      await restoreSnapshot(snapshot, "loans");
+    });
+    if (index < 0) openContractShare(loan.id);
+  } catch (error) {
+    state.clients = structuredClone(snapshot.clients);
+    state.loans = structuredClone(snapshot.loans);
+    state.history = structuredClone(snapshot.history);
+    render();
+    toast(error.message || "Não foi possível salvar o empréstimo.");
+  } finally {
+    endSubmission(form, "loan");
+  }
 }
 function installmentInfo(loan, index) {
   let carry = 0;
@@ -2866,7 +2948,10 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
   } catch (error) {
     state.clients = structuredClone(snapshot.clients);
     state.loans = structuredClone(snapshot.loans);
-    await save();
+    state.history = structuredClone(snapshot.history);
+    try {
+      await save();
+    } catch {}
     render();
     if (!$("#detailsModal").hidden) details(loanId);
     toast(error.message || "Não foi possível atualizar esta parcela.");
@@ -3048,7 +3133,10 @@ async function savePartialPayment(event) {
   } catch (error) {
     state.clients = structuredClone(snapshot.clients);
     state.loans = structuredClone(snapshot.loans);
-    await save();
+    state.history = structuredClone(snapshot.history);
+    try {
+      await save();
+    } catch {}
     render();
     if (!$("#detailsModal").hidden) details(loanId);
     toast(error.message || "Não foi possível registrar o pagamento parcial.");
@@ -3103,6 +3191,7 @@ async function savePostpone(event) {
   } catch (error) {
     state.clients = structuredClone(snapshot.clients);
     state.loans = structuredClone(snapshot.loans);
+    state.history = structuredClone(snapshot.history);
     render();
     toast(error.message || "Não foi possível atualizar o vencimento.");
   } finally {
@@ -3147,6 +3236,7 @@ async function toggleBlacklist(clientId, loanContext = null) {
   } catch (error) {
     state.clients = structuredClone(snapshot.clients);
     state.loans = structuredClone(snapshot.loans);
+    state.history = structuredClone(snapshot.history);
     render();
     if (loanContext) details(loanContext);
     toast(error.message || "Não foi possível alterar a lista negra.");
@@ -3197,6 +3287,7 @@ async function archiveLoan(loanId) {
   } catch (error) {
     state.clients = structuredClone(snapshot.clients);
     state.loans = structuredClone(snapshot.loans);
+    state.history = structuredClone(snapshot.history);
     render();
     toast(error.message || "Não foi possível atualizar o empréstimo.");
   } finally {
@@ -3453,6 +3544,7 @@ $("#loanForm").addEventListener("submit", saveLoan);
 $("#postponeForm").addEventListener("submit", savePostpone);
 $("#partialForm").addEventListener("submit", savePartialPayment);
 $("#monthlyReportForm").addEventListener("submit", downloadMonthlyReport);
+$("#pixForm").addEventListener("submit", savePix);
 $("#passwordChangeForm").addEventListener("submit", changePassword);
 [$("#loanAmount"), $("#loanLateFee"), $("#partialPaidAmount")].forEach(
   (input) => input.addEventListener("input", maskCurrencyInput),
@@ -3506,6 +3598,8 @@ $("#reportMonth").addEventListener("input", updateReportPreview);
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
+$("#pixBtn").onclick = openPix;
+$("#profileBtn").onclick = openProfile;
 $("#monthlyReportBtn").onclick = openMonthlyReport;
 $("#securityBtn").onclick = openSecurity;
 $("#profileGoogleButton").onclick = linkProfileGoogle;
@@ -3555,17 +3649,21 @@ $("#subscriptionRequestButton").onclick = () =>
 $("#subscriptionRefreshButton").onclick = refreshPlatformAccess;
 $("#accessLogout").onclick = async () => {
   if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
-  localStorage.removeItem("credmais_user");
+  clearSignedOutData();
   location.reload();
 };
 $("#installAppBtn").onclick = openInstall;
 $("#confirmInstallBtn").onclick = installPWA;
 $("#logoutBtn").onclick = async () => {
   if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
-  localStorage.removeItem("credmais_user");
+  clearSignedOutData();
   location.reload();
 };
-$("#modalBackdrop").onclick = closeModals;
+$("#modalBackdrop").onclick = requestClose;
+$("[data-keep-editing]").onclick = keepEditing;
+$("[data-discard-changes]").onclick = discardChanges;
+$("[data-cancel-delete]").onclick = cancelDelete;
+$("[data-confirm-delete]").onclick = confirmDelete;
 document.querySelectorAll("[data-auth]").forEach((button) => {
   button.onclick = () => setAuth(button.dataset.auth);
 });
@@ -3590,7 +3688,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (button.classList.contains("add-loan")) openLoan();
-  if (button.dataset.close) closeModals();
+  if (button.dataset.close) requestClose();
   if (button.dataset.pageLink) setPage(button.dataset.pageLink);
   if (button.dataset.details) details(button.dataset.details);
   if (button.dataset.whatsapp)
@@ -3618,6 +3716,11 @@ document.addEventListener("click", (event) => {
     openPostpone(button.dataset.postpone, button.dataset.installment);
   if (button.dataset.partial)
     openPartialPayment(button.dataset.partial, button.dataset.installment);
+  if (button.dataset.toggleInstallment)
+    toggleInstallment(
+      button.dataset.toggleInstallment,
+      Number(button.dataset.installment),
+    );
   if (button.dataset.toggleBlacklist)
     toggleBlacklist(
       button.dataset.toggleBlacklist,
@@ -3640,7 +3743,9 @@ document.addEventListener("click", (event) => {
     sidebar.classList.remove("open");
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") $(".sidebar").classList.remove("open");
+  if (event.key !== "Escape") return;
+  $(".sidebar").classList.remove("open");
+  requestClose();
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshFromCloud({ notify: true });
@@ -3652,6 +3757,7 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("storage", (event) => {
   if (!state.user || hasOpenModal()) return;
+  if (localStorage.getItem("credmais_cache_owner") !== state.user.id) return;
   if (event.key === "credmais_clients")
     state.clients = JSON.parse(event.newValue || "[]");
   else if (event.key === "credmais_loans")

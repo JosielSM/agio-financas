@@ -196,14 +196,20 @@
       );
     },
     async platformAccess(user, phone = "") {
-      if (!client)
+      if (!client && authProvider === "local")
         return { enabled: false, status: "active" };
+      if (!client)
+        throw new Error(
+          "Não foi possível conectar à proteção de assinaturas. O acesso foi bloqueado por segurança.",
+        );
       const { data, error } = await client.rpc("ensure_platform_account", {
         p_display_name: user?.name || "",
         p_phone: phone || null,
       });
       if (missingFunction(error))
-        return { enabled: false, status: "active" };
+        throw new Error(
+          "A proteção de assinaturas ainda não foi instalada no banco. O acesso foi bloqueado por segurança.",
+        );
       if (error) throw error;
       return data;
     },
@@ -226,24 +232,12 @@
       if (error) throw error;
       return Boolean(data);
     },
-    async bootstrapPlatformAdmin(code) {
-      if (!client)
-        throw new Error("O banco do painel ainda não está conectado.");
-      const { data, error } = await client.rpc("bootstrap_platform_admin", {
-        p_activation_code: String(code || "").trim(),
-      });
-      if (missingFunction(error))
-        throw new Error("Execute a migração do painel administrativo no Supabase.");
-      if (error) throw error;
-      return Boolean(data);
-    },
     async loadPlatformAdmin() {
       if (!client) throw new Error("O banco do painel não está conectado.");
       const expirySyncResult = await client.rpc(
         "admin_sync_expired_platform_accounts",
       );
-      if (expirySyncResult.error && !missingFunction(expirySyncResult.error))
-        throw expirySyncResult.error;
+      if (expirySyncResult.error) throw accessError(expirySyncResult.error);
       const [accountsResult, settingsResult, logResult, adminsResult] = await Promise.all([
         client.from("platform_accounts").select("*").order("created_at"),
         client.from("platform_settings").select("*").eq("id", 1).single(),
@@ -266,26 +260,21 @@
         settings: settingsResult.data,
         log: logResult.data || [],
         adminIds: (adminsResult.data || []).map((admin) => admin.user_id),
-        expirySync: expirySyncResult.error
-          ? { available: false, count: 0, accounts: [] }
-          : { available: true, ...(expirySyncResult.data || {}) },
+        expirySync: { available: true, ...(expirySyncResult.data || {}) },
       };
     },
     async savePlatformSettings(settings) {
-      const { data, error } = await client
-        .from("platform_settings")
-        .update({
-          default_monthly_fee: settings.defaultMonthlyFee,
-          billing_recipient: settings.billingRecipient,
-          billing_pix_key: settings.billingPixKey,
-          billing_pix_type: settings.billingPixType,
-          billing_message: settings.billingMessage,
-          support_phone: settings.supportPhone,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", 1)
-        .select("*")
-        .single();
+      const { data, error } = await client.rpc(
+        "admin_update_platform_settings_v1",
+        {
+          p_default_monthly_fee: Number(settings.defaultMonthlyFee),
+          p_billing_recipient: settings.billingRecipient || "",
+          p_billing_pix_key: settings.billingPixKey || "",
+          p_billing_pix_type: settings.billingPixType || "Chave aleatória",
+          p_billing_message: settings.billingMessage || "",
+          p_support_phone: settings.supportPhone || "",
+        },
+      );
       if (error) throw error;
       return data;
     },
@@ -308,27 +297,6 @@
         p_phone: accountDetails.phone || "",
         p_notes: accountDetails.notes || "",
       });
-      if (missingFunction(error)) {
-        const compatible = await client.rpc("admin_grant_platform_access_v2", {
-          p_user_id: userId,
-          p_period_value: Number(periodValue),
-          p_period_unit: periodUnit,
-          p_monthly_fee: Number(monthlyFee),
-          p_access_type: accessType,
-          p_access_amount: Number(accessAmount),
-        });
-        if (!compatible.error) return compatible.data;
-        if (!missingFunction(compatible.error)) throw accessError(compatible.error);
-      }
-      if (missingFunction(error) && periodUnit === "months" && accessType === "paid") {
-        const fallback = await client.rpc("admin_grant_platform_access", {
-          p_user_id: userId,
-          p_months: Number(periodValue),
-          p_monthly_fee: Number(monthlyFee),
-        });
-        if (fallback.error) throw accessError(fallback.error);
-        return fallback.data;
-      }
       if (error) throw accessError(error);
       return data;
     },
@@ -338,13 +306,6 @@
         p_phone: accountDetails.phone || "",
         p_notes: accountDetails.notes || "",
       });
-      if (missingFunction(error)) {
-        const compatible = await client.rpc("admin_grant_platform_lifetime", {
-          p_user_id: userId,
-        });
-        if (compatible.error) throw accessError(compatible.error);
-        return compatible.data;
-      }
       if (error) throw accessError(error);
       return data;
     },
@@ -357,47 +318,30 @@
       return data;
     },
     async updatePlatformAccount(userId, values) {
-      const { data, error } = await client
-        .from("platform_accounts")
-        .update({
-          phone: values.phone || "",
-          notes: values.notes || "",
-          monthly_fee: Number(values.monthlyFee),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId)
-        .select("*")
-        .single();
+      const { data, error } = await client.rpc(
+        "admin_update_platform_account_v1",
+        {
+          p_user_id: userId,
+          p_phone: values.phone || "",
+          p_notes: values.notes || "",
+          p_monthly_fee: Number(values.monthlyFee),
+        },
+      );
       if (error) throw error;
       return data;
     },
     async updatePix(pixKey, pixType, pixRecipientName) {
-      if (firebaseAuth) {
-        const user = await firebaseAuth.currentUser();
-        if (!user) throw new Error("Entre novamente para atualizar seus dados.");
-        const profile = {
-          owner_id: user.id,
-          display_name: user.name,
-          pix_key: pixKey,
-          pix_key_type: pixType,
-          pix_recipient_name: pixRecipientName,
-          updated_at: new Date().toISOString(),
-        };
-        if (client) {
-          const { error } = await client.from("profiles").upsert(profile);
-          if (error) throw error;
-        }
-        return withProfile(user, profile);
-      }
-      const { data, error } = await client.auth.updateUser({
-        data: {
-          pix_key: pixKey,
-          pix_key_type: pixType,
-          pix_recipient_name: pixRecipientName,
-        },
+      const user = await currentAuthUser();
+      if (!client || !user?.id)
+        throw new Error("Entre novamente para atualizar seus dados.");
+      const { data, error } = await client.rpc("save_my_profile_v1", {
+        p_display_name: user.name || "",
+        p_pix_key: pixKey || "",
+        p_pix_key_type: pixType || "Chave aleatória",
+        p_pix_recipient_name: pixRecipientName || "",
       });
       if (error) throw error;
-      return supabaseUserData(data.user);
+      return withProfile(user, data);
     },
     async changePassword(newPassword) {
       if (firebaseAuth) return firebaseAuth.changePassword(newPassword);
@@ -485,16 +429,16 @@
     },
     async deleteLoan(loanId) {
       if (!client) return;
-      const { error } = await client.from("loans").delete().eq("id", loanId);
+      const { error } = await client.rpc("delete_my_loan_v1", {
+        p_loan_id: loanId,
+      });
       if (error) throw error;
     },
     async deleteClient(clientId) {
       if (!client) return;
-      const { error } = await client.from("clients").delete().eq("id", clientId);
-      if (error?.code === "23503")
-        throw new Error(
-          "A atualização de exclusão segura ainda precisa ser aplicada no banco.",
-        );
+      const { error } = await client.rpc("delete_my_client_v1", {
+        p_client_id: clientId,
+      });
       if (error) throw error;
     },
     async sync(user, clients, loans, history = []) {
@@ -512,35 +456,22 @@
         description: item.description || "",
         created_at: item.createdAt,
       }));
-      if (firebaseAuth) {
-        const { error } = await client.from("profiles").upsert({
-          owner_id: user.id,
-          display_name: user.name,
+      const { error } = await client.rpc("sync_my_workspace_v1", {
+        p_clients: clientRows,
+        p_loans: loanRows,
+        p_history: historyRows,
+        p_profile: {
+          display_name: user.name || "",
           pix_key: user.pixKey || "",
           pix_key_type: user.pixType || "Chave aleatória",
           pix_recipient_name: user.pixRecipientName || "",
-          updated_at: new Date().toISOString(),
-        });
-        if (error) throw error;
-      }
-      if (clientRows.length) {
-        const { error } = await client.from("clients").upsert(clientRows);
-        if (error) throw error;
-      }
-      if (loanRows.length) {
-        const { error } = await client.from("loans").upsert(loanRows);
-        if (error) throw error;
-      }
-      if (historyRows.length) {
-        const { error } = await client
-          .from("activity_history")
-          .upsert(historyRows);
-        if (error && error.code !== "PGRST205")
-          console.warn(
-            "Histórico ainda não configurado no Supabase:",
-            error.message,
-          );
-      }
+        },
+      });
+      if (missingFunction(error))
+        throw new Error(
+          "A atualização segura do banco ainda não foi instalada.",
+        );
+      if (error) throw error;
     },
   };
 })();

@@ -118,8 +118,17 @@ async function register(event) {
     email = $("#registerEmail").value.trim(),
     password = $("#registerPassword").value,
     confirmation = $("#registerPasswordConfirm").value;
-  if (password.length < 6)
-    return feedback("registerFeedback", "Use uma senha com pelo menos 6 caracteres.", "error");
+  if (
+    password.length < 10 ||
+    !/[a-z]/.test(password) ||
+    !/[A-Z]/.test(password) ||
+    !/\d/.test(password)
+  )
+    return feedback(
+      "registerFeedback",
+      "Use 10 caracteres ou mais, com maiúscula, minúscula e número.",
+      "error",
+    );
   if (password !== confirmation)
     return feedback("registerFeedback", "As senhas não são iguais.", "error");
   feedback("registerFeedback");
@@ -168,30 +177,6 @@ async function authorize() {
     feedback("loginFeedback", error.message || "Não foi possível validar o administrador.", "error");
     setAuthView("login");
   }
-}
-async function activateAdmin(event) {
-  event.preventDefault();
-  const button = event.currentTarget.querySelector('[type="submit"]');
-  feedback("activationFeedback");
-  await loading(button, async () => {
-    try {
-      await bridge.bootstrapPlatformAdmin($("#activationCode").value);
-      $("#activationCode").value = "";
-      await showDashboard();
-      toast("Painel administrativo ativado com segurança.");
-    } catch (error) {
-      const message = String(error.message || "");
-      feedback(
-        "activationFeedback",
-        message.includes("ADMIN_ALREADY_CONFIGURED")
-          ? "Este painel já possui um proprietário. Entre com a conta administrativa correta."
-          : message.includes("INVALID_ACTIVATION_CODE")
-            ? "Código de ativação inválido. Confira e tente novamente."
-            : message || "Não foi possível ativar o painel.",
-        "error",
-      );
-    }
-  });
 }
 async function signOut() {
   await bridge.signOut();
@@ -831,7 +816,6 @@ $("#adminLogin").addEventListener("submit", signIn);
 $("#googleLogin").onclick = signInGoogle;
 $("#adminRegister").addEventListener("submit", register);
 $("#adminForgot").addEventListener("submit", forgot);
-$("#adminActivation").addEventListener("submit", activateAdmin);
 $("#activationLogout").onclick = signOut;
 $("#adminLogout").onclick = signOut;
 $("#manageForm").addEventListener("submit", saveManage);

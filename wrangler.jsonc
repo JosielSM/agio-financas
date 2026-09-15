@@ -1,8 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agio-financas",
-  "compatibility_date": "2026-08-21",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": ".",
+    "directory": "dist/main",
+    "binding": "ASSETS",
+    "run_worker_first": true
   },
+  "vars": {
+    "APP_KIND": "main"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    }
+  }
 }

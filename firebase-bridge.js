@@ -48,7 +48,8 @@
       "Selecione a mesma conta Google vinculada a este perfil.",
     "auth/user-disabled": "Esta conta foi desativada.",
     "auth/user-not-found": "E-mail ou senha incorretos.",
-    "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
+    "auth/weak-password":
+      "Use ao menos 10 caracteres, com letra maiúscula, minúscula e número.",
     "auth/wrong-password": "E-mail ou senha incorretos.",
   };
 

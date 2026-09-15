@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v18";
+const CACHE_NAME = "credmais-shell-v19";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -43,16 +43,16 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
   if (event.request.mode === "navigate") {
-    const page = requestUrl.pathname.startsWith("/admin")
-      ? "/admin/index.html"
-      : requestUrl.pathname.endsWith("/auth-action.html")
-        ? "/auth-action.html"
-        : "/index.html";
+    const page = requestUrl.pathname.endsWith("/auth-action.html")
+      ? "/auth-action.html"
+      : "/index.html";
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(page, copy));
+          event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => cache.put(page, copy)),
+          );
           return response;
         })
         .catch(() =>
@@ -69,7 +69,11 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            event.waitUntil(
+              caches
+                .open(CACHE_NAME)
+                .then((cache) => cache.put(event.request, copy)),
+            );
           }
           return response;
         })

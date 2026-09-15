@@ -1,4 +1,10 @@
 .wrangler/
+dist/
+node_modules/
+.dev.vars
+.env
+.env.*
+!.env.example
 .firebase/
 firebase-debug.log
 firebase-debug.*.log

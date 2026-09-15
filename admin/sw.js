@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-admin-v8";
+const CACHE_NAME = "credmais-admin-v9";
 const SHELL = [
   "/admin/",
   "/admin/index.html",
@@ -20,15 +20,19 @@ self.addEventListener("install", (event) => {
 });
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith("credmais-admin-") && key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
-      ),
-    ),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter(
+              (key) => key.startsWith("credmais-admin-") && key !== CACHE_NAME,
+            )
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
@@ -37,7 +41,11 @@ self.addEventListener("fetch", (event) => {
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          event.waitUntil(
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, copy)),
+          );
         }
         return response;
       })
