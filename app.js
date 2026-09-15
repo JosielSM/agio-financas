@@ -145,6 +145,7 @@ const save = async ({ allowReadOnly = false } = {}) => {
     );
   }
   state.platformAccess = liveAccess;
+  renderTrialBanner(liveAccess);
   if (!platformAccessAllowed(liveAccess)) {
     applyPlatformRestrictions();
     throw new Error(
@@ -1056,8 +1057,41 @@ function platformReadOnly() {
       !platformAccessAllowed(state.platformAccess),
   );
 }
+function activeFreeTrial(access = state.platformAccess) {
+  return Boolean(
+    access?.accessType === "free" &&
+      access?.status === "active" &&
+      platformAccessAllowed(access),
+  );
+}
 function accessContent(access) {
   const status = access?.status || "pending";
+  if (status === "active" && access?.accessType === "free") {
+    return {
+      status: "active",
+      content: {
+        badge: "TESTE GRATUITO ATIVO",
+        icon: "🎁",
+        title: "Aproveite seus 15 dias gratuitos",
+        message:
+          "Todas as funções estão disponíveis. Você pode assinar agora e o período pago começará depois do fim do teste.",
+        button: "Teste já liberado",
+      },
+    };
+  }
+  if (status === "expired" && access?.accessType === "free") {
+    return {
+      status,
+      content: {
+        badge: "TESTE GRATUITO ENCERRADO",
+        icon: "◷",
+        title: "Seus 15 dias gratuitos terminaram",
+        message:
+          "Seus dados continuam protegidos e disponíveis para consulta. Escolha um plano para voltar a cadastrar e alterar informações.",
+        button: "Solicitar ajuda",
+      },
+    };
+  }
   return {
     status,
     content:
@@ -1156,12 +1190,15 @@ function showAccessGate(access, { openPrompt = true } = {}) {
   $("#accessTitle").textContent = content.title;
   $("#accessMessage").textContent = content.message;
   $("#accessRequestButton").textContent = content.button;
+  $("#accessRequestForm").hidden = activeFreeTrial(access);
   $("#accessPhone").value = formatPhone(access?.phone || "");
+  $("#accessPriceLabel").textContent =
+    access?.accessType === "free" ? "Preço depois do teste" : "Mensalidade informada";
   $("#accessMonthlyFee").textContent = money(
     access?.monthlyFee ?? access?.defaultMonthlyFee ?? 0,
   );
   $("#accessPaidUntil").textContent = access?.paidUntil
-    ? `Último período liberado até ${new Date(`${access.paidUntil}T12:00`).toLocaleDateString("pt-BR")}.`
+    ? `${access?.accessType === "free" ? "Teste gratuito" : "Último período liberado"} até ${new Date(`${access.paidUntil}T12:00`).toLocaleDateString("pt-BR")}.`
     : "A liberação será válida pelo período contratado.";
   renderBillingPanel();
   void loadBillingConfig();
@@ -1179,6 +1216,20 @@ function showAccessGate(access, { openPrompt = true } = {}) {
       ? "Sem conexão. Exibindo a última situação salva neste aparelho."
       : "",
   );
+}
+function renderTrialBanner(access = state.platformAccess) {
+  const banner = $("#trialBanner");
+  if (!banner) return;
+  const active = activeFreeTrial(access);
+  banner.hidden = !active;
+  if (!active) return;
+  const endDate = access?.paidUntil
+      ? new Date(`${access.paidUntil}T12:00`).toLocaleDateString("pt-BR")
+      : "data não informada",
+    launchProtected = access?.monthlyFeeSource === "launch_locked";
+  $("#trialBannerMessage").textContent =
+    `Acesso completo até ${endDate}.${launchProtected ? " Seu preço de lançamento está protegido." : ""}`;
+  $("#trialBannerFee").textContent = `${money(billingMonthlyFee())}/mês`;
 }
 function billingMonthlyFee() {
   return Number(
@@ -1536,6 +1587,7 @@ async function showApp(resolvedAccess = null) {
   const requestedPage = location.hash.slice(1);
   if ($(`#${requestedPage}Page`)) setPage(requestedPage);
   else setPage("dashboard");
+  renderTrialBanner(access);
   startAutoRefresh();
   if (writeAllowed) {
     $("#accessView").hidden = true;
@@ -1564,11 +1616,13 @@ async function refreshFromCloud({ notify = false } = {}) {
   try {
     const access = await resolvePlatformAccess();
     if (access?.enabled && !platformAccessAllowed(access)) {
+      renderTrialBanner(access);
       showAccessGate(access, { openPrompt: !$("#accessView").hidden });
       return false;
     }
     const accessWasLocked = platformReadOnly();
     state.platformAccess = access;
+    renderTrialBanner(access);
     $("#accessView").hidden = true;
     applyPlatformRestrictions();
     const pending = pendingSyncPayload(state.user.id),
@@ -3789,6 +3843,8 @@ $("#automaticPaymentButton").onclick = () => startBillingCheckout("one_time");
 $("#automaticSubscriptionButton").onclick = () =>
   startBillingCheckout("subscription");
 $("#subscriptionRequestButton").onclick = () =>
+  showAccessGate(state.platformAccess, { openPrompt: true });
+$("#trialUpgradeButton").onclick = () =>
   showAccessGate(state.platformAccess, { openPrompt: true });
 $("#subscriptionRefreshButton").onclick = refreshPlatformAccess;
 $("#accessLogout").onclick = async () => {

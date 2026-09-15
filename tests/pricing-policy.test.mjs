@@ -5,21 +5,59 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
-test("admin supports a global price and a per-user override", async () => {
+test("admin exposes launch, standard, lifetime and per-user pricing choices", async () => {
   const [html, app, bridge] = await Promise.all([
     read("admin/index.html"),
     read("admin/app.js"),
     read("supabase-bridge.js"),
   ]);
 
-  assert.match(html, /name="managePricing" value="default"/);
+  assert.match(html, /R\$ 39,90\/mês/);
+  assert.match(html, /R\$ 59,90\/mês/);
+  assert.match(html, /15 dias/);
+  assert.match(html, /name="managePricing" value="launch_locked"/);
+  assert.match(html, /name="managePricing" value="global"/);
   assert.match(html, /name="managePricing" value="custom"/);
-  assert.match(html, /id="defaultMonthlyFee"/);
+  assert.match(html, /id="standardMonthlyFee"/);
+  assert.match(html, /Vitalício — colaborador/);
   assert.match(app, /account\.monthly_fee \?\? state\.settings\?\.default_monthly_fee/);
-  assert.match(bridge, /admin_update_platform_account_v2/);
-  assert.match(bridge, /admin_grant_platform_access_v4/);
-  assert.match(bridge, /p_use_default_fee/);
-  assert.match(bridge, /p_monthly_fee: useDefaultFee \? null/);
+  assert.match(bridge, /admin_update_platform_settings_v3/);
+  assert.match(bridge, /admin_update_platform_account_v3/);
+  assert.match(bridge, /admin_grant_platform_access_v5/);
+  assert.match(bridge, /p_pricing_tier/);
+  assert.match(bridge, /pricingTier === "custom"/);
+});
+
+test("database protects launch users and grants a one-time 15-day trial", async () => {
+  const sql = await read(
+    "supabase/migrations/20260915170000_launch_pricing_and_trial.sql",
+  );
+
+  assert.match(sql, /launch_monthly_fee[\s\S]{0,80}39\.90/i);
+  assert.match(sql, /standard_monthly_fee[\s\S]{0,80}59\.90/i);
+  assert.match(sql, /trial_days[\s\S]{0,80}15/i);
+  assert.match(sql, /pricing_tier in \('global', 'launch_locked', 'custom', 'lifetime'\)/i);
+  assert.match(sql, /where account\.pricing_tier is null/i);
+  assert.match(sql, /monthly_fee = 39\.90[\s\S]{0,120}pricing_tier = 'launch_locked'/i);
+  assert.match(sql, /status = 'active'[\s\S]{0,120}paid_until = current_date \+ 14[\s\S]{0,120}access_type = 'free'/i);
+  assert.match(sql, /on conflict \(user_id\) do nothing/i);
+  assert.match(sql, /Teste gratuito de 15 dias iniciado automaticamente/i);
+  assert.match(sql, /admin_update_platform_settings_v3/i);
+  assert.match(sql, /launchAccountsPreserved/i);
+  assert.match(sql, /security definer\s+set search_path = ''/i);
+  assert.match(sql, /commit;\s*$/i);
+});
+
+test("main app explains the active trial and lets the user subscribe early", async () => {
+  const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
+
+  assert.match(html, /id="trialBanner"/);
+  assert.match(html, /id="trialUpgradeButton"/);
+  assert.match(html, /Teste gratuitamente por 15 dias/);
+  assert.match(app, /function activeFreeTrial/);
+  assert.match(app, /TESTE GRATUITO ENCERRADO/);
+  assert.match(app, /Seu preço de lançamento está protegido/);
+  assert.match(app, /renderTrialBanner\(access\)/);
 });
 
 test("subscription billing exposes only the automatic checkout", async () => {

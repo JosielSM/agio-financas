@@ -17,8 +17,8 @@ test("browser mutations use validated database functions", async () => {
     "save_my_profile_v1",
     "delete_my_loan_v1",
     "delete_my_client_v1",
-    "admin_update_platform_account_v1",
-    "admin_update_platform_settings_v1",
+    "admin_update_platform_account_v3",
+    "admin_update_platform_settings_v3",
   ]) {
     assert.match(bridge, new RegExp(`\\b${rpc}\\b`));
   }
@@ -53,8 +53,8 @@ test("production verification independently checks every database boundary", asy
 
 test("access-control verification covers every manual subscription path", async () => {
   const sql = await read("supabase-access-control-verification.sql");
-  assert.match(sql, /admin_grant_platform_access_v3/i);
-  assert.match(sql, /15,\s*'days'[\s\S]*?'free'/i);
+  assert.match(sql, /admin_grant_platform_access_v5/i);
+  assert.match(sql, /15,\s*'days'[\s\S]*?'launch_locked'[\s\S]*?'free'/i);
   assert.match(sql, /admin_grant_platform_lifetime_v2/i);
   assert.match(sql, /admin_set_platform_status\(test_user_id, 'blocked'\)/i);
   assert.match(sql, /make_interval\(months => 2\)/i);

@@ -18,6 +18,49 @@ begin
     raise exception 'A coluna expiry_notified_at não existe';
   end if;
 
+  if exists (
+    select required.column_name
+    from unnest(array['pricing_tier', 'trial_started_at']) as required(column_name)
+    where not exists (
+      select 1 from information_schema.columns actual
+      where actual.table_schema = 'public'
+        and actual.table_name = 'platform_accounts'
+        and actual.column_name = required.column_name
+    )
+  ) then
+    raise exception 'A política de lançamento ou teste gratuito está incompleta em platform_accounts';
+  end if;
+
+  if exists (
+    select required.column_name
+    from unnest(array[
+      'launch_monthly_fee', 'standard_monthly_fee', 'pricing_phase', 'trial_days'
+    ]) as required(column_name)
+    where not exists (
+      select 1 from information_schema.columns actual
+      where actual.table_schema = 'public'
+        and actual.table_name = 'platform_settings'
+        and actual.column_name = required.column_name
+    )
+  ) then
+    raise exception 'A política comercial está incompleta em platform_settings';
+  end if;
+
+  if not exists (
+    select 1 from public.platform_settings
+    where id = 1
+      and launch_monthly_fee = 39.90
+      and standard_monthly_fee >= 39.90
+      and pricing_phase in ('launch', 'standard')
+      and trial_days = 15
+      and default_monthly_fee = case
+        when pricing_phase = 'launch' then launch_monthly_fee
+        else standard_monthly_fee
+      end
+  ) then
+    raise exception 'Os valores comerciais do CredMais estão inconsistentes';
+  end if;
+
   if not exists (
     select 1 from pg_constraint
     where conrelid = 'public.loans'::regclass
@@ -66,7 +109,9 @@ begin
   end if;
 
   if to_regprocedure('public.sync_my_workspace_v1(jsonb,jsonb,jsonb,jsonb)') is null
-    or to_regprocedure('public.admin_grant_platform_access_v3(text,integer,text,numeric,text,numeric,text,text)') is null
+    or to_regprocedure('public.admin_update_platform_settings_v3(numeric,text,text,text)') is null
+    or to_regprocedure('public.admin_update_platform_account_v3(text,text,text,text,numeric)') is null
+    or to_regprocedure('public.admin_grant_platform_access_v5(text,integer,text,text,numeric,text,numeric,text,text)') is null
     or to_regprocedure('public.delete_my_account_data()') is null then
     raise exception 'Uma RPC obrigatória não está instalada';
   end if;
@@ -86,8 +131,10 @@ begin
         'ensure_platform_account', 'request_platform_access',
         'sync_my_workspace_v1', 'save_my_profile_v1',
         'delete_my_loan_v1', 'delete_my_client_v1',
-        'admin_update_platform_account_v1', 'admin_update_platform_settings_v1',
-        'admin_grant_platform_access_v3', 'admin_grant_platform_lifetime_v2',
+        'admin_update_platform_account_v1', 'admin_update_platform_account_v3',
+        'admin_update_platform_settings_v1', 'admin_update_platform_settings_v3',
+        'admin_grant_platform_access_v3', 'admin_grant_platform_access_v5',
+        'admin_grant_platform_lifetime_v2',
         'admin_set_platform_status', 'admin_sync_expired_platform_accounts',
         'delete_my_account_data', 'audit_workspace_change',
         'register_platform_expiration'

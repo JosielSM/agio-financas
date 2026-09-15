@@ -49,7 +49,27 @@
         <div class="accounts-list" id="accountsList" aria-live="polite"></div>
       </section>
 
-      <section class="page" id="settingsSection"><div class="page-head"><div><h2>Configurações de cobrança</h2><p>Defina o preço aplicado automaticamente às contas sem valor personalizado.</p></div></div><section class="panel settings-panel"><form id="settingsForm"><div class="global-price-card"><span>VALOR GLOBAL</span><b id="globalPricePreview">R$ 0,00 por mês</b><small>Usuários marcados como “valor global” acompanham qualquer alteração feita aqui. As exceções individuais não mudam.</small></div><div class="form-grid"><label>Mensalidade global<input id="defaultMonthlyFee" inputmode="decimal" required><small>Valor padrão para novos usuários e contas sem preço personalizado.</small></label><label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15"><small>Usado somente para suporte e contato, nunca para confirmar pagamentos.</small></label><label class="full">Modelo do lembrete<textarea id="billingMessage" rows="9" required></textarea><small>Use: {nome}, {valor} e {vencimento}. O pagamento será feito somente pelo checkout automático.</small></label></div><p class="feedback" id="settingsFeedback"></p><button class="primary" type="submit">Salvar configurações</button></form></section></section>
+      <section class="page" id="settingsSection">
+        <div class="page-head"><div><h2>Política comercial</h2><p>Controle o lançamento, o preço normal e o teste gratuito sem alterar contratos protegidos.</p></div></div>
+        <section class="panel settings-panel">
+          <form id="settingsForm">
+            <div class="pricing-policy-board">
+              <article class="policy-card launch"><span>🚀 LANÇAMENTO</span><b id="launchPricePreview">R$ 39,90/mês</b><small>Protegido para os primeiros usuários enquanto mantiverem a conta.</small></article>
+              <article class="policy-card standard"><span>💎 PREÇO NORMAL</span><b id="standardPricePreview">R$ 59,90/mês</b><small>Aplicado a novas contas quando a fase normal for ativada.</small></article>
+              <article class="policy-card trial"><span>🎁 TESTE GRATUITO</span><b id="trialDaysPreview">15 dias</b><small>Concedido automaticamente uma única vez, com acesso completo.</small></article>
+            </div>
+            <div class="active-policy-summary"><span id="pricingPhaseBadge">FASE DE LANÇAMENTO</span><div><b id="globalPricePreview">R$ 39,90 por mês</b><small>Preço atual para novas contas e contas que seguem o valor global.</small></div></div>
+            <div class="form-grid">
+              <label>Fase para novas contas<select id="pricingPhase"><option value="launch">Lançamento — R$ 39,90</option><option value="standard">Preço normal — valor configurado</option></select><small>Ao ativar o preço normal, os primeiros usuários continuam com R$ 39,90.</small></label>
+              <label>Preço normal futuro<input id="standardMonthlyFee" inputmode="decimal" required><small>Inicialmente R$ 59,90. Pode ser ajustado antes de ativar.</small></label>
+              <label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15"><small>Usado somente para suporte e contato, nunca para confirmar pagamentos.</small></label>
+              <label class="full">Modelo do lembrete<textarea id="billingMessage" rows="9" required></textarea><small>Use: {nome}, {valor} e {vencimento}. O pagamento será feito somente pelo checkout automático.</small></label>
+            </div>
+            <p class="policy-warning" id="pricingPhaseWarning">O CredMais está em lançamento. Mudar para o preço normal afeta somente novas contas e usuários no valor global.</p>
+            <p class="feedback" id="settingsFeedback"></p><button class="primary" type="submit">Salvar política comercial</button>
+          </form>
+        </section>
+      </section>
     </main>
     <nav class="bottom-nav"><button class="active" data-section="overview"><i>⌂</i><span>Início</span></button><button data-section="accounts"><i>♙</i><span>Assinaturas</span></button><button data-section="settings"><i>⚙</i><span>Ajustes</span></button></nav>
   </div>
@@ -73,7 +93,7 @@
       <section class="manage-section">
         <div class="manage-section-title"><div><b>Dados e cobrança</b><small>Informações usadas no contato e na mensagem mensal.</small></div></div>
         <div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15" placeholder="(00) 00000-0000"></label><label class="full">Observações<textarea id="manageNotes" rows="3" placeholder="Anotações internas sobre esta conta"></textarea></label></div>
-        <fieldset class="pricing-picker"><legend>Preço da assinatura</legend><div><label><input type="radio" name="managePricing" value="default" checked><span><b>Usar valor global</b><small id="manageGlobalFeeLabel">Acompanha o preço configurado para todos.</small></span></label><label><input type="radio" name="managePricing" value="custom"><span><b>Valor personalizado</b><small>Use uma condição especial somente para este usuário.</small></span></label></div><label id="manageFeeField" class="custom-price-field" hidden>Mensalidade personalizada<input id="manageFee" inputmode="decimal"><small>Este valor substitui o global apenas nesta conta.</small></label><div class="effective-price"><span>Valor que será cobrado</span><b id="manageEffectiveFee">R$ 0,00 por mês</b></div></fieldset>
+        <fieldset class="pricing-picker"><legend>Preço da assinatura</legend><div><label><input type="radio" name="managePricing" value="launch_locked"><span><b>Lançamento protegido</b><small id="manageLaunchFeeLabel">Mantém R$ 39,90 mesmo quando o preço normal for ativado.</small></span></label><label><input type="radio" name="managePricing" value="global" checked><span><b>Preço global atual</b><small id="manageGlobalFeeLabel">Acompanha a fase e o valor configurados para novas contas.</small></span></label><label><input type="radio" name="managePricing" value="custom"><span><b>Desconto especial</b><small>Defina uma condição exclusiva somente para este usuário.</small></span></label></div><label id="manageFeeField" class="custom-price-field" hidden>Mensalidade personalizada<input id="manageFee" inputmode="decimal"><small>Este valor substitui os preços de lançamento e normal nesta conta.</small></label><div class="effective-price"><span>Valor que será cobrado</span><b id="manageEffectiveFee">R$ 0,00 por mês</b></div></fieldset>
         <button class="outline wide-action" type="submit">Salvar dados do usuário</button>
       </section>
       <section class="manage-section access-section">

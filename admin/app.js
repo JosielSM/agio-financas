@@ -199,14 +199,31 @@ const statusLabel = (status) =>
   })[status] || "Pendente";
 const accountFee = (account) =>
   Number(account.monthly_fee ?? state.settings?.default_monthly_fee ?? 0);
-const accountUsesDefaultFee = (account) =>
-  account?.monthly_fee === null || account?.monthly_fee === undefined;
-const usesDefaultPricing = () =>
-  document.querySelector('[name="managePricing"]:checked')?.value !== "custom";
-const managedMonthlyFee = () =>
-  usesDefaultPricing()
-    ? Number(state.settings?.default_monthly_fee || 0)
-    : readMoneyInput($("#manageFee"));
+const accountPricingTier = (account) => {
+  if (account?.access_type === "lifetime") return "lifetime";
+  if (["global", "launch_locked", "custom"].includes(account?.pricing_tier))
+    return account.pricing_tier;
+  return account?.monthly_fee === null || account?.monthly_fee === undefined
+    ? "global"
+    : "custom";
+};
+const accountPricingLabel = (account) =>
+  ({
+    global: "Preço global atual",
+    launch_locked: "Lançamento protegido",
+    custom: "Desconto especial",
+    lifetime: "Sem cobrança",
+  })[accountPricingTier(account)] || "Preço global atual";
+const selectedPricingTier = () =>
+  document.querySelector('[name="managePricing"]:checked')?.value || "global";
+const managedMonthlyFee = () => {
+  const tier = selectedPricingTier();
+  if (tier === "launch_locked")
+    return Number(state.settings?.launch_monthly_fee || 39.9);
+  if (tier === "global")
+    return Number(state.settings?.default_monthly_fee || 0);
+  return readMoneyInput($("#manageFee"));
+};
 const dateLabel = (value) =>
   value ? new Date(`${value}T12:00`).toLocaleDateString("pt-BR") : "Não liberado";
 const accessDateLabel = (account) =>
@@ -249,7 +266,7 @@ function accessDateFromToday(period) {
   const today = new Date();
   let result;
   if (period.unit === "days") {
-    result = new Date(today.getFullYear(), today.getMonth(), today.getDate() + period.value, 12);
+    result = new Date(today.getFullYear(), today.getMonth(), today.getDate() + period.value - 1, 12);
   } else {
     const targetMonth = today.getMonth() + period.value,
       lastDay = new Date(today.getFullYear(), targetMonth + 1, 0).getDate();
@@ -402,7 +419,7 @@ function renderAccounts() {
             email = escapeHtml(account.email || "E-mail não informado");
           return `<article class="account-row" data-manage-row="${userId}">
             <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}</b><small>${email}</small></div></div>
-            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${accountUsesDefaultFee(account) ? "Valor global" : "Valor personalizado"} · vence: ${accessDateLabel(account)}`}</small></div>
+            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${accountPricingLabel(account)} · vence: ${accessDateLabel(account)}`}</small></div>
             <div class="account-compact-status"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span></div>
             <div class="account-actions"><button data-manage="${userId}" aria-label="Abrir perfil e ações de ${name}" title="Abrir perfil">›</button></div>
           </article>`;
@@ -411,8 +428,22 @@ function renderAccounts() {
     : '<div class="panel empty">Nenhuma conta encontrada neste filtro.</div>';
 }
 function renderSettings() {
-  setMoneyInput($("#defaultMonthlyFee"), state.settings?.default_monthly_fee || 0);
-  $("#globalPricePreview").textContent = `${money(state.settings?.default_monthly_fee || 0)} por mês`;
+  const launchFee = Number(state.settings?.launch_monthly_fee || 39.9),
+    standardFee = Number(state.settings?.standard_monthly_fee || 59.9),
+    phase = state.settings?.pricing_phase === "standard" ? "standard" : "launch",
+    currentFee = phase === "launch" ? launchFee : standardFee;
+  setMoneyInput($("#standardMonthlyFee"), standardFee);
+  $("#pricingPhase").value = phase;
+  $("#launchPricePreview").textContent = `${money(launchFee)}/mês`;
+  $("#standardPricePreview").textContent = `${money(standardFee)}/mês`;
+  $("#trialDaysPreview").textContent = `${Number(state.settings?.trial_days || 15)} dias`;
+  $("#globalPricePreview").textContent = `${money(currentFee)} por mês`;
+  $("#pricingPhaseBadge").textContent =
+    phase === "launch" ? "FASE DE LANÇAMENTO" : "PREÇO NORMAL ATIVO";
+  $("#pricingPhaseWarning").textContent =
+    phase === "launch"
+      ? `O CredMais está em lançamento por ${money(launchFee)}. Ativar o preço normal afetará somente novas contas e usuários no valor global.`
+      : `O preço normal de ${money(standardFee)} está ativo. Os primeiros usuários continuam protegidos por ${money(launchFee)}.`;
   $("#supportPhone").value = formatPhone(state.settings?.support_phone || "");
   const savedMessage = state.settings?.billing_message || "";
   $("#billingMessage").value = /\{pix\}|\{recebedor\}|chave\s+pix|envie\s+o\s+comprovante/i.test(savedMessage)
@@ -480,7 +511,7 @@ function openManage(userId) {
   $("#manageAvatar").textContent = accountInitials(account);
   $("#managePhone").value = formatPhone(account.phone || "");
   const lifetime = isLifetimeAccount(account),
-    useDefaultFee = lifetime || accountUsesDefaultFee(account);
+    pricingTier = lifetime ? "global" : accountPricingTier(account);
   setMoneyInput(
     $("#manageFee"),
     Number(account.monthly_fee) > 0
@@ -488,8 +519,9 @@ function openManage(userId) {
       : Number(state.settings?.default_monthly_fee || 0),
   );
   document.querySelector(
-    `[name="managePricing"][value="${useDefaultFee ? "default" : "custom"}"]`,
+    `[name="managePricing"][value="${pricingTier}"]`,
   ).checked = true;
+  $("#manageLaunchFeeLabel").textContent = `${money(state.settings?.launch_monthly_fee || 39.9)} por mês; não muda quando o preço normal for ativado.`;
   $("#manageGlobalFeeLabel").textContent = `${money(state.settings?.default_monthly_fee || 0)} por mês; acompanha futuras alterações globais.`;
   $("#manageNotes").value = account.notes || "";
   const status = effectiveStatus(account);
@@ -539,17 +571,22 @@ function syncManagePeriod() {
 }
 function syncPricingMode(resetAmount = true) {
   const lifetime = selectedAccessPeriod().lifetime,
-    useDefaultFee = usesDefaultPricing(),
+    pricingTier = selectedPricingTier(),
     feeField = $("#manageFeeField"),
     feeInput = $("#manageFee");
   document.querySelectorAll('[name="managePricing"]').forEach((input) => {
     input.disabled = lifetime;
   });
-  feeField.hidden = lifetime || useDefaultFee;
-  feeInput.disabled = lifetime || useDefaultFee;
+  feeField.hidden = lifetime || pricingTier !== "custom";
+  feeInput.disabled = lifetime || pricingTier !== "custom";
+  const sourceLabel = {
+    global: "preço global atual",
+    launch_locked: "lançamento protegido",
+    custom: "desconto especial",
+  }[pricingTier];
   $("#manageEffectiveFee").textContent = lifetime
     ? "Sem cobrança mensal"
-    : `${money(managedMonthlyFee())} por mês${useDefaultFee ? " · valor global" : " · personalizado"}`;
+    : `${money(managedMonthlyFee())} por mês · ${sourceLabel}`;
   if (!lifetime && resetAmount) syncGrantType(true);
 }
 function syncGrantType(resetAmount = false) {
@@ -570,14 +607,14 @@ function syncGrantType(resetAmount = false) {
   $("#grantAccess").textContent = free ? "Liberar teste gratuito" : "Liberar acesso pago";
 }
 async function saveManagedAccount(showToast = true) {
-  const useDefaultFee = usesDefaultPricing(),
-    monthlyFee = useDefaultFee ? null : readMoneyInput($("#manageFee"));
-  if (!useDefaultFee && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
+  const pricingTier = selectedPricingTier(),
+    monthlyFee = pricingTier === "custom" ? readMoneyInput($("#manageFee")) : null;
+  if (pricingTier === "custom" && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
     throw new Error("Informe uma mensalidade personalizada maior que zero.");
   const account = await bridge.updatePlatformAccount(state.managedUserId, {
     phone: formatPhone($("#managePhone").value),
     notes: $("#manageNotes").value.trim(),
-    useDefaultFee,
+    pricingTier,
     monthlyFee,
   });
   const index = state.accounts.findIndex((item) => item.user_id === account.user_id);
@@ -606,13 +643,13 @@ async function grantAccess() {
     try {
       const period = selectedAccessPeriod(),
         accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
-        useDefaultFee = usesDefaultPricing(),
-        monthlyFee = useDefaultFee ? null : readMoneyInput($("#manageFee")),
+        pricingTier = selectedPricingTier(),
+        monthlyFee = pricingTier === "custom" ? readMoneyInput($("#manageFee")) : null,
         accountDetails = {
           phone: formatPhone($("#managePhone").value),
           notes: $("#manageNotes").value.trim(),
         };
-      if (!period.lifetime && !useDefaultFee && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
+      if (!period.lifetime && pricingTier === "custom" && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
         throw new Error("Informe uma mensalidade personalizada maior que zero.");
       let updatedAccount;
       if (period.lifetime)
@@ -626,7 +663,7 @@ async function grantAccess() {
           period.value,
           period.unit,
           monthlyFee,
-          useDefaultFee,
+          pricingTier,
           accessType,
           readMoneyInput($("#manageGrantAmount")),
           accountDetails,
@@ -798,17 +835,28 @@ async function saveSettings(event) {
   feedback("settingsFeedback");
   await loading(button, async () => {
     try {
-      const defaultMonthlyFee = readMoneyInput($("#defaultMonthlyFee"));
-      if (!Number.isFinite(defaultMonthlyFee) || defaultMonthlyFee <= 0)
-        throw new Error("Informe um valor global maior que zero.");
+      const standardMonthlyFee = readMoneyInput($("#standardMonthlyFee")),
+        pricingPhase = $("#pricingPhase").value;
+      if (!Number.isFinite(standardMonthlyFee) || standardMonthlyFee < 39.9)
+        throw new Error("O preço normal deve ser igual ou maior que R$ 39,90.");
+      if (!["launch", "standard"].includes(pricingPhase))
+        throw new Error("Escolha uma fase de preço válida.");
       state.settings = await bridge.savePlatformSettings({
-        defaultMonthlyFee,
+        standardMonthlyFee,
+        pricingPhase,
         supportPhone: formatPhone($("#supportPhone").value),
         billingMessage: $("#billingMessage").value.trim(),
       });
+      renderSettings();
       renderOverview();
       renderAccounts();
-      feedback("settingsFeedback", "Configurações salvas com sucesso.", "success");
+      feedback(
+        "settingsFeedback",
+        pricingPhase === "launch"
+          ? "Política salva. O lançamento continua em R$ 39,90."
+          : "Preço normal ativado para novas contas; os usuários de lançamento foram preservados.",
+        "success",
+      );
     } catch (error) {
       feedback("settingsFeedback", error.message || "Não foi possível salvar.", "error");
     }
@@ -878,9 +926,22 @@ $("#accountSearch").oninput = (event) => {
   state.search = event.target.value;
   renderAccounts();
 };
-$("#defaultMonthlyFee").addEventListener("input", (event) => {
+$("#standardMonthlyFee").addEventListener("input", (event) => {
   maskMoney(event);
-  $("#globalPricePreview").textContent = `${money(readMoneyInput(event.currentTarget))} por mês`;
+  $("#standardPricePreview").textContent = `${money(readMoneyInput(event.currentTarget))}/mês`;
+  if ($("#pricingPhase").value === "standard")
+    $("#globalPricePreview").textContent = `${money(readMoneyInput(event.currentTarget))} por mês`;
+});
+$("#pricingPhase").addEventListener("change", () => {
+  const phase = $("#pricingPhase").value,
+    fee = phase === "launch" ? 39.9 : readMoneyInput($("#standardMonthlyFee"));
+  $("#globalPricePreview").textContent = `${money(fee)} por mês`;
+  $("#pricingPhaseBadge").textContent =
+    phase === "launch" ? "FASE DE LANÇAMENTO" : "PREÇO NORMAL ATIVO";
+  $("#pricingPhaseWarning").textContent =
+    phase === "launch"
+      ? "O CredMais continuará oferecendo R$ 39,90 às novas contas."
+      : "Ao salvar, o preço normal valerá para novas contas e usuários no valor global. Os primeiros usuários não serão alterados.";
 });
 $("#manageFee").addEventListener("input", (event) => {
   maskMoney(event);

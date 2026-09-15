@@ -65,7 +65,9 @@
     ["42883", "PGRST202"].includes(error?.code);
   const accessSchemaError = (error) =>
     ["42703", "PGRST204"].includes(error?.code) ||
-    /expiry_notified_at|access_type|access_amount/i.test(error?.message || "");
+    /expiry_notified_at|access_type|access_amount|pricing_tier|trial_started_at|launch_monthly_fee|standard_monthly_fee|pricing_phase|trial_days/i.test(
+      error?.message || "",
+    );
   const accessError = (error) => {
     if (missingFunction(error))
       return new Error(
@@ -308,11 +310,12 @@
       };
     },
     async savePlatformSettings(settings) {
-      // v2 supersede admin_update_platform_settings_v1 e remove os dados de PIX manual.
+      // v3 mantém a coorte de lançamento protegida ao ativar o preço normal.
       const { data, error } = await client.rpc(
-        "admin_update_platform_settings_v2",
+        "admin_update_platform_settings_v3",
         {
-          p_default_monthly_fee: Number(settings.defaultMonthlyFee),
+          p_standard_monthly_fee: Number(settings.standardMonthlyFee),
+          p_pricing_phase: settings.pricingPhase,
           p_billing_message: settings.billingMessage || "",
           p_support_phone: settings.supportPhone || "",
         },
@@ -325,17 +328,17 @@
       periodValue,
       periodUnit,
       monthlyFee,
-      useDefaultFee,
+      pricingTier,
       accessType = "paid",
       accessAmount = 0,
       accountDetails = {},
     ) {
-      const { data, error } = await client.rpc("admin_grant_platform_access_v4", {
+      const { data, error } = await client.rpc("admin_grant_platform_access_v5", {
         p_user_id: userId,
         p_period_value: Number(periodValue),
         p_period_unit: periodUnit,
-        p_use_default_fee: Boolean(useDefaultFee),
-        p_monthly_fee: useDefaultFee ? null : Number(monthlyFee),
+        p_pricing_tier: pricingTier,
+        p_monthly_fee: pricingTier === "custom" ? Number(monthlyFee) : null,
         p_access_type: accessType,
         p_access_amount: Number(accessAmount),
         p_phone: accountDetails.phone || "",
@@ -362,15 +365,16 @@
       return data;
     },
     async updatePlatformAccount(userId, values) {
-      // v2 supersede admin_update_platform_account_v1 e permite herdar o valor global.
+      // v3 distingue preço global, lançamento protegido e desconto especial.
       const { data, error } = await client.rpc(
-        "admin_update_platform_account_v2",
+        "admin_update_platform_account_v3",
         {
           p_user_id: userId,
           p_phone: values.phone || "",
           p_notes: values.notes || "",
-          p_use_default_fee: Boolean(values.useDefaultFee),
-          p_monthly_fee: values.useDefaultFee ? null : Number(values.monthlyFee),
+          p_pricing_tier: values.pricingTier,
+          p_monthly_fee:
+            values.pricingTier === "custom" ? Number(values.monthlyFee) : null,
         },
       );
       if (error) throw accessError(error);

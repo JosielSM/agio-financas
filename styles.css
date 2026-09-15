@@ -494,6 +494,78 @@ button {
 .dark .subscription-banner-actions small {
   color: #d5c18e;
 }
+.trial-banner {
+  position: relative;
+  z-index: 6;
+  margin: 16px 28px 0 296px;
+  padding: 15px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #9dd9bf;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ecfaf4, #fbfffd);
+  box-shadow: 0 10px 28px #087b5916;
+  color: #07583f;
+}
+.trial-banner-copy,
+.trial-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.trial-gift {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #d9f3e7;
+  font-size: 20px;
+}
+.trial-banner strong,
+.trial-banner p,
+.trial-banner span {
+  margin: 0;
+}
+.trial-banner p {
+  margin-top: 3px;
+  color: #477563;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.trial-banner-actions > span {
+  display: grid;
+  min-width: 116px;
+  text-align: right;
+}
+.trial-banner-actions small {
+  color: #5e8274;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.trial-banner-actions b {
+  font: 700 16px Outfit;
+}
+.trial-banner-actions button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.dark .trial-banner {
+  border-color: #285b45;
+  background: linear-gradient(135deg, #17382a, #17241f);
+  color: #bff1db;
+}
+.dark .trial-gift {
+  background: #214c39;
+}
+.dark .trial-banner p,
+.dark .trial-banner-actions small {
+  color: #9fc8b6;
+}
 .auth-theme-toggle {
   position: fixed;
   z-index: 5;
@@ -1775,6 +1847,26 @@ body.dark {
     text-align: left;
   }
   .subscription-banner-actions button {
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+  .trial-banner {
+    margin: 10px 10px 0;
+    padding: 13px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .trial-banner-actions {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+  .trial-banner-actions > span {
+    min-width: 92px;
+    text-align: left;
+  }
+  .trial-banner-actions button {
     padding-inline: 10px;
     font-size: 11px;
   }

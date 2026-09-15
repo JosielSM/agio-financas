@@ -46,10 +46,11 @@ begin
     current_date + 365
   );
 
-  saved := public.admin_grant_platform_access_v3(
+  saved := public.admin_grant_platform_access_v5(
     test_user_id,
     1,
     'months',
+    'custom',
     49.90,
     'paid',
     49.90,
@@ -63,17 +64,18 @@ begin
     raise exception 'A liberação paga mensal não substituiu a validade corretamente';
   end if;
 
-  saved := public.admin_grant_platform_access_v3(
+  saved := public.admin_grant_platform_access_v5(
     test_user_id,
     15,
     'days',
-    49.90,
+    'launch_locked',
+    null,
     'free',
     0,
     null,
     'Teste gratuito'
   );
-  if (saved->>'paid_until')::date <> current_date + 15
+  if (saved->>'paid_until')::date <> current_date + 14
     or saved->>'access_type' <> 'free'
     or (saved->>'access_amount')::numeric <> 0 then
     raise exception 'A liberação gratuita de 15 dias está incorreta';
@@ -86,6 +88,7 @@ begin
   );
   if saved->>'status' <> 'active'
     or saved->>'access_type' <> 'lifetime'
+    or saved->>'pricing_tier' <> 'lifetime'
     or saved->>'paid_until' is not null then
     raise exception 'A liberação vitalícia está incorreta';
   end if;
@@ -96,10 +99,11 @@ begin
     raise exception 'O bloqueio manual não interrompeu o acesso';
   end if;
 
-  saved := public.admin_grant_platform_access_v3(
+  saved := public.admin_grant_platform_access_v5(
     test_user_id,
     2,
     'months',
+    'custom',
     49.90,
     'paid',
     99.80,
