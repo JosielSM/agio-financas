@@ -14,17 +14,15 @@ const state = {
 };
 const DEFAULT_MESSAGE = `Olá, *{nome}*! 👋
 
-📌 *MENSALIDADE CREDMAIS*
+💎 *CREDMAIS PREMIUM*
 ━━━━━━━━━━━━━━━━
-
-💳 Valor: *{valor}*
+💳 Mensalidade: *{valor}*
 📅 Vencimento: *{vencimento}*
 
-💠 *PAGAMENTO VIA PIX*
-👤 Recebedor: *{recebedor}*
-🔑 Chave PIX: {pix}
+⚡ *PAGAMENTO AUTOMÁTICO*
+Entre na sua conta do CredMais, escolha o período e toque em *Pagar agora*. O pagamento é feito no ambiente seguro do Mercado Pago.
 
-Após o pagamento, envie o comprovante por aqui para a liberação do acesso.
+✅ Assim que o Mercado Pago confirmar, seu acesso será liberado automaticamente. Não é necessário enviar comprovante.
 
 Atenciosamente,
 *CredMais*`;
@@ -201,6 +199,14 @@ const statusLabel = (status) =>
   })[status] || "Pendente";
 const accountFee = (account) =>
   Number(account.monthly_fee ?? state.settings?.default_monthly_fee ?? 0);
+const accountUsesDefaultFee = (account) =>
+  account?.monthly_fee === null || account?.monthly_fee === undefined;
+const usesDefaultPricing = () =>
+  document.querySelector('[name="managePricing"]:checked')?.value !== "custom";
+const managedMonthlyFee = () =>
+  usesDefaultPricing()
+    ? Number(state.settings?.default_monthly_fee || 0)
+    : readMoneyInput($("#manageFee"));
 const dateLabel = (value) =>
   value ? new Date(`${value}T12:00`).toLocaleDateString("pt-BR") : "Não liberado";
 const accessDateLabel = (account) =>
@@ -396,7 +402,7 @@ function renderAccounts() {
             email = escapeHtml(account.email || "E-mail não informado");
           return `<article class="account-row" data-manage-row="${userId}">
             <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}</b><small>${email}</small></div></div>
-            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `Vence: ${accessDateLabel(account)}`}</small></div>
+            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${accountUsesDefaultFee(account) ? "Valor global" : "Valor personalizado"} · vence: ${accessDateLabel(account)}`}</small></div>
             <div class="account-compact-status"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span></div>
             <div class="account-actions"><button data-manage="${userId}" aria-label="Abrir perfil e ações de ${name}" title="Abrir perfil">›</button></div>
           </article>`;
@@ -406,11 +412,12 @@ function renderAccounts() {
 }
 function renderSettings() {
   setMoneyInput($("#defaultMonthlyFee"), state.settings?.default_monthly_fee || 0);
+  $("#globalPricePreview").textContent = `${money(state.settings?.default_monthly_fee || 0)} por mês`;
   $("#supportPhone").value = formatPhone(state.settings?.support_phone || "");
-  $("#billingRecipient").value = state.settings?.billing_recipient || "";
-  $("#billingPixType").value = state.settings?.billing_pix_type || "Chave aleatória";
-  $("#billingPixKey").value = state.settings?.billing_pix_key || "";
-  $("#billingMessage").value = state.settings?.billing_message || DEFAULT_MESSAGE;
+  const savedMessage = state.settings?.billing_message || "";
+  $("#billingMessage").value = /\{pix\}|\{recebedor\}|chave\s+pix|envie\s+o\s+comprovante/i.test(savedMessage)
+    ? DEFAULT_MESSAGE
+    : savedMessage || DEFAULT_MESSAGE;
 }
 async function loadDashboard(notify = false) {
   const result = await bridge.loadPlatformAdmin();
@@ -472,10 +479,20 @@ function openManage(userId) {
   $("#manageEmail").textContent = account.email || "E-mail não informado";
   $("#manageAvatar").textContent = accountInitials(account);
   $("#managePhone").value = formatPhone(account.phone || "");
-  setMoneyInput($("#manageFee"), accountFee(account));
+  const lifetime = isLifetimeAccount(account),
+    useDefaultFee = lifetime || accountUsesDefaultFee(account);
+  setMoneyInput(
+    $("#manageFee"),
+    Number(account.monthly_fee) > 0
+      ? Number(account.monthly_fee)
+      : Number(state.settings?.default_monthly_fee || 0),
+  );
+  document.querySelector(
+    `[name="managePricing"][value="${useDefaultFee ? "default" : "custom"}"]`,
+  ).checked = true;
+  $("#manageGlobalFeeLabel").textContent = `${money(state.settings?.default_monthly_fee || 0)} por mês; acompanha futuras alterações globais.`;
   $("#manageNotes").value = account.notes || "";
   const status = effectiveStatus(account);
-  const lifetime = isLifetimeAccount(account);
   $("#manageMonths").value = lifetime ? "lifetime" : "months:1";
   document.querySelector('[name="manageGrantType"][value="paid"]').checked = true;
   $("#manageStatus").textContent = lifetime ? "Vitalício" : statusLabel(status);
@@ -509,27 +526,31 @@ function openManage(userId) {
 }
 function syncManagePeriod() {
   const period = selectedAccessPeriod(),
-    lifetime = period.lifetime,
-    account = state.accounts.find((item) => item.user_id === state.managedUserId),
-    feeInput = $("#manageFee");
+    lifetime = period.lifetime;
   $("#grantTypeBlock").hidden = lifetime;
   if (lifetime) {
-    setMoneyInput(feeInput, 0);
-    feeInput.disabled = true;
     $("#managePeriodHelp").textContent =
       "Colaboradores ficam sem vencimento e sem cobrança mensal.";
     $("#grantAccess").textContent = "Liberar vitalício";
-    return;
+  } else {
+    $("#managePeriodHelp").textContent = `A validade será definida até ${accessDateFromToday(period)}, contando a partir de hoje. Uma nova liberação substituirá a data anterior.`;
   }
-  if (feeInput.disabled) {
-    const normalFee = Number(account?.monthly_fee) > 0
-      ? Number(account.monthly_fee)
-      : Number(state.settings?.default_monthly_fee || 0);
-    setMoneyInput(feeInput, normalFee);
-  }
-  feeInput.disabled = false;
-  $("#managePeriodHelp").textContent = `A validade será definida até ${accessDateFromToday(period)}, contando a partir de hoje. Uma nova liberação substituirá a data anterior.`;
-  syncGrantType(true);
+  syncPricingMode(true);
+}
+function syncPricingMode(resetAmount = true) {
+  const lifetime = selectedAccessPeriod().lifetime,
+    useDefaultFee = usesDefaultPricing(),
+    feeField = $("#manageFeeField"),
+    feeInput = $("#manageFee");
+  document.querySelectorAll('[name="managePricing"]').forEach((input) => {
+    input.disabled = lifetime;
+  });
+  feeField.hidden = lifetime || useDefaultFee;
+  feeInput.disabled = lifetime || useDefaultFee;
+  $("#manageEffectiveFee").textContent = lifetime
+    ? "Sem cobrança mensal"
+    : `${money(managedMonthlyFee())} por mês${useDefaultFee ? " · valor global" : " · personalizado"}`;
+  if (!lifetime && resetAmount) syncGrantType(true);
 }
 function syncGrantType(resetAmount = false) {
   const period = selectedAccessPeriod();
@@ -537,7 +558,7 @@ function syncGrantType(resetAmount = false) {
   const accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
     free = accessType === "free",
     amountInput = $("#manageGrantAmount"),
-    monthlyFee = readMoneyInput($("#manageFee")),
+    monthlyFee = managedMonthlyFee(),
     suggestedAmount = period.unit === "days"
       ? Math.round((monthlyFee * period.value / 30) * 100) / 100
       : monthlyFee * period.value;
@@ -549,10 +570,15 @@ function syncGrantType(resetAmount = false) {
   $("#grantAccess").textContent = free ? "Liberar teste gratuito" : "Liberar acesso pago";
 }
 async function saveManagedAccount(showToast = true) {
+  const useDefaultFee = usesDefaultPricing(),
+    monthlyFee = useDefaultFee ? null : readMoneyInput($("#manageFee"));
+  if (!useDefaultFee && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
+    throw new Error("Informe uma mensalidade personalizada maior que zero.");
   const account = await bridge.updatePlatformAccount(state.managedUserId, {
     phone: formatPhone($("#managePhone").value),
     notes: $("#manageNotes").value.trim(),
-    monthlyFee: readMoneyInput($("#manageFee")),
+    useDefaultFee,
+    monthlyFee,
   });
   const index = state.accounts.findIndex((item) => item.user_id === account.user_id);
   if (index >= 0) state.accounts[index] = account;
@@ -580,10 +606,14 @@ async function grantAccess() {
     try {
       const period = selectedAccessPeriod(),
         accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
+        useDefaultFee = usesDefaultPricing(),
+        monthlyFee = useDefaultFee ? null : readMoneyInput($("#manageFee")),
         accountDetails = {
           phone: formatPhone($("#managePhone").value),
           notes: $("#manageNotes").value.trim(),
         };
+      if (!period.lifetime && !useDefaultFee && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
+        throw new Error("Informe uma mensalidade personalizada maior que zero.");
       let updatedAccount;
       if (period.lifetime)
         updatedAccount = await bridge.grantPlatformLifetime(
@@ -595,7 +625,8 @@ async function grantAccess() {
           state.managedUserId,
           period.value,
           period.unit,
-          readMoneyInput($("#manageFee")),
+          monthlyFee,
+          useDefaultFee,
           accessType,
           readMoneyInput($("#manageGrantAmount")),
           accountDetails,
@@ -627,13 +658,14 @@ async function toggleBlock() {
   });
 }
 function billingMessage(account) {
-  const template = state.settings?.billing_message || DEFAULT_MESSAGE,
+  const savedTemplate = state.settings?.billing_message || "",
+    template = /\{pix\}|\{recebedor\}|chave\s+pix|envie\s+o\s+comprovante/i.test(savedTemplate)
+      ? DEFAULT_MESSAGE
+      : savedTemplate || DEFAULT_MESSAGE,
     replacements = {
       nome: account.display_name || account.email?.split("@")[0] || "cliente",
       valor: money(accountFee(account)),
       vencimento: dateLabel(account.paid_until || todayValue()),
-      pix: state.settings?.billing_pix_key || "Solicite a chave PIX",
-      recebedor: state.settings?.billing_recipient || "CredMais",
     };
   return Object.entries(replacements).reduce(
     (message, [key, value]) => message.replaceAll(`{${key}}`, value),
@@ -647,18 +679,10 @@ function splitBillingMessage(message) {
     .map((block) => block.trim())
     .filter(Boolean);
   const greeting = blocks.shift() || "Olá! 👋";
-  const pixIndex = blocks.findIndex((block) => /pix|chave/i.test(block));
-  if (pixIndex >= 0)
-    return {
-      greeting,
-      details: blocks.slice(0, pixIndex).join("\n\n"),
-      pix: blocks[pixIndex],
-      closing: blocks.slice(pixIndex + 1).join("\n\n"),
-    };
   return {
     greeting,
     details: blocks.shift() || "",
-    pix: blocks.shift() || "",
+    payment: blocks.shift() || "",
     closing: blocks.join("\n\n"),
   };
 }
@@ -666,7 +690,7 @@ function syncChargePreview() {
   $("#chargePreview").value = [
     $("#chargeGreeting").value.trim(),
     $("#chargeDetails").value.trim(),
-    $("#chargePix").value.trim(),
+    $("#chargePayment").value.trim(),
     $("#chargeClosing").value.trim(),
   ]
     .filter(Boolean)
@@ -702,7 +726,7 @@ function openCharge(userId) {
   const parts = splitBillingMessage(billingMessage(account));
   $("#chargeGreeting").value = parts.greeting;
   $("#chargeDetails").value = parts.details;
-  $("#chargePix").value = parts.pix;
+  $("#chargePayment").value = parts.payment;
   $("#chargeClosing").value = parts.closing;
   syncChargePreview();
   $("#sendCharge").disabled = digits(account.phone).length < 10;
@@ -774,12 +798,12 @@ async function saveSettings(event) {
   feedback("settingsFeedback");
   await loading(button, async () => {
     try {
+      const defaultMonthlyFee = readMoneyInput($("#defaultMonthlyFee"));
+      if (!Number.isFinite(defaultMonthlyFee) || defaultMonthlyFee <= 0)
+        throw new Error("Informe um valor global maior que zero.");
       state.settings = await bridge.savePlatformSettings({
-        defaultMonthlyFee: readMoneyInput($("#defaultMonthlyFee")),
+        defaultMonthlyFee,
         supportPhone: formatPhone($("#supportPhone").value),
-        billingRecipient: $("#billingRecipient").value.trim(),
-        billingPixKey: $("#billingPixKey").value.trim(),
-        billingPixType: $("#billingPixType").value,
         billingMessage: $("#billingMessage").value.trim(),
       });
       renderOverview();
@@ -824,6 +848,9 @@ $("#manageMonths").onchange = syncManagePeriod;
 document.querySelectorAll('[name="manageGrantType"]').forEach((input) =>
   input.addEventListener("change", () => syncGrantType(true)),
 );
+document.querySelectorAll('[name="managePricing"]').forEach((input) =>
+  input.addEventListener("change", () => syncPricingMode(true)),
+);
 $("#toggleBlock").onclick = toggleBlock;
 $("#chargeAccount").onclick = () => openCharge(state.managedUserId);
 $("#copyUserEmail").onclick = () => copyManagedContact("email");
@@ -851,10 +878,13 @@ $("#accountSearch").oninput = (event) => {
   state.search = event.target.value;
   renderAccounts();
 };
-$("#defaultMonthlyFee").addEventListener("input", maskMoney);
+$("#defaultMonthlyFee").addEventListener("input", (event) => {
+  maskMoney(event);
+  $("#globalPricePreview").textContent = `${money(readMoneyInput(event.currentTarget))} por mês`;
+});
 $("#manageFee").addEventListener("input", (event) => {
   maskMoney(event);
-  if (!selectedAccessPeriod().lifetime) syncGrantType(true);
+  if (!selectedAccessPeriod().lifetime) syncPricingMode(true);
 });
 $("#manageGrantAmount").addEventListener("input", maskMoney);
 [$("#supportPhone"), $("#managePhone")].forEach((input) =>

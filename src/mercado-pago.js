@@ -271,7 +271,7 @@ async function checkout(request, env) {
       {
         ok: false,
         error: "BILLING_NOT_CONFIGURED",
-        message: "O pagamento automático está sendo configurado. Use o PIX manual por enquanto.",
+        message: "O pagamento automático está temporariamente indisponível. Tente novamente em alguns instantes.",
       },
       503,
     );

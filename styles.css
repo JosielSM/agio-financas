@@ -389,64 +389,6 @@ button {
 .dark .subscription-pay-button {
   color: #8ccaff;
 }
-.access-payment {
-  margin: -8px 0 16px;
-  padding: 13px;
-  display: grid;
-  gap: 5px;
-  border: 1px dashed var(--line);
-  border-radius: 13px;
-  background: var(--surface);
-}
-.access-payment > span,
-.access-payment > small {
-  color: var(--muted);
-  font-size: 9px;
-  letter-spacing: .5px;
-}
-.access-payment > b {
-  color: var(--text);
-  font-size: 13px;
-}
-.access-payment code {
-  padding: 8px;
-  overflow-wrap: anywhere;
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--brand);
-  font: 700 12px DM Sans;
-}
-.access-payment button {
-  min-height: 36px;
-  margin-top: 3px;
-}
-.access-payment-actions {
-  display: grid;
-  grid-template-columns: .8fr 1.2fr;
-  gap: 7px;
-}
-.access-payment-actions button {
-  width: 100%;
-  margin: 3px 0 0;
-  border-radius: 9px;
-  font-size: 11px;
-  font-weight: 800;
-}
-.access-receipt-button {
-  border: 1px solid #128c55;
-  background: #128c55;
-  color: #fff;
-  box-shadow: 0 7px 16px #128c5525;
-}
-.access-receipt-button:hover {
-  background: #0f7c4b;
-}
-.access-receipt-help {
-  margin-top: 3px;
-  text-align: center;
-  line-height: 1.4;
-  letter-spacing: 0 !important;
-}
 .access-card form {
   display: grid;
   gap: 11px;
@@ -1806,9 +1748,6 @@ body.dark {
   }
   .access-actions .primary {
     grid-column: auto;
-  }
-  .access-payment-actions {
-    grid-template-columns: 1fr;
   }
   .payment-plan-list {
     grid-template-columns: repeat(3, 1fr);

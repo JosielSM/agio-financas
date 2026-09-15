@@ -308,13 +308,11 @@
       };
     },
     async savePlatformSettings(settings) {
+      // v2 supersede admin_update_platform_settings_v1 e remove os dados de PIX manual.
       const { data, error } = await client.rpc(
-        "admin_update_platform_settings_v1",
+        "admin_update_platform_settings_v2",
         {
           p_default_monthly_fee: Number(settings.defaultMonthlyFee),
-          p_billing_recipient: settings.billingRecipient || "",
-          p_billing_pix_key: settings.billingPixKey || "",
-          p_billing_pix_type: settings.billingPixType || "Chave aleatória",
           p_billing_message: settings.billingMessage || "",
           p_support_phone: settings.supportPhone || "",
         },
@@ -327,15 +325,17 @@
       periodValue,
       periodUnit,
       monthlyFee,
+      useDefaultFee,
       accessType = "paid",
       accessAmount = 0,
       accountDetails = {},
     ) {
-      const { data, error } = await client.rpc("admin_grant_platform_access_v3", {
+      const { data, error } = await client.rpc("admin_grant_platform_access_v4", {
         p_user_id: userId,
         p_period_value: Number(periodValue),
         p_period_unit: periodUnit,
-        p_monthly_fee: Number(monthlyFee),
+        p_use_default_fee: Boolean(useDefaultFee),
+        p_monthly_fee: useDefaultFee ? null : Number(monthlyFee),
         p_access_type: accessType,
         p_access_amount: Number(accessAmount),
         p_phone: accountDetails.phone || "",
@@ -362,16 +362,18 @@
       return data;
     },
     async updatePlatformAccount(userId, values) {
+      // v2 supersede admin_update_platform_account_v1 e permite herdar o valor global.
       const { data, error } = await client.rpc(
-        "admin_update_platform_account_v1",
+        "admin_update_platform_account_v2",
         {
           p_user_id: userId,
           p_phone: values.phone || "",
           p_notes: values.notes || "",
-          p_monthly_fee: Number(values.monthlyFee),
+          p_use_default_fee: Boolean(values.useDefaultFee),
+          p_monthly_fee: values.useDefaultFee ? null : Number(values.monthlyFee),
         },
       );
-      if (error) throw error;
+      if (error) throw accessError(error);
       return data;
     },
     async updatePix(pixKey, pixType, pixRecipientName) {

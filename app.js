@@ -1165,20 +1165,6 @@ function showAccessGate(access, { openPrompt = true } = {}) {
     : "A liberação será válida pelo período contratado.";
   renderBillingPanel();
   void loadBillingConfig();
-  const paymentDetails = $("#accessPaymentDetails"),
-    billingPixKey = String(access?.billingPixKey || "").trim();
-  paymentDetails.hidden = !billingPixKey;
-  $("#accessBillingRecipient").textContent =
-    access?.billingRecipient || "CredMais";
-  $("#accessBillingPixType").textContent =
-    access?.billingPixType || "Chave PIX";
-  $("#accessBillingPixKey").textContent = billingPixKey;
-  const hasSupportWhatsApp = Boolean(
-    whatsappDestination(access?.supportPhone),
-  );
-  $("#accessReceiptHelp").textContent = hasSupportWhatsApp
-    ? "Depois de pagar, abra o WhatsApp e anexe a imagem do comprovante nesta conversa."
-    : "O WhatsApp para receber comprovantes ainda não foi configurado pelo administrador.";
   $("#subscriptionBannerTitle").textContent = content.title;
   $("#subscriptionBannerMessage").textContent = content.message;
   $("#subscriptionBannerFee").textContent = money(
@@ -1245,7 +1231,8 @@ async function loadBillingConfig() {
       if (!config.enabled) {
         setFeedback(
           "automaticPaymentFeedback",
-          "Pagamento automático em configuração. Você ainda pode usar o PIX e enviar o comprovante.",
+          "Pagamento automático temporariamente indisponível. Tente novamente em alguns instantes.",
+          "error",
         );
       } else if (config.environment === "sandbox") {
         setFeedback(
@@ -1285,7 +1272,7 @@ async function startBillingCheckout(mode = "one_time") {
   if (!state.billing.configured) {
     setFeedback(
       "automaticPaymentFeedback",
-      "O pagamento automático ainda não está disponível. Use o PIX manual abaixo.",
+      "O pagamento automático ainda não está disponível. Tente novamente em alguns instantes.",
       "error",
     );
     return;
@@ -1382,48 +1369,6 @@ function dismissAccessPrompt() {
   $("#accessView").hidden = true;
   state.accessPromptDismissed = true;
   toast("Modo de visualização ativo. Use o aviso no topo para solicitar acesso.");
-}
-async function copyAccessPix() {
-  const pixKey = $("#accessBillingPixKey").textContent.trim();
-  if (!pixKey) return toast("A chave PIX ainda não foi configurada.");
-  try {
-    await navigator.clipboard.writeText(pixKey);
-    toast("Chave PIX copiada.");
-  } catch (_error) {
-    toast("Não foi possível copiar. Toque e segure a chave PIX para selecionar.");
-  }
-}
-function sendAccessReceipt() {
-  const supportPhone = whatsappDestination(state.platformAccess?.supportPhone);
-  if (!supportPhone) {
-    setFeedback(
-      "accessFeedback",
-      "O administrador ainda precisa configurar o WhatsApp que receberá os comprovantes.",
-      "error",
-    );
-    return toast("WhatsApp para comprovantes ainda não configurado.");
-  }
-  const accountName = state.user?.name || "Usuário CredMais",
-    accountEmail = state.user?.email || "E-mail não informado",
-    monthlyFee = money(
-      state.platformAccess?.monthlyFee ??
-        state.platformAccess?.defaultMonthlyFee ??
-        0,
-    ),
-    previousAccess = state.platformAccess?.paidUntil
-      ? `\n📅 Período anterior: até *${new Date(`${state.platformAccess.paidUntil}T12:00`).toLocaleDateString("pt-BR")}*`
-      : "",
-    message = `Olá! 👋\n\n✅ *PAGAMENTO CREDMAIS REALIZADO*\n━━━━━━━━━━━━━━━━\n\n👤 Conta: *${accountName}*\n✉️ E-mail: ${accountEmail}\n💳 Mensalidade: *${monthlyFee}*${previousAccess}\n\n📎 Vou anexar o comprovante de pagamento nesta conversa para conferência e liberação do acesso.`;
-  setFeedback(
-    "accessFeedback",
-    "Abrindo o WhatsApp. Anexe a imagem do comprovante antes de enviar.",
-    "success",
-  );
-  window.open(
-    `https://wa.me/${supportPhone}?text=${encodeURIComponent(message)}`,
-    "_blank",
-    "noopener",
-  );
 }
 async function requestPlatformAccess(event) {
   event.preventDefault();
@@ -3837,8 +3782,6 @@ $("#accessPhone").addEventListener("input", (event) => {
 $("#accessRefresh").onclick = refreshPlatformAccess;
 $("#accessDismiss").onclick = dismissAccessPrompt;
 $("#accessContinue").onclick = dismissAccessPrompt;
-$("#accessCopyPix").onclick = copyAccessPix;
-$("#accessSendReceipt").onclick = sendAccessReceipt;
 document.querySelectorAll("[data-payment-months]").forEach((button) => {
   button.onclick = () => selectBillingPlan(button.dataset.paymentMonths);
 });
