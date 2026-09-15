@@ -830,6 +830,19 @@ function clearSignedOutData() {
   state.loans = [];
   state.history = [];
 }
+async function signOutCurrentUser() {
+  if (submissionLocks.has("sign-out")) return;
+  submissionLocks.add("sign-out");
+  toast("Saindo da sua conta...");
+  try {
+    if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
+    clearSignedOutData();
+    location.reload();
+  } catch (error) {
+    submissionLocks.delete("sign-out");
+    toast(error.message || "Não foi possível sair da conta. Tente novamente.");
+  }
+}
 async function deleteAccountAndData(event) {
   event.preventDefault();
   const form = event.currentTarget,
@@ -1714,15 +1727,16 @@ async function installPWA() {
   );
 }
 function setupPWA() {
-  if (isStandalone()) $("#installAppBtn").hidden = true;
+  const installButton = $("#profileInstallButton");
+  if (isStandalone()) installButton.hidden = true;
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    $("#installAppBtn").hidden = false;
+    installButton.hidden = false;
   });
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    $("#installAppBtn").hidden = true;
+    installButton.hidden = true;
     toast("CredMais instalado com sucesso.");
   });
   if ("serviceWorker" in navigator) {
@@ -3795,7 +3809,6 @@ $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#pixBtn").onclick = openPix;
 $("#profileBtn").onclick = openProfile;
 $("#monthlyReportBtn").onclick = openMonthlyReport;
-$("#securityBtn").onclick = openSecurity;
 $("#profileGoogleButton").onclick = linkProfileGoogle;
 $("#profileSecurityButton").onclick = () => {
   closeModals();
@@ -3806,9 +3819,13 @@ $("#profilePixButton").onclick = () => {
   closeModals();
   openPix();
 };
-$("#profileLogoutButton").onclick = () => {
+$("#profileInstallButton").onclick = () => {
   closeModals();
-  $("#logoutBtn").click();
+  openInstall();
+};
+$("#profileLogoutButton").onclick = async () => {
+  closeModals();
+  await signOutCurrentUser();
 };
 $("#profileDangerToggle").onclick = toggleProfileDanger;
 $("#openDeleteAccountButton").onclick = openDeleteAccount;
@@ -3847,18 +3864,8 @@ $("#subscriptionRequestButton").onclick = () =>
 $("#trialUpgradeButton").onclick = () =>
   showAccessGate(state.platformAccess, { openPrompt: true });
 $("#subscriptionRefreshButton").onclick = refreshPlatformAccess;
-$("#accessLogout").onclick = async () => {
-  if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
-  clearSignedOutData();
-  location.reload();
-};
-$("#installAppBtn").onclick = openInstall;
+$("#accessLogout").onclick = signOutCurrentUser;
 $("#confirmInstallBtn").onclick = installPWA;
-$("#logoutBtn").onclick = async () => {
-  if (window.credmaisBridge?.enabled) await window.credmaisBridge.signOut();
-  clearSignedOutData();
-  location.reload();
-};
 $("#modalBackdrop").onclick = requestClose;
 $("[data-keep-editing]").onclick = keepEditing;
 $("[data-discard-changes]").onclick = discardChanges;

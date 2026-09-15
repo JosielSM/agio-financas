@@ -893,20 +893,11 @@ textarea {
   border-top: 1px solid var(--line);
   padding-top: 15px;
 }
-.logout {
-  color: #d75959;
-}
-.install-app {
-  color: var(--brand);
-}
 .report-link {
   color: #26715a;
 }
 .report-link i {
   color: var(--brand);
-}
-.security-link {
-  color: var(--text);
 }
 .security-modal form {
   margin-top: 20px;

@@ -34,5 +34,24 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v25/);
+  assert.match(serviceWorker, /credmais-shell-v26/);
+});
+
+test("the sidebar keeps only the monthly report account action", async () => {
+  const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
+  const sidebarBottom =
+    html.match(/<div class="sidebar-bottom">[\s\S]*?<\/div><\/aside>/)?.[0] ||
+    "";
+
+  assert.match(sidebarBottom, /id="monthlyReportBtn"/);
+  assert.doesNotMatch(sidebarBottom, /Senha e segurança|Instalar app|>\s*Sair\s*</);
+  assert.doesNotMatch(
+    sidebarBottom,
+    /id="securityBtn"|id="installAppBtn"|id="logoutBtn"/,
+  );
+  assert.match(html, /id="profileSecurityButton"/);
+  assert.match(html, /id="profileInstallButton"/);
+  assert.match(html, /id="profileLogoutButton"/);
+  assert.match(app, /async function signOutCurrentUser\(\)/);
+  assert.doesNotMatch(app, /#securityBtn|#installAppBtn|#logoutBtn/);
 });
