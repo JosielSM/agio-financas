@@ -3888,7 +3888,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (button.classList.contains("add-loan")) openLoan();
-  if (button.dataset.close) requestClose();
+  if (button.hasAttribute("data-close")) requestClose();
   if (button.dataset.pageLink) setPage(button.dataset.pageLink);
   if (button.dataset.details) details(button.dataset.details);
   if (button.dataset.whatsapp)

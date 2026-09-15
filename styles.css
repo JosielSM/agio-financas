@@ -1715,6 +1715,8 @@ textarea {
   left: 50%;
   transform: translate(-50%, 100px);
   opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   background: #17382b;
   color: #fff;
   border-radius: 9px;
@@ -1743,6 +1745,8 @@ textarea {
 .toast.show {
   transform: translate(-50%, 0);
   opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 .toast.has-undo {
   top: calc(18px + env(safe-area-inset-top)) !important;
