@@ -284,7 +284,7 @@
         "admin_sync_expired_platform_accounts",
       );
       if (expirySyncResult.error) throw accessError(expirySyncResult.error);
-      const [accountsResult, settingsResult, logResult, adminsResult] = await Promise.all([
+      const [accountsResult, settingsResult, logResult, adminsResult, billingResult] = await Promise.all([
         client.from("platform_accounts").select("*").order("created_at"),
         client.from("platform_settings").select("*").eq("id", 1).single(),
         client
@@ -293,9 +293,14 @@
           .order("created_at", { ascending: false })
           .limit(12),
         client.from("platform_admins").select("user_id"),
+        client.rpc("admin_get_platform_billing_dashboard_v1"),
       ]);
       const error =
-        accountsResult.error || settingsResult.error || logResult.error || adminsResult.error;
+        accountsResult.error ||
+        settingsResult.error ||
+        logResult.error ||
+        adminsResult.error ||
+        (missingFunction(billingResult.error) ? null : billingResult.error);
       if (error) {
         if (missingRelation(error))
           throw new Error("Execute a migração do painel administrativo no Supabase.");
@@ -305,6 +310,7 @@
         accounts: accountsResult.data || [],
         settings: settingsResult.data,
         log: logResult.data || [],
+        payments: billingResult.data?.payments || [],
         adminIds: (adminsResult.data || []).map((admin) => admin.user_id),
         expirySync: { available: true, ...(expirySyncResult.data || {}) },
       };

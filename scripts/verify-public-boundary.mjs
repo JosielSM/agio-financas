@@ -78,4 +78,13 @@ assert.ok(
   "An unauthenticated request reset a platform subscription",
 );
 
+const billingDashboard = await api("rpc/admin_get_platform_billing_dashboard_v1", {
+  method: "POST",
+  body: "{}",
+});
+assert.ok(
+  billingDashboard.status >= 400,
+  "An unauthenticated request read the administrative payment dashboard",
+);
+
 console.log("CredMais: fronteira pública do Supabase validada.");

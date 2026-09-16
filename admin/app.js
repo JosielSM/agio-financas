@@ -5,8 +5,11 @@ const state = {
   accounts: [],
   settings: null,
   log: [],
+  payments: [],
   adminIds: [],
   filter: "all",
+  paymentFilter: "all",
+  overviewFeed: "recent",
   search: "",
   section: "overview",
   managedUserId: null,
@@ -285,20 +288,96 @@ const isFreeAccess = (account) =>
   Boolean(account.paid_until);
 const customerAccounts = () =>
   state.accounts.filter((account) => !state.adminIds.includes(account.user_id));
+const recentCustomerAccounts = () => {
+  const threshold = Date.now() - 7 * 86400000;
+  return customerAccounts()
+    .filter((account) => new Date(account.created_at).getTime() >= threshold)
+    .sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
+};
+const approvedAutomaticPayments = () =>
+  state.payments
+    .filter(
+      (payment) =>
+        payment.status === "approved" &&
+        Boolean(payment.accessGrantedAt) &&
+        payment.liveMode !== false,
+    )
+    .sort(
+      (first, second) =>
+        new Date(second.paidAt || second.updatedAt || second.createdAt) -
+        new Date(first.paidAt || first.updatedAt || first.createdAt),
+    );
+const paymentsForUser = (userId) =>
+  state.payments
+    .filter((payment) => payment.userId === userId)
+    .sort(
+      (first, second) =>
+        new Date(second.paidAt || second.updatedAt || second.createdAt) -
+        new Date(first.paidAt || first.updatedAt || first.createdAt),
+    );
+const latestApprovedPayment = (userId) =>
+  approvedAutomaticPayments().find((payment) => payment.userId === userId) || null;
+const paymentStatusLabel = (status) =>
+  ({
+    approved: "Aprovado",
+    pending: "Aguardando pagamento",
+    creating: "Preparando checkout",
+    in_process: "Em análise",
+    authorized: "Autorizado",
+    rejected: "Recusado",
+    cancelled: "Cancelado",
+    refunded: "Estornado",
+    charged_back: "Contestado",
+    expired: "Expirado",
+    error: "Erro no checkout",
+  })[status] || "Aguardando";
+const paymentStatusGroup = (status) => {
+  if (status === "approved") return "approved";
+  if (["creating", "pending", "in_process", "authorized"].includes(status))
+    return "pending";
+  return "failed";
+};
+const paymentMethodLabel = (payment) => {
+  const method = String(payment?.paymentMethod || "").toLowerCase(),
+    type = String(payment?.paymentType || "").toLowerCase();
+  if (method === "pix" || type === "bank_transfer") return "Pix";
+  if (type === "credit_card") return method ? `Cartão de crédito · ${method.toUpperCase()}` : "Cartão de crédito";
+  if (type === "debit_card") return method ? `Cartão de débito · ${method.toUpperCase()}` : "Cartão de débito";
+  if (type === "account_money") return "Saldo Mercado Pago";
+  return method ? method.replaceAll("_", " ") : "Mercado Pago";
+};
+const paymentPlanLabel = (payment) => {
+  if (!payment) return "Nenhum plano pago";
+  if (payment.mode === "subscription") return "Assinatura mensal automática";
+  const months = Number(payment.planMonths || 1);
+  return `${months} ${months === 1 ? "mês" : "meses"} · pagamento único`;
+};
+const paymentAccount = (payment) =>
+  state.accounts.find((account) => account.user_id === payment.userId);
+const isCurrentMonth = (value) => {
+  const date = new Date(value || 0),
+    now = new Date();
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth()
+  );
+};
 function renderStats() {
   const customers = customerAccounts(),
     statuses = customers.map(effectiveStatus),
-    activeAccounts = customers.filter(
-      (account) =>
-        effectiveStatus(account) === "active" &&
-        !isLifetimeAccount(account) &&
-        !isFreeAccess(account),
+    automaticPayments = approvedAutomaticPayments(),
+    receivedThisMonth = automaticPayments.filter((payment) =>
+      isCurrentMonth(payment.paidAt || payment.accessGrantedAt),
     );
   $("#statTotal").textContent = customers.length;
+  $("#statRecent").textContent = recentCustomerAccounts().length;
+  $("#statAutomaticPaid").textContent = new Set(
+    automaticPayments.map((payment) => payment.userId),
+  ).size;
   $("#statActive").textContent = statuses.filter((status) => status === "active").length;
-  $("#statPending").textContent = statuses.filter((status) => status === "pending").length;
-  $("#statRevenue").textContent = money(
-    activeAccounts.reduce((total, account) => total + accountFee(account), 0),
+  $("#statReceivedMonth").textContent = money(
+    receivedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0),
   );
 }
 const expiryNoticeStorageKey = () =>
@@ -357,9 +436,85 @@ function needsAttention(account) {
     days = Math.ceil((end - new Date()) / 86400000);
   return days <= 7;
 }
+function renderOverviewFeed() {
+  const feed = $("#overviewFeed");
+  if (!feed) return;
+  document.querySelectorAll("[data-overview-feed]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.overviewFeed === state.overviewFeed),
+  );
+  if (state.overviewFeed === "paid") {
+    const payments = approvedAutomaticPayments().slice(0, 6);
+    feed.innerHTML = payments.length
+      ? payments
+          .map((payment) => {
+            const account = paymentAccount(payment),
+              userId = escapeHtml(payment.userId),
+              name = escapeHtml(account?.display_name || account?.email || "Conta sem nome");
+            return `<article class="feed-item paid-feed" data-manage-row="${userId}"><span class="feed-avatar paid">✓</span><div class="feed-main"><b>${name}</b><small>${escapeHtml(paymentMethodLabel(payment))} · ${dateTimeLabel(payment.paidAt || payment.accessGrantedAt)}</small></div><div class="feed-value"><b>${money(payment.amount)}</b><small>${escapeHtml(paymentPlanLabel(payment))}</small></div><button data-manage="${userId}" aria-label="Abrir perfil de ${name}">›</button></article>`;
+          })
+          .join("")
+      : '<div class="empty-state"><span>◆</span><b>Nenhum pagamento automático ainda</b><p>As confirmações do Mercado Pago aparecerão aqui.</p></div>';
+    return;
+  }
+  const accounts = recentCustomerAccounts().slice(0, 6);
+  feed.innerHTML = accounts.length
+    ? accounts
+        .map((account) => {
+          const status = effectiveStatus(account),
+            userId = escapeHtml(account.user_id),
+            name = escapeHtml(account.display_name || account.email || "Conta sem nome");
+          return `<article class="feed-item" data-manage-row="${userId}"><span class="feed-avatar">${escapeHtml(accountInitials(account))}</span><div class="feed-main"><b>${name}<em>Novo</em></b><small>${escapeHtml(account.email || "E-mail não informado")}</small></div><div class="feed-value"><b>${statusLabel(status)}</b><small>Criado em ${dateTimeLabel(account.created_at)}</small></div><button data-manage="${userId}" aria-label="Abrir perfil de ${name}">›</button></article>`;
+        })
+        .join("")
+    : '<div class="empty-state"><span>＋</span><b>Nenhum cadastro nos últimos 7 dias</b><p>Novos usuários aparecerão aqui automaticamente.</p></div>';
+}
+function renderPayments() {
+  const approvedThisMonth = approvedAutomaticPayments().filter((payment) =>
+      isCurrentMonth(payment.paidAt || payment.accessGrantedAt),
+    ),
+    pending = state.payments.filter(
+      (payment) => paymentStatusGroup(payment.status) === "pending",
+    ),
+    failed = state.payments.filter(
+      (payment) => paymentStatusGroup(payment.status) === "failed",
+    );
+  $("#paymentApprovedMonth").textContent = approvedThisMonth.length;
+  $("#paymentApprovedAmount").textContent = `${money(
+    approvedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0),
+  )} recebidos`;
+  $("#paymentPendingCount").textContent = pending.length;
+  $("#paymentFailedCount").textContent = failed.length;
+  document.querySelectorAll("[data-payment-filter]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.paymentFilter === state.paymentFilter),
+  );
+  const payments = state.payments
+    .filter(
+      (payment) =>
+        state.paymentFilter === "all" ||
+        paymentStatusGroup(payment.status) === state.paymentFilter,
+    )
+    .sort(
+      (first, second) =>
+        new Date(second.paidAt || second.updatedAt || second.createdAt) -
+        new Date(first.paidAt || first.updatedAt || first.createdAt),
+    );
+  $("#paymentList").innerHTML = payments.length
+    ? payments
+        .map((payment) => {
+          const account = paymentAccount(payment),
+            userId = escapeHtml(payment.userId),
+            name = escapeHtml(account?.display_name || account?.email || "Conta sem nome"),
+            group = paymentStatusGroup(payment.status),
+            when = payment.paidAt || payment.updatedAt || payment.createdAt;
+          return `<article class="payment-row ${group}" data-manage-row="${userId}"><span class="payment-state-icon">${group === "approved" ? "✓" : group === "pending" ? "◷" : "!"}</span><div class="payment-user"><b>${name}</b><small>${escapeHtml(account?.email || "E-mail não informado")}</small></div><div class="payment-description"><b>${escapeHtml(paymentPlanLabel(payment))}</b><small>${group === "approved" ? escapeHtml(paymentMethodLabel(payment)) : paymentStatusLabel(payment.status)} · ${dateTimeLabel(when)}</small></div><div class="payment-amount"><b>${money(payment.amount)}</b><span class="payment-status ${group}">${paymentStatusLabel(payment.status)}</span></div><button data-manage="${userId}" aria-label="Abrir cobrança de ${name}">›</button></article>`;
+        })
+        .join("")
+    : '<div class="empty-state"><span>◆</span><b>Nenhum pagamento neste filtro</b><p>Os pagamentos gerados pelo Mercado Pago aparecerão aqui.</p></div>';
+}
 function renderOverview() {
   renderStats();
   renderExpiryAlert();
+  renderOverviewFeed();
   const attention = customerAccounts()
     .filter(needsAttention)
     .sort((first, second) => {
@@ -390,13 +545,28 @@ function renderAccounts() {
       .filter((account) => {
         const status = effectiveStatus(account),
           lifetime = isLifetimeAccount(account),
+          recent = recentCustomerAccounts().some((item) => item.user_id === account.user_id),
+          automaticPaid = Boolean(latestApprovedPayment(account.user_id)),
           matchesFilter =
             state.filter === "all" ||
-            (state.filter === "lifetime" ? lifetime : state.filter === status),
+            (state.filter === "lifetime"
+              ? lifetime
+              : state.filter === "recent"
+                ? recent
+                : state.filter === "auto_paid"
+                  ? automaticPaid
+                  : state.filter === status),
           haystack = `${account.display_name || ""} ${account.email || ""} ${account.phone || ""}`.toLowerCase();
         return matchesFilter && haystack.includes(term);
       })
       .sort((first, second) => {
+        if (state.filter === "recent")
+          return new Date(second.created_at) - new Date(first.created_at);
+        if (state.filter === "auto_paid")
+          return (
+            new Date(latestApprovedPayment(second.user_id)?.paidAt || 0) -
+            new Date(latestApprovedPayment(first.user_id)?.paidAt || 0)
+          );
         const order = { pending: 0, expired: 1, blocked: 2, active: 3 };
         const difference = order[effectiveStatus(first)] - order[effectiveStatus(second)];
         if (difference) return difference;
@@ -413,13 +583,15 @@ function renderAccounts() {
         .map((account) => {
           const status = effectiveStatus(account),
             lifetime = isLifetimeAccount(account),
-            freeAccess = isFreeAccess(account);
+            freeAccess = isFreeAccess(account),
+            automaticPayment = latestApprovedPayment(account.user_id),
+            recent = recentCustomerAccounts().some((item) => item.user_id === account.user_id);
           const userId = escapeHtml(account.user_id),
             name = escapeHtml(account.display_name || "Conta sem nome"),
             email = escapeHtml(account.email || "E-mail não informado");
           return `<article class="account-row" data-manage-row="${userId}">
-            <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}</b><small>${email}</small></div></div>
-            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${accountPricingLabel(account)} · vence: ${accessDateLabel(account)}`}</small></div>
+            <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}${recent ? '<em class="new-tag">Novo</em>' : ""}</b><small>${email}</small></div></div>
+            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${automaticPayment ? `Pago por ${paymentMethodLabel(automaticPayment)}` : accountPricingLabel(account)} · vence: ${accessDateLabel(account)}`}</small></div>
             <div class="account-compact-status"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span></div>
             <div class="account-actions"><button data-manage="${userId}" aria-label="Abrir perfil e ações de ${name}" title="Abrir perfil">›</button></div>
           </article>`;
@@ -455,9 +627,11 @@ async function loadDashboard(notify = false) {
   state.accounts = result.accounts;
   state.settings = result.settings;
   state.log = result.log;
+  state.payments = result.payments || [];
   state.adminIds = result.adminIds || [];
   renderOverview();
   renderAccounts();
+  renderPayments();
   renderSettings();
   const informedExpiration = notifyAutomaticExpirations(result.expirySync);
   if (notify && !informedExpiration) toast("Painel atualizado.");
@@ -484,7 +658,12 @@ function setSection(section) {
     button.classList.toggle("active", button.dataset.section === section),
   );
   $("#sectionTitle").textContent =
-    ({ overview: "Visão geral", accounts: "Assinaturas", settings: "Configurações" })[
+    ({
+      overview: "Visão geral",
+      accounts: "Usuários",
+      payments: "Pagamentos",
+      settings: "Configurações",
+    })[
       section
     ];
   document.querySelector(".admin-app aside").classList.remove("open");
@@ -500,6 +679,67 @@ function closeModals() {
   document.querySelectorAll(".modal").forEach((modal) => (modal.hidden = true));
   $("#modalBackdrop").hidden = true;
   document.body.style.overflow = "";
+}
+function renderManagedBilling(account) {
+  const payments = paymentsForUser(account.user_id),
+    latest = latestApprovedPayment(account.user_id),
+    automatic = Boolean(latest),
+    lifetime = isLifetimeAccount(account),
+    free = isFreeAccess(account),
+    manuallyPaid =
+      !automatic &&
+      !lifetime &&
+      !free &&
+      effectiveStatus(account) === "active" &&
+      account.access_type === "paid";
+  const origin = automatic
+    ? "Mercado Pago automático"
+    : lifetime
+      ? "Colaborador vitalício"
+      : free
+        ? "Teste gratuito"
+        : manuallyPaid
+          ? "Liberação manual paga"
+          : "Sem pagamento confirmado";
+  $("#managePaymentOrigin").textContent = origin;
+  $("#managePaymentOrigin").className = `payment-origin-badge ${automatic ? "automatic" : manuallyPaid ? "manual" : free || lifetime ? "free" : "empty"}`;
+  $("#managePaymentMethod").textContent = latest
+    ? paymentMethodLabel(latest)
+    : manuallyPaid
+      ? "Informado manualmente"
+      : free
+        ? "Cortesia"
+        : lifetime
+          ? "Sem cobrança"
+          : "Ainda não pagou";
+  $("#managePaymentAmount").textContent = latest
+    ? money(latest.amount)
+    : manuallyPaid
+      ? money(account.access_amount)
+      : money(0);
+  $("#managePaymentPlan").textContent = latest
+    ? paymentPlanLabel(latest)
+    : lifetime
+      ? "Vitalício"
+      : free
+        ? "Teste gratuito"
+        : manuallyPaid
+          ? "Acesso liberado manualmente"
+          : "Nenhum plano pago";
+  $("#managePaymentDate").textContent = latest
+    ? dateTimeLabel(latest.paidAt || latest.accessGrantedAt)
+    : manuallyPaid
+      ? dateTimeLabel(account.approved_at)
+      : "Sem confirmação";
+  $("#managePaymentHistory").innerHTML = payments.length
+    ? `<div class="payment-history-title"><b>Histórico automático</b><small>Últimos pagamentos e tentativas</small></div>${payments
+        .slice(0, 5)
+        .map((payment) => {
+          const group = paymentStatusGroup(payment.status);
+          return `<article><span class="history-dot ${group}"></span><div><b>${paymentStatusLabel(payment.status)} · ${money(payment.amount)}</b><small>${escapeHtml(paymentPlanLabel(payment))} · ${dateTimeLabel(payment.paidAt || payment.updatedAt || payment.createdAt)}</small></div><em>${group === "approved" ? escapeHtml(paymentMethodLabel(payment)) : "Mercado Pago"}</em></article>`;
+        })
+        .join("")}`
+    : '<div class="payment-history-empty">Nenhuma tentativa automática registrada para esta conta.</div>';
 }
 function openManage(userId) {
   const account = state.accounts.find((item) => item.user_id === userId);
@@ -540,6 +780,7 @@ function openManage(userId) {
     "Não solicitou",
   );
   $("#manageCreatedAt").textContent = dateTimeLabel(account.created_at, "Data indisponível");
+  renderManagedBilling(account);
   $("#toggleBlock").textContent =
     status === "blocked" ? "↻ Reabrir solicitação" : "⊘ Bloquear acesso";
   $("#toggleBlock").classList.toggle("restore", status === "blocked");
@@ -924,7 +1165,10 @@ async function installAdmin() {
 function applyTheme(dark) {
   document.body.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
-  $("#themeToggle").textContent = dark ? "☀" : "☾";
+  [$("#themeToggle"), $("#authThemeToggle")].filter(Boolean).forEach((button) => {
+    button.textContent = dark ? "☀" : "☾";
+    button.title = dark ? "Usar tema claro" : "Usar tema escuro";
+  });
   document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1713" : "#075b43";
   localStorage.setItem("credmais_admin_theme", dark ? "dark" : "light");
 }
@@ -960,6 +1204,22 @@ document.querySelectorAll("[data-charge-part]").forEach((input) =>
 );
 $("#settingsForm").addEventListener("submit", saveSettings);
 $("#refreshAccounts").onclick = () => loading($("#refreshAccounts"), () => loadDashboard(true));
+$("#refreshPayments").onclick = () => loading($("#refreshPayments"), () => loadDashboard(true));
+$("#headerRefresh").onclick = () => loading($("#headerRefresh"), () => loadDashboard(true));
+$("#openCurrentFeed").onclick = () => {
+  if (state.overviewFeed === "paid") {
+    state.paymentFilter = "approved";
+    renderPayments();
+    setSection("payments");
+    return;
+  }
+  state.filter = "recent";
+  document.querySelectorAll("[data-filter]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.filter === "recent"),
+  );
+  renderAccounts();
+  setSection("accounts");
+};
 $("#openExpiredAccounts").onclick = () => {
   state.filter = "expired";
   document.querySelectorAll("[data-filter]").forEach((button) =>
@@ -998,6 +1258,7 @@ $("#manageGrantAmount").addEventListener("input", maskMoney);
   input.addEventListener("input", (event) => (event.target.value = formatPhone(event.target.value))),
 );
 $("#themeToggle").onclick = () => applyTheme(!document.body.classList.contains("dark"));
+$("#authThemeToggle").onclick = () => applyTheme(!document.body.classList.contains("dark"));
 $("#installAdmin").onclick = installAdmin;
 $("#menuButton").onclick = () => document.querySelector(".admin-app aside").classList.toggle("open");
 $("#modalBackdrop").onclick = closeModals;
@@ -1013,6 +1274,14 @@ document.addEventListener("click", (event) => {
         item.classList.toggle("active", item === button),
       );
       renderAccounts();
+    }
+    if (button.dataset.overviewFeed) {
+      state.overviewFeed = button.dataset.overviewFeed;
+      renderOverviewFeed();
+    }
+    if (button.dataset.paymentFilter) {
+      state.paymentFilter = button.dataset.paymentFilter;
+      renderPayments();
     }
     if (button.dataset.manage) openManage(button.dataset.manage);
     if (button.dataset.charge) openCharge(button.dataset.charge);
