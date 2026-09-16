@@ -1,6 +1,6 @@
 import { handleBillingRequest } from "./mercado-pago.js";
 
-const APP_VERSION = "2026.09.16.2";
+const APP_VERSION = "2026.09.16.3";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",

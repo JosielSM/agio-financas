@@ -62,7 +62,7 @@
             <div class="form-grid">
               <label>Fase para novas contas<select id="pricingPhase"><option value="launch">Lançamento — R$ 39,90</option><option value="standard">Preço normal — valor configurado</option></select><small>Ao ativar o preço normal, os primeiros usuários continuam com R$ 39,90.</small></label>
               <label>Preço normal futuro<input id="standardMonthlyFee" inputmode="decimal" required><small>Inicialmente R$ 59,90. Pode ser ajustado antes de ativar.</small></label>
-              <label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15"><small>Usado somente para suporte e contato, nunca para confirmar pagamentos.</small></label>
+              <label>WhatsApp de suporte<input id="supportPhone" inputmode="tel" maxlength="15" placeholder="(00) 00000-0000"><small>Abre uma conversa direta pelos botões de suporte do aplicativo e dos planos, sem mensagem automática.</small></label>
               <label class="full">Modelo do lembrete<textarea id="billingMessage" rows="9" required></textarea><small>Use: {nome}, {valor} e {vencimento}. O pagamento será feito somente pelo checkout automático.</small></label>
             </div>
             <p class="policy-warning" id="pricingPhaseWarning">O CredMais está em lançamento. Mudar para o preço normal afeta somente novas contas e usuários no valor global.</p>

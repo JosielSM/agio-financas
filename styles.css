@@ -410,6 +410,46 @@ button {
   margin-bottom: 0 !important;
   font-size: 10px !important;
 }
+.platform-support-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, #1eaa65 45%, var(--line));
+  border-radius: 11px;
+  background: color-mix(in srgb, #1eaa65 9%, var(--surface));
+  color: #14814c;
+  text-align: left;
+}
+.platform-support-button > span:first-child {
+  font-size: 19px;
+}
+.platform-support-button > span:last-child {
+  display: grid;
+  gap: 1px;
+}
+.platform-support-button b {
+  font-size: 12px;
+}
+.platform-support-button small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.platform-support-button:hover {
+  border-color: #1eaa65;
+  background: #1eaa65;
+  color: #fff;
+}
+.platform-support-button:hover small {
+  color: #eafff3;
+}
+.platform-support-button.is-unavailable {
+  filter: grayscale(.45);
+  opacity: .65;
+}
 .subscription-banner {
   position: relative;
   z-index: 6;
@@ -950,8 +990,16 @@ textarea {
 }
 .sidebar-bottom {
   margin-top: auto;
+  display: grid;
+  gap: 5px;
   border-top: 1px solid var(--line);
   padding-top: 15px;
+}
+.support-link {
+  color: #168452;
+}
+.support-link i {
+  color: #1eaa65;
 }
 .report-link {
   color: #26715a;

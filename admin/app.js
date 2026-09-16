@@ -878,15 +878,18 @@ async function saveSettings(event) {
   await loading(button, async () => {
     try {
       const standardMonthlyFee = readMoneyInput($("#standardMonthlyFee")),
-        pricingPhase = $("#pricingPhase").value;
+        pricingPhase = $("#pricingPhase").value,
+        supportPhone = formatPhone($("#supportPhone").value);
       if (!Number.isFinite(standardMonthlyFee) || standardMonthlyFee < 39.9)
         throw new Error("O preço normal deve ser igual ou maior que R$ 39,90.");
       if (!["launch", "standard"].includes(pricingPhase))
         throw new Error("Escolha uma fase de preço válida.");
+      if (supportPhone && ![10, 11].includes(digits(supportPhone).length))
+        throw new Error("Informe um WhatsApp de suporte válido com DDD.");
       state.settings = await bridge.savePlatformSettings({
         standardMonthlyFee,
         pricingPhase,
-        supportPhone: formatPhone($("#supportPhone").value),
+        supportPhone,
         billingMessage: $("#billingMessage").value.trim(),
       });
       renderSettings();

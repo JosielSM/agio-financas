@@ -1090,6 +1090,26 @@ function whatsappDestination(value) {
     return number;
   return "";
 }
+function platformSupportNumber(access = state.platformAccess) {
+  return whatsappDestination(access?.supportPhone || "");
+}
+function renderPlatformSupport(access = state.platformAccess) {
+  const available = Boolean(platformSupportNumber(access));
+  document.querySelectorAll("[data-platform-support]").forEach((button) => {
+    button.classList.toggle("is-unavailable", !available);
+    button.setAttribute("aria-disabled", String(!available));
+    button.title = available
+      ? "Falar com o suporte pelo WhatsApp"
+      : "WhatsApp de suporte aguardando configuração";
+  });
+}
+function openPlatformSupport() {
+  const phone = platformSupportNumber();
+  if (!phone)
+    return toast("O WhatsApp de suporte ainda não foi configurado.");
+  $(".sidebar").classList.remove("open");
+  window.open(`https://wa.me/${phone}`, "_blank", "noopener");
+}
 const PLATFORM_MUTATION_SELECTOR = [
   ".add-loan",
   "#addClientBtn",
@@ -1252,6 +1272,7 @@ async function resolvePlatformAccess() {
 }
 function showOfflineMode(access = offlinePlatformAccess()) {
   state.platformAccess = { ...access, enabled: true, offline: true };
+  renderPlatformSupport(state.platformAccess);
   $("#authView").hidden = true;
   $("#appView").hidden = false;
   $("#accessView").hidden = true;
@@ -1271,6 +1292,7 @@ function showAccessGate(access, { openPrompt = true } = {}) {
     return;
   }
   state.platformAccess = access;
+  renderPlatformSupport(access);
   $("#authView").hidden = true;
   $("#appView").hidden = false;
   const offlineBanner = $("#offlineBanner");
@@ -1544,6 +1566,7 @@ async function showApp(resolvedAccess = null) {
   const access = resolvedAccess || (await resolvePlatformAccess()),
     writeAllowed = platformAccessAllowed(access);
   state.platformAccess = access;
+  renderPlatformSupport(access);
   if (window.credmaisBridge?.enabled) {
     const cacheOwner = localStorage.getItem("credmais_cache_owner"),
       ownsCache = cacheOwner === state.user.id;
@@ -1676,6 +1699,7 @@ async function refreshFromCloud({ notify = false } = {}) {
       return false;
     }
     state.platformAccess = access;
+    renderPlatformSupport(access);
     renderTrialBanner(access);
     $("#accessView").hidden = true;
     const offlineBanner = $("#offlineBanner");
@@ -3856,6 +3880,9 @@ $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#pixBtn").onclick = openPix;
 $("#profileBtn").onclick = openProfile;
 $("#monthlyReportBtn").onclick = openMonthlyReport;
+document
+  .querySelectorAll("[data-platform-support]")
+  .forEach((button) => (button.onclick = openPlatformSupport));
 $("#profileGoogleButton").onclick = linkProfileGoogle;
 $("#profileSecurityButton").onclick = () => {
   closeModals();

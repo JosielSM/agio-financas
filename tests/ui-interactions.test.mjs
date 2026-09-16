@@ -34,7 +34,7 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v28/);
+  assert.match(serviceWorker, /credmais-shell-v29/);
 });
 
 test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {
@@ -63,13 +63,15 @@ test("the payment dialog keeps only payment choices and non-overlapping controls
   assert.match(app, /\[\$\("#headerTheme"\), \$\("#authTheme"\), \$\("#accessTheme"\)\]/);
 });
 
-test("the sidebar keeps only the monthly report account action", async () => {
+test("the sidebar keeps the report and direct WhatsApp support actions", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
   const sidebarBottom =
     html.match(/<div class="sidebar-bottom">[\s\S]*?<\/div><\/aside>/)?.[0] ||
     "";
 
   assert.match(sidebarBottom, /id="monthlyReportBtn"/);
+  assert.match(sidebarBottom, /id="sidebarSupportButton"/);
+  assert.match(sidebarBottom, /data-platform-support/);
   assert.doesNotMatch(sidebarBottom, /Senha e segurança|Instalar app|>\s*Sair\s*</);
   assert.doesNotMatch(
     sidebarBottom,
@@ -80,4 +82,24 @@ test("the sidebar keeps only the monthly report account action", async () => {
   assert.match(html, /id="profileLogoutButton"/);
   assert.match(app, /async function signOutCurrentUser\(\)/);
   assert.doesNotMatch(app, /#securityBtn|#installAppBtn|#logoutBtn/);
+});
+
+test("support opens the configured WhatsApp without a prefilled message", async () => {
+  const [html, app, adminHtml, adminApp] = await Promise.all([
+    read("index.html"),
+    read("app.js"),
+    read("admin/index.html"),
+    read("admin/app.js"),
+  ]);
+  const supportHandler =
+    app.match(/function openPlatformSupport\(\)\s*\{[\s\S]*?\n\}/)?.[0] || "";
+
+  assert.match(html, /id="paymentSupportButton"[^>]+data-platform-support/);
+  assert.match(html, /id="sidebarSupportButton"[^>]+data-platform-support/);
+  assert.match(app, /access\?\.supportPhone/);
+  assert.match(supportHandler, /https:\/\/wa\.me\/\$\{phone\}/);
+  assert.doesNotMatch(supportHandler, /\?text=|encodeURIComponent/);
+  assert.match(adminHtml, /id="supportPhone"/);
+  assert.match(adminHtml, /sem mensagem automática/i);
+  assert.match(adminApp, /WhatsApp de suporte válido com DDD/);
 });
