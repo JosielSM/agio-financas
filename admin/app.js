@@ -543,6 +543,11 @@ function openManage(userId) {
   $("#toggleBlock").textContent =
     status === "blocked" ? "↻ Reabrir solicitação" : "⊘ Bloquear acesso";
   $("#toggleBlock").classList.toggle("restore", status === "blocked");
+  const protectedAdminAccount = state.adminIds.includes(account.user_id);
+  $("#resetPlatformAccess").disabled = protectedAdminAccount;
+  $("#resetPlatformAccess").title = protectedAdminAccount
+    ? "A conta proprietária do painel não pode ter o acesso resetado."
+    : "Zerar somente o plano e a validade desta conta";
   $("#chargeAccount").disabled = lifetime;
   $("#chargeAccount").title = lifetime
     ? "Colaboradores vitalícios não possuem cobrança mensal."
@@ -691,6 +696,43 @@ async function toggleBlock() {
       toast(nextStatus === "blocked" ? "Acesso bloqueado." : "Solicitação reaberta.");
     } catch (error) {
       feedback("manageFeedback", error.message || "Não foi possível alterar o acesso.", "error");
+    }
+  });
+}
+async function resetPlatformAccess() {
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId);
+  if (!account) return toast("Esta conta não foi encontrada.");
+  if (state.adminIds.includes(account.user_id))
+    return feedback(
+      "manageFeedback",
+      "A conta proprietária do painel não pode ter o acesso resetado.",
+      "error",
+    );
+
+  const accountName = account.display_name || account.email || "este usuário";
+  const confirmed = window.confirm(
+    `Resetar o plano de ${accountName}?\n\n` +
+      "A conta ficará sem plano e sem data de validade. Clientes, empréstimos, histórico e preço especial serão preservados.\n\n" +
+      "Cobranças pendentes serão invalidadas. Esta ação não estorna pagamentos já realizados.",
+  );
+  if (!confirmed) {
+    feedback("manageFeedback", "Reset cancelado. Nenhum dado foi alterado.");
+    return;
+  }
+
+  feedback("manageFeedback");
+  await loading($("#resetPlatformAccess"), async () => {
+    try {
+      await bridge.resetPlatformAccess(account.user_id);
+      closeModals();
+      await loadDashboard();
+      toast("Plano resetado. A conta agora está sem validade e pronta para um novo teste.");
+    } catch (error) {
+      feedback(
+        "manageFeedback",
+        error.message || "Não foi possível resetar o plano.",
+        "error",
+      );
     }
   });
 }
@@ -900,6 +942,7 @@ document.querySelectorAll('[name="managePricing"]').forEach((input) =>
   input.addEventListener("change", () => syncPricingMode(true)),
 );
 $("#toggleBlock").onclick = toggleBlock;
+$("#resetPlatformAccess").onclick = resetPlatformAccess;
 $("#chargeAccount").onclick = () => openCharge(state.managedUserId);
 $("#copyUserEmail").onclick = () => copyManagedContact("email");
 $("#copyUserPhone").onclick = () => copyManagedContact("phone");

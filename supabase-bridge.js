@@ -364,6 +364,14 @@
       if (error) throw error;
       return data;
     },
+    async resetPlatformAccess(userId) {
+      const { data, error } = await client.rpc(
+        "admin_reset_platform_access_v1",
+        { p_user_id: userId },
+      );
+      if (error) throw accessError(error);
+      return data;
+    },
     async updatePlatformAccount(userId, values) {
       // v3 distingue preço global, lançamento protegido e desconto especial.
       const { data, error } = await client.rpc(

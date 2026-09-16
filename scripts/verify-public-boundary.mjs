@@ -69,4 +69,13 @@ assert.ok(
   "An unauthenticated request created a platform account",
 );
 
+const resetAccess = await api("rpc/admin_reset_platform_access_v1", {
+  method: "POST",
+  body: JSON.stringify({ p_user_id: "unauthenticated-security-probe" }),
+});
+assert.ok(
+  resetAccess.status >= 400,
+  "An unauthenticated request reset a platform subscription",
+);
+
 console.log("CredMais: fronteira pública do Supabase validada.");
