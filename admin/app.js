@@ -171,10 +171,12 @@ async function authorize() {
     }
     $("#authView").hidden = false;
     $("#adminView").hidden = true;
+    $("#authThemeToggle").hidden = false;
     setAuthView("activation");
   } catch (error) {
     $("#authView").hidden = false;
     $("#adminView").hidden = true;
+    $("#authThemeToggle").hidden = false;
     feedback("loginFeedback", error.message || "Não foi possível validar o administrador.", "error");
     setAuthView("login");
   }
@@ -648,6 +650,14 @@ async function showDashboard() {
   $("#ownerInitial").textContent = (state.user?.name || "A")[0].toUpperCase();
   $("#authView").hidden = true;
   $("#adminView").hidden = false;
+  $("#authThemeToggle").hidden = true;
+}
+function setActivityMenu(open) {
+  const menu = $("#activityMenu"),
+    button = $("#activityMenuButton");
+  menu.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
+  if (open) menu.scrollTop = 0;
 }
 function setSection(section) {
   state.section = section;
@@ -666,6 +676,7 @@ function setSection(section) {
     })[
       section
     ];
+  setActivityMenu(false);
   document.querySelector(".admin-app aside").classList.remove("open");
 }
 function openModal(id) {
@@ -1259,6 +1270,9 @@ $("#manageGrantAmount").addEventListener("input", maskMoney);
 );
 $("#themeToggle").onclick = () => applyTheme(!document.body.classList.contains("dark"));
 $("#authThemeToggle").onclick = () => applyTheme(!document.body.classList.contains("dark"));
+$("#activityMenuButton").onclick = () =>
+  setActivityMenu($("#activityMenu").hidden);
+$("#activityMenuClose").onclick = () => setActivityMenu(false);
 $("#installAdmin").onclick = installAdmin;
 $("#menuButton").onclick = () => document.querySelector(".admin-app aside").classList.toggle("open");
 $("#modalBackdrop").onclick = closeModals;
@@ -1289,6 +1303,13 @@ document.addEventListener("click", (event) => {
   }
   const accountRow = event.target.closest("[data-manage-row]");
   if (accountRow && !button) openManage(accountRow.dataset.manageRow);
+  const activityMenu = $("#activityMenu");
+  if (
+    !activityMenu.hidden &&
+    !activityMenu.contains(event.target) &&
+    !$("#activityMenuButton").contains(event.target)
+  )
+    setActivityMenu(false);
   const aside = document.querySelector(".admin-app aside");
   if (aside?.classList.contains("open") && !aside.contains(event.target) && !$("#menuButton").contains(event.target))
     aside.classList.remove("open");
@@ -1296,6 +1317,7 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeModals();
+    setActivityMenu(false);
     document.querySelector(".admin-app aside")?.classList.remove("open");
   }
 });

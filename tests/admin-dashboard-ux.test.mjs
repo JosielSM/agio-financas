@@ -26,6 +26,15 @@ test("admin dashboard prioritizes new users and automatic payments", async () =>
   assert.match(styles, /\.admin-topbar\{position:sticky/);
   assert.match(styles, /\.bottom-nav\{grid-template-columns:repeat\(4,1fr\)\}/);
   assert.match(styles, /@media\(max-width:720px\)/);
+  assert.match(html, /id="activityMenuButton"/);
+  assert.match(html, /id="activityMenu"[^>]+hidden/);
+  assert.match(app, /function setActivityMenu\(open\)/);
+  assert.match(app, /\$\("#authThemeToggle"\)\.hidden = true/);
+  assert.match(
+    styles,
+    /@media\(max-width:720px\)\{\.dashboard-stats\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/,
+  );
+  assert.match(styles, /\.activity-popover\{position:absolute/);
 });
 
 test("user profile explains billing status and payment origin", async () => {
