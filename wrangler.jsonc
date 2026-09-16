@@ -12,7 +12,7 @@
   "vars": {
     "APP_KIND": "main",
     "APP_ORIGIN": "https://agio-financas.santosjosiel2003.workers.dev",
-    "MERCADO_PAGO_ENV": "sandbox",
+    "MERCADO_PAGO_ENV": "production",
     "SUPABASE_URL": "https://umnmabuvldkfopfyzwbw.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_R7DrN0yYGXWas1x0oNt1sQ_umbK685G"
   },
