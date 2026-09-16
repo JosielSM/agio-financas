@@ -27,12 +27,18 @@ function isProduction(env) {
   return String(env.MERCADO_PAGO_ENV || "sandbox").toLowerCase() === "production";
 }
 
+function validMercadoAccessToken(env) {
+  const token = String(env.MERCADO_PAGO_ACCESS_TOKEN || "").trim();
+  if (!/^[\x21-\x7e]{10,}$/.test(token)) return false;
+  return isProduction(env) ? token.startsWith("APP_USR-") : token.startsWith("TEST-");
+}
+
 function billingConfigured(env) {
   return Boolean(
     env.SUPABASE_URL &&
       env.SUPABASE_PUBLISHABLE_KEY &&
       env.SUPABASE_SERVICE_ROLE_KEY &&
-      env.MERCADO_PAGO_ACCESS_TOKEN &&
+      validMercadoAccessToken(env) &&
       env.MERCADO_PAGO_WEBHOOK_SECRET &&
       env.APP_ORIGIN,
   );
@@ -100,7 +106,13 @@ async function supabaseRpc(env, functionName, body, options = {}) {
       body: JSON.stringify(body || {}),
     },
   );
-  const responseBody = await response.json().catch(() => null);
+  const responseText = await response.text();
+  let responseBody = null;
+  try {
+    responseBody = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    responseBody = null;
+  }
   if (!response.ok) {
     console.error(
       JSON.stringify({
@@ -136,16 +148,56 @@ async function mercadoRequest(env, pathname, options = {}) {
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  const responseBody = await response.json().catch(() => null);
+  const responseText = await response.text();
+  let responseBody = null;
+  try {
+    responseBody = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    responseBody = null;
+  }
   if (!response.ok) {
+    const causes = Array.isArray(responseBody?.cause)
+      ? responseBody.cause
+          .map((cause) => String(cause?.code || cause?.description || "").slice(0, 120))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+    const providerError = String(
+      responseBody?.error || responseBody?.code || causes[0] || "UNKNOWN",
+    ).slice(0, 120);
+    const providerMessage = String(responseBody?.message || responseText || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .slice(0, 240);
     console.error(
       JSON.stringify({
         message: "mercado_pago_request_failed",
         path: pathname,
         status: response.status,
-        cause: responseBody?.cause?.[0]?.code || responseBody?.error || "UNKNOWN",
+        providerError,
+        providerMessage,
+        causes,
+        providerContentType: String(response.headers.get("content-type") || "").slice(0, 80),
+        providerRequestId: String(
+          response.headers.get("x-request-id") ||
+            response.headers.get("x-correlation-id") ||
+            "",
+        ).slice(0, 120),
       }),
     );
+    if (response.status === 401) {
+      throw new HttpError(
+        503,
+        "MERCADO_PAGO_INVALID_CREDENTIAL",
+        "A credencial de produção do Mercado Pago precisa ser atualizada pelo administrador.",
+      );
+    }
+    if (response.status === 403) {
+      throw new HttpError(
+        503,
+        "MERCADO_PAGO_NOT_AUTHORIZED",
+        "O Mercado Pago ainda não autorizou esta aplicação a criar cobranças reais. O administrador já foi informado.",
+      );
+    }
     throw new HttpError(
       response.status >= 500 ? 503 : 400,
       "MERCADO_PAGO_ERROR",

@@ -34,9 +34,11 @@
   </main>
 
   <main id="accessView" class="access-shell" hidden role="dialog" aria-modal="true" aria-labelledby="accessTitle">
-    <button class="auth-theme-toggle" id="accessTheme" type="button" aria-label="Alternar tema">☾</button>
     <section class="access-card">
-      <button class="access-dismiss" id="accessDismiss" type="button" aria-label="Continuar apenas visualizando">×</button>
+      <div class="access-card-tools">
+        <button class="access-theme-toggle" id="accessTheme" type="button" aria-label="Alternar tema"><span class="theme-icon">☾</span></button>
+        <button class="access-dismiss" id="accessDismiss" type="button" aria-label="Fechar planos">×</button>
+      </div>
       <div class="access-brand"><span class="brand-mark">C</span><strong>CredMais</strong></div>
       <span class="access-status" id="accessStatus">AGUARDANDO LIBERAÇÃO</span>
       <div class="access-icon" id="accessIcon">◷</div>
@@ -57,12 +59,6 @@
         <p class="form-feedback" id="automaticPaymentFeedback" aria-live="polite"></p>
         <small class="automatic-payment-security">🔒 O CredMais não recebe nem armazena os dados do seu cartão.</small>
       </section>
-      <form id="accessRequestForm">
-        <label>Seu WhatsApp para contato<input id="accessPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="15" placeholder="(00) 00000-0000" required></label>
-        <p class="form-feedback" id="accessFeedback" aria-live="polite"></p>
-        <button class="primary" id="accessRequestButton" type="submit">Solicitar liberação</button>
-      </form>
-      <div class="access-actions"><button class="primary" id="accessContinue" type="button">Continuar visualizando</button><button class="outline" id="accessRefresh" type="button">Atualizar situação</button><button class="text-button" id="accessLogout" type="button">Sair da conta</button></div>
       <p class="access-security">Seus dados permanecem protegidos e não são apagados quando uma mensalidade vence.</p>
     </section>
   </main>

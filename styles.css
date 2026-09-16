@@ -124,16 +124,33 @@ button {
   box-shadow: 0 24px 70px #09261a1a;
   text-align: center;
 }
-.access-dismiss {
+.access-card-tools {
   position: absolute;
   top: 14px;
   right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.access-dismiss,
+.access-theme-toggle {
   width: 36px;
   height: 36px;
+  display: grid;
+  place-items: center;
   border-radius: 10px;
   background: var(--bg);
   color: var(--muted);
   font-size: 20px;
+}
+.access-theme-toggle {
+  color: var(--brand);
+  font-size: 16px;
+}
+.access-dismiss:hover,
+.access-theme-toggle:hover {
+  background: var(--soft);
+  color: var(--brand);
 }
 .access-brand {
   display: flex;
@@ -388,27 +405,6 @@ button {
 }
 .dark .subscription-pay-button {
   color: #8ccaff;
-}
-.access-card form {
-  display: grid;
-  gap: 11px;
-  text-align: left;
-}
-.access-card form .primary {
-  width: 100%;
-  min-height: 46px;
-}
-.access-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
-}
-.access-actions .primary {
-  grid-column: 1 / -1;
-}
-.access-actions button {
-  min-height: 42px;
 }
 .access-security {
   margin-bottom: 0 !important;
@@ -1873,12 +1869,6 @@ body.dark {
   .access-card {
     padding: 25px 19px;
     border-radius: 18px;
-  }
-  .access-actions {
-    grid-template-columns: 1fr;
-  }
-  .access-actions .primary {
-    grid-column: auto;
   }
   .payment-plan-list {
     grid-template-columns: repeat(3, 1fr);

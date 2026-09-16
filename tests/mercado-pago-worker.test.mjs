@@ -31,6 +31,20 @@ test("billing configuration never exposes payment secrets", async () => {
   assert.doesNotMatch(JSON.stringify(body), /access-token|service-role|webhook-secret/);
 });
 
+test("billing stays disabled when the Mercado Pago token is masked", async () => {
+  const response = await handleRequest(
+    new Request("https://credmais.test/api/billing/config"),
+    environment({
+      MERCADO_PAGO_ENV: "production",
+      MERCADO_PAGO_ACCESS_TOKEN: "••••••••••••••••••••",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.enabled, false);
+});
+
 test("checkout requires an authenticated Firebase session", async () => {
   const response = await handleRequest(
     new Request("https://credmais.test/api/billing/checkout", {
@@ -64,6 +78,66 @@ test("checkout rejects a manipulated plan before contacting providers", async (t
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error, "INVALID_PLAN");
   assert.equal(fetchCalls, 0);
+});
+
+test("checkout reports a production credential refused by Mercado Pago", async (t) => {
+  const originalConsoleError = console.error;
+  const logs = [];
+  console.error = (message) => logs.push(String(message));
+  t.after(() => {
+    console.error = originalConsoleError;
+  });
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const target = String(url);
+    if (target.includes("/rpc/create_platform_payment_order_v1")) {
+      return Response.json({
+        orderId: "9a81d30e-1963-4adc-a2f9-f9d80e4c5151",
+        requestKey: "checkout-request-key",
+        planMonths: 1,
+        amount: 39.9,
+        email: "cliente@example.test",
+        name: "Cliente",
+        processing: false,
+        checkoutUrl: "",
+      });
+    }
+    if (target.endsWith("/checkout/preferences")) {
+      return Response.json(
+        {
+          error: "forbidden",
+          message: "Unauthorized result from policies",
+          cause: [{ code: "PA_UNAUTHORIZED_RESULT_FROM_POLICIES" }],
+        },
+        { status: 403 },
+      );
+    }
+    if (target.includes("/rpc/system_mark_mercado_checkout_error_v1")) {
+      return Response.json({ ok: true });
+    }
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  });
+
+  const response = await handleRequest(
+    new Request("https://credmais.test/api/billing/checkout", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer firebase-id-token-long-enough",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ months: 1, mode: "one_time" }),
+    }),
+    environment({
+      MERCADO_PAGO_ENV: "production",
+      MERCADO_PAGO_ACCESS_TOKEN: "APP_USR-access-token-for-tests",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error, "MERCADO_PAGO_NOT_AUTHORIZED");
+  assert.match(body.message, /não autorizou esta aplicação/i);
+  assert.ok(logs.some((entry) => entry.includes("PA_UNAUTHORIZED_RESULT_FROM_POLICIES")));
+  assert.ok(logs.every((entry) => !entry.includes("TEST-access-token")));
 });
 
 test("webhook rejects an invalid Mercado Pago signature", async (t) => {

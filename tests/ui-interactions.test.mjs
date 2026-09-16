@@ -34,7 +34,33 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v27/);
+  assert.match(serviceWorker, /credmais-shell-v28/);
+});
+
+test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {
+  const [html, app, css] = await Promise.all([
+    read("index.html"),
+    read("app.js"),
+    read("styles.css"),
+  ]);
+  const accessView =
+    html.match(/<main id="accessView"[\s\S]*?<div id="appView"/)?.[0] || "";
+
+  assert.match(accessView, /class="access-card-tools"/);
+  assert.match(accessView, /id="accessTheme"/);
+  assert.match(accessView, /id="accessDismiss"/);
+  assert.match(accessView, /id="automaticPaymentButton"/);
+  assert.match(accessView, /id="automaticSubscriptionButton"/);
+  assert.doesNotMatch(
+    accessView,
+    /accessRequestForm|accessPhone|accessRequestButton|accessContinue|accessRefresh|accessLogout/,
+  );
+  assert.doesNotMatch(
+    app,
+    /#accessRequestForm|#accessPhone|#accessRequestButton|#accessContinue|#accessRefresh|#accessLogout/,
+  );
+  assert.match(css, /\.access-card-tools\s*\{[\s\S]*?display:\s*flex/);
+  assert.match(app, /\[\$\("#headerTheme"\), \$\("#authTheme"\), \$\("#accessTheme"\)\]/);
 });
 
 test("the sidebar keeps only the monthly report account action", async () => {

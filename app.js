@@ -1145,7 +1145,6 @@ function accessContent(access) {
         title: "Aproveite seus 15 dias gratuitos",
         message:
           "Todas as funções estão disponíveis. Você pode assinar agora e o período pago começará depois do fim do teste.",
-        button: "Teste já liberado",
       },
     };
   }
@@ -1158,7 +1157,6 @@ function accessContent(access) {
         title: "Seus 15 dias gratuitos terminaram",
         message:
           "Seus dados continuam protegidos e disponíveis para consulta. Escolha um plano para voltar a cadastrar e alterar informações.",
-        button: "Solicitar ajuda",
       },
     };
   }
@@ -1172,7 +1170,6 @@ function accessContent(access) {
           title: "Sua solicitação está pendente",
           message:
             "Você pode conhecer toda a plataforma. Para cadastrar, cobrar ou alterar dados, aguarde a liberação do administrador.",
-          button: "Reenviar solicitação",
         },
         expired: {
           badge: "BLOQUEADO POR PAGAMENTO VENCIDO",
@@ -1180,7 +1177,6 @@ function accessContent(access) {
           title: "Seu acesso foi bloqueado automaticamente",
           message:
             "A mensalidade venceu. Seus dados continuam visíveis, mas nenhuma alteração é permitida até a renovação do acesso.",
-          button: "Solicitar renovação",
         },
         blocked: {
           badge: "AÇÕES BLOQUEADAS",
@@ -1188,7 +1184,6 @@ function accessContent(access) {
           title: "Esta conta está em modo de visualização",
           message:
             "Você pode navegar pelo CredMais, mas precisa regularizar o acesso antes de realizar qualquer operação.",
-          button: "Avisar que quero regularizar",
         },
       }[status] || {
         badge: "LIBERAÇÃO NECESSÁRIA",
@@ -1196,7 +1191,6 @@ function accessContent(access) {
         title: "Conheça o CredMais",
         message:
           "Navegue normalmente pela plataforma e solicite a liberação quando quiser começar a usar as funcionalidades.",
-        button: "Solicitar liberação",
       },
   };
 }
@@ -1289,9 +1283,6 @@ function showAccessGate(access, { openPrompt = true } = {}) {
   $("#accessIcon").textContent = content.icon;
   $("#accessTitle").textContent = content.title;
   $("#accessMessage").textContent = content.message;
-  $("#accessRequestButton").textContent = content.button;
-  $("#accessRequestForm").hidden = activeFreeTrial(access);
-  $("#accessPhone").value = formatPhone(access?.phone || "");
   $("#accessPriceLabel").textContent =
     access?.accessType === "free" ? "Preço depois do teste" : "Mensalidade informada";
   $("#accessMonthlyFee").textContent = money(
@@ -1307,15 +1298,9 @@ function showAccessGate(access, { openPrompt = true } = {}) {
   $("#subscriptionBannerFee").textContent = money(
     access?.monthlyFee ?? access?.defaultMonthlyFee ?? 0,
   );
-  $("#subscriptionRequestButton").textContent = content.button;
+  $("#subscriptionRequestButton").textContent = "Ver planos";
   applyPlatformRestrictions();
   if (openPrompt) requestAnimationFrame(() => $("#accessDismiss").focus());
-  setFeedback(
-    "accessFeedback",
-    access?.offline
-      ? "Sem conexão. Exibindo a última situação salva neste aparelho."
-      : "",
-  );
 }
 function renderTrialBanner(access = state.platformAccess) {
   const banner = $("#trialBanner");
@@ -1513,7 +1498,7 @@ async function handleBillingReturn() {
   }
   setFeedback(
     "automaticPaymentFeedback",
-    "A confirmação ainda está pendente. Use “Atualizar situação” em alguns instantes; não pague novamente.",
+    "A confirmação ainda está pendente e será verificada automaticamente. Não pague novamente.",
   );
 }
 function dismissAccessPrompt() {
@@ -1521,48 +1506,8 @@ function dismissAccessPrompt() {
   state.accessPromptDismissed = true;
   toast("Modo de visualização ativo. Use o aviso no topo para solicitar acesso.");
 }
-async function requestPlatformAccess(event) {
-  event.preventDefault();
-  const form = event.currentTarget,
-    phone = formatPhone($("#accessPhone").value);
-  if (digits(phone).length < 10)
-    return setFeedback(
-      "accessFeedback",
-      "Informe um WhatsApp válido para o administrador falar com você.",
-      "error",
-    );
-  if (!beginSubmission(form, "platform-access")) return;
-  setFeedback("accessFeedback", "Enviando sua solicitação...");
-  try {
-    const access = await window.credmaisBridge.requestPlatformAccess(
-      state.user,
-      phone,
-    );
-    localStorage.setItem(
-      platformAccessStorageKey(state.user.id),
-      JSON.stringify(access),
-    );
-    showAccessGate(access);
-    setFeedback(
-      "accessFeedback",
-      "Solicitação enviada. Use “Atualizar situação” após a liberação.",
-      "success",
-    );
-  } catch (error) {
-    toast(error.message || "Não foi possível solicitar a liberação.");
-    setFeedback(
-      "accessFeedback",
-      error.message || "Não foi possível solicitar a liberação.",
-      "error",
-    );
-  } finally {
-    endSubmission(form, "platform-access");
-  }
-}
 async function refreshPlatformAccess() {
-  const buttons = [$("#accessRefresh"), $("#subscriptionRefreshButton")].filter(
-    Boolean,
-  );
+  const buttons = [$("#subscriptionRefreshButton")].filter(Boolean);
   buttons.forEach((button) => {
     button.disabled = true;
     button.dataset.originalText = button.textContent;
@@ -1578,19 +1523,19 @@ async function refreshPlatformAccess() {
       toast("Acesso liberado. Todas as funções estão disponíveis.");
     } else {
       showAccessGate(access, { openPrompt: true });
-      setFeedback("accessFeedback", "Situação atualizada.", "success");
+      setFeedback("automaticPaymentFeedback", "Situação atualizada.", "success");
     }
   } catch (error) {
     toast(error.message || "Não foi possível atualizar a situação agora.");
     setFeedback(
-      "accessFeedback",
+      "automaticPaymentFeedback",
       error.message || "Não foi possível atualizar agora.",
       "error",
     );
   } finally {
     buttons.forEach((button) => {
       button.disabled = false;
-      button.textContent = button.dataset.originalText || "Atualizar situação";
+      button.textContent = button.dataset.originalText || "Atualizar";
       delete button.dataset.originalText;
     });
   }
@@ -3948,11 +3893,6 @@ $("#profilePhoto").onerror = () => {
 $("#headerTheme").onclick = toggleTheme;
 $("#authTheme").onclick = toggleTheme;
 $("#accessTheme").onclick = toggleTheme;
-$("#accessRequestForm").addEventListener("submit", requestPlatformAccess);
-$("#accessPhone").addEventListener("input", (event) => {
-  event.target.value = formatPhone(event.target.value);
-});
-$("#accessRefresh").onclick = refreshPlatformAccess;
 const offlineRefreshButton = $("#offlineRefreshButton");
 if (offlineRefreshButton)
   offlineRefreshButton.onclick = async () => {
@@ -3968,7 +3908,6 @@ if (offlineRefreshButton)
     }
   };
 $("#accessDismiss").onclick = dismissAccessPrompt;
-$("#accessContinue").onclick = dismissAccessPrompt;
 document.querySelectorAll("[data-payment-months]").forEach((button) => {
   button.onclick = () => selectBillingPlan(button.dataset.paymentMonths);
 });
@@ -3980,7 +3919,6 @@ $("#subscriptionRequestButton").onclick = () =>
 $("#trialUpgradeButton").onclick = () =>
   showAccessGate(state.platformAccess, { openPrompt: true });
 $("#subscriptionRefreshButton").onclick = refreshPlatformAccess;
-$("#accessLogout").onclick = signOutCurrentUser;
 $("#confirmInstallBtn").onclick = installPWA;
 $("#modalBackdrop").onclick = requestClose;
 $("[data-keep-editing]").onclick = keepEditing;
