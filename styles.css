@@ -4096,3 +4096,5 @@ button.profile-menu-item:hover:not(:disabled) {
     min-width: 0;
   }
 }
+/* CPF opcional com validação visível e acessível */
+.field-hint{min-height:14px}.field-hint.error{color:var(--danger);font-weight:700}input[aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 3px #c8484315}

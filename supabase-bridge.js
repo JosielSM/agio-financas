@@ -470,7 +470,7 @@
         clients: clientsResult.data.map((row) => ({
           id: row.id,
           name: row.name,
-          cpf: row.cpf,
+          cpf: row.cpf || "",
           phone: row.phone,
           email: row.email || "",
           note: row.note || "",

@@ -213,6 +213,35 @@ const formatCpf = (value) =>
     .replace(/(\d{3})(\d)/, "$1.$2")
     .replace(/(\d{3})(\d)/, "$1.$2")
     .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+function isValidCpf(value) {
+  const cpf = digits(value);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const verificationDigit = (length) => {
+    let sum = 0;
+    for (let index = 0; index < length; index += 1)
+      sum += Number(cpf[index]) * (length + 1 - index);
+    const digit = (sum * 10) % 11;
+    return digit === 10 ? 0 : digit;
+  };
+  return (
+    verificationDigit(9) === Number(cpf[9]) &&
+    verificationDigit(10) === Number(cpf[10])
+  );
+}
+function renderClientCpfValidation(force = false) {
+  const input = $("#clientCpf"),
+    help = $("#clientCpfHelp"),
+    cpf = digits(input.value),
+    invalid = Boolean(cpf) && (cpf.length === 11 ? !isValidCpf(cpf) : force);
+  input.setAttribute("aria-invalid", String(invalid));
+  help.classList.toggle("error", invalid);
+  help.textContent = invalid
+    ? "CPF inválido. Corrija os números ou deixe o campo em branco."
+    : cpf && isValidCpf(cpf)
+      ? "CPF válido."
+      : "Se informar, o CPF será validado antes de salvar.";
+  return !invalid;
+}
 const formatPhone = (value) => {
   const number = digits(value).slice(0, 11);
   return number.length <= 10
@@ -2050,6 +2079,7 @@ async function register(event) {
 function resetClientForm() {
   $("#clientForm").reset();
   $("#clientId").value = "";
+  renderClientCpfValidation();
   $("#clientModalEyebrow").textContent = "NOVO CADASTRO";
   $("#clientModalTitle").textContent = "Adicionar cliente";
   $("#clientSaveBtn").textContent = "Salvar cliente";
@@ -2171,6 +2201,7 @@ function openClient(id) {
     $("#clientId").value = client.id;
     $("#clientName").value = client.name;
     $("#clientCpf").value = client.cpf;
+    renderClientCpfValidation();
     $("#clientPhone").value = client.phone;
     $("#clientNote").value = client.note || "";
     $("#clientModalEyebrow").textContent = "EDITAR CLIENTE";
@@ -2813,7 +2844,11 @@ async function saveClient(event) {
   const snapshot = stateSnapshot();
   const cpf = digits($("#clientCpf").value),
     phone = digits($("#clientPhone").value);
-  if (cpf.length !== 11) return toast("Informe um CPF com 11 números.");
+  if (cpf && !isValidCpf(cpf)) {
+    renderClientCpfValidation(true);
+    $("#clientCpf").focus();
+    return toast("CPF inválido. Corrija os números ou deixe o campo em branco.");
+  }
   if (phone.length < 10 || phone.length > 11)
     return toast("Informe um telefone válido com DDD.");
   if (!beginSubmission(form, "client")) return;
@@ -2823,7 +2858,7 @@ async function saveClient(event) {
   const client = {
     id: $("#clientId").value || crypto.randomUUID(),
     name: $("#clientName").value.trim(),
-    cpf: formatCpf(cpf),
+    cpf: cpf ? formatCpf(cpf) : "",
     phone: formatPhone(phone),
     email: previous?.email || "",
     note: $("#clientNote").value.trim(),
@@ -3832,7 +3867,9 @@ $("#partialPaidAmount").addEventListener("input", calculatePartialPayment);
 $("#partialInterest").addEventListener("input", calculatePartialPayment);
 $("#clientCpf").addEventListener("input", (event) => {
   event.target.value = formatCpf(event.target.value);
+  renderClientCpfValidation();
 });
+$("#clientCpf").addEventListener("blur", () => renderClientCpfValidation(true));
 $("#clientPhone").addEventListener("input", (event) => {
   event.target.value = formatPhone(event.target.value);
 });
