@@ -31,6 +31,7 @@ let expandedInstallment = null;
 let pendingDelete = null;
 let toastTimer = null;
 let autoRefreshTimer = null;
+let accessRecoveryTimer = null;
 let renderedMonthKey = null;
 let refreshingFromCloud = false;
 let deferredInstallPrompt = null;
@@ -135,16 +136,11 @@ const save = async ({ allowReadOnly = false } = {}) => {
     persistWorkspaceCache();
     return true;
   }
-  let liveAccess;
-  try {
-    liveAccess = rememberVerifiedPlatformAccess(
-      await window.credmaisBridge.platformAccess(state.user),
-    );
-  } catch (error) {
-    showOfflineMode(offlinePlatformAccess(error));
+  const liveAccess = await resolvePlatformAccess();
+  if (liveAccess.offline) {
+    showOfflineMode(liveAccess);
     throw new Error(
-      error?.message ||
-        "Sem conexão para confirmar seu acesso. Nenhuma alteração foi salva.",
+      "Não foi possível confirmar seu acesso agora. Nenhuma alteração foi salva; o sistema tentará novamente automaticamente.",
     );
   }
   state.platformAccess = liveAccess;
@@ -828,6 +824,7 @@ function openDeleteAccount() {
   openModal("deleteAccountModal");
 }
 function clearDeletedAccountData(userId) {
+  stopAccessRecovery();
   clearPendingSync(userId);
   localStorage.removeItem(platformAccessStorageKey(userId));
   [
@@ -844,6 +841,7 @@ function clearDeletedAccountData(userId) {
   state.history = [];
 }
 function clearSignedOutData() {
+  stopAccessRecovery();
   const userId = state.user?.id;
   if (userId) {
     clearPendingSync(userId);
@@ -1089,7 +1087,7 @@ function rememberVerifiedPlatformAccess(access) {
     }
   return verified;
 }
-function offlinePlatformAccess(error = null) {
+function offlinePlatformAccess(error = null, connectionState = "unavailable") {
   const cached = cachedPlatformAccess();
   return {
     ...(cached || {
@@ -1100,7 +1098,7 @@ function offlinePlatformAccess(error = null) {
     }),
     enabled: true,
     offline: true,
-    connectionState: navigator.onLine === false ? "offline" : "unavailable",
+    connectionState,
     connectionMessage: error?.message || "",
   };
 }
@@ -1262,7 +1260,7 @@ function applyPlatformRestrictions() {
       control.setAttribute(
         "title",
         offline
-          ? "Conecte-se à internet para usar esta função"
+          ? "Aguarde a verificação do acesso para usar esta função"
           : "Liberação necessária para usar esta função",
       );
     } else {
@@ -1280,39 +1278,75 @@ function requirePlatformAccess(action = "usar esta função") {
   if (!platformReadOnly()) return true;
   if (platformOfflineReadOnly()) {
     showOfflineMode(state.platformAccess);
-    toast(`Você está offline. Conecte-se à internet para ${action}.`);
+    toast(`Aguarde a verificação automática da conexão para ${action}.`);
     return false;
   }
   showAccessGate(state.platformAccess, { openPrompt: true });
   toast(`Liberação necessária para ${action}.`);
   return false;
 }
+async function probeAppReachability() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    await fetch(`/api/health?connectivity=${Date.now()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return true;
+  } catch (error) {
+    console.warn("Verificação de conexão com o CredMais indisponível:", error.message);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 async function resolvePlatformAccess() {
   if (!window.credmaisBridge?.platformAccess || !state.user?.id)
     return { enabled: false, status: "active" };
-  if (navigator.onLine === false) return offlinePlatformAccess();
   try {
     return rememberVerifiedPlatformAccess(
       await window.credmaisBridge.platformAccess(state.user),
     );
   } catch (error) {
-    return offlinePlatformAccess(error);
+    const appReachable = await probeAppReachability();
+    return offlinePlatformAccess(error, appReachable ? "unavailable" : "offline");
   }
+}
+function startAccessRecovery() {
+  if (accessRecoveryTimer || !state.user?.id || !window.credmaisBridge?.enabled)
+    return;
+  accessRecoveryTimer = setInterval(() => {
+    if (!document.hidden)
+      void refreshFromCloud({ allowWhileModalOpen: true });
+  }, 12000);
+}
+function stopAccessRecovery() {
+  if (!accessRecoveryTimer) return;
+  clearInterval(accessRecoveryTimer);
+  accessRecoveryTimer = null;
 }
 function showOfflineMode(access = offlinePlatformAccess()) {
   state.platformAccess = { ...access, enabled: true, offline: true };
+  startAccessRecovery();
   renderPlatformSupport(state.platformAccess);
   $("#authView").hidden = true;
   $("#appView").hidden = false;
   $("#accessView").hidden = true;
   $("#subscriptionBanner").hidden = true;
   $("#trialBanner").hidden = true;
+  const title = $("#offlineBannerTitle");
   const message = $("#offlineBannerMessage");
+  if (title)
+    title.textContent =
+      state.platformAccess.connectionState === "offline"
+        ? "Sem conexão com o CredMais"
+        : "Verificação de acesso indisponível";
   if (message)
     message.textContent =
       state.platformAccess.connectionState === "offline"
-        ? "Este aparelho está sem internet. Seus dados continuam disponíveis para consulta e nenhuma alteração será feita até a conexão voltar."
-        : "Não foi possível confirmar o acesso agora. Seus dados continuam disponíveis para consulta e tentaremos novamente automaticamente.";
+        ? "Não foi possível alcançar o CredMais. Seus dados salvos continuam disponíveis para consulta; verificaremos a conexão automaticamente."
+        : "Seu aparelho pode estar conectado, mas não foi possível confirmar o acesso no momento. Seus dados continuam disponíveis para consulta e tentaremos novamente automaticamente.";
   applyPlatformRestrictions();
 }
 function showAccessGate(access, { openPrompt = true } = {}) {
@@ -1320,6 +1354,7 @@ function showAccessGate(access, { openPrompt = true } = {}) {
     showOfflineMode(access);
     return;
   }
+  stopAccessRecovery();
   state.platformAccess = access;
   renderPlatformSupport(access);
   $("#authView").hidden = true;
@@ -1564,7 +1599,7 @@ async function refreshPlatformAccess() {
     const access = await resolvePlatformAccess();
     if (access?.offline) {
       showOfflineMode(access);
-      toast("A conexão ainda não foi restabelecida. Continuamos em modo de consulta.");
+      toast("Ainda não foi possível confirmar o acesso. Tentaremos novamente automaticamente.");
     } else if (platformAccessAllowed(access)) {
       await showApp(access);
       toast("Acesso liberado. Todas as funções estão disponíveis.");
@@ -1591,6 +1626,7 @@ async function showApp(resolvedAccess = null) {
   const access = resolvedAccess || (await resolvePlatformAccess()),
     writeAllowed = platformAccessAllowed(access);
   state.platformAccess = access;
+  if (!access?.offline) stopAccessRecovery();
   renderPlatformSupport(access);
   if (window.credmaisBridge?.enabled) {
     const cacheOwner = localStorage.getItem("credmais_cache_owner"),
@@ -1698,26 +1734,29 @@ function hasOpenModal() {
     (modal) => !modal.hidden,
   );
 }
-async function refreshFromCloud({ notify = false } = {}) {
+async function refreshFromCloud({ notify = false, allowWhileModalOpen = false } = {}) {
+  const modalOpen = hasOpenModal();
   if (
     refreshingFromCloud ||
     !window.credmaisBridge?.enabled ||
     !state.user?.id ||
     document.hidden ||
-    hasOpenModal()
+    (modalOpen && !allowWhileModalOpen)
   )
     return false;
   refreshingFromCloud = true;
   try {
     const wasOffline = platformOfflineReadOnly(),
+      previousConnectionState = state.platformAccess?.connectionState,
       accessWasPaymentLocked = platformPaymentLocked();
     const access = await resolvePlatformAccess();
     if (access?.offline) {
       showOfflineMode(access);
       if (notify && !wasOffline)
-        toast("Conexão indisponível. O CredMais entrou em modo de consulta.");
+        toast("Não foi possível confirmar o acesso. O CredMais está em modo de consulta.");
       return false;
     }
+    stopAccessRecovery();
     if (access?.enabled && !platformAccessAllowed(access)) {
       renderTrialBanner(access);
       showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
@@ -1730,6 +1769,15 @@ async function refreshFromCloud({ notify = false } = {}) {
     const offlineBanner = $("#offlineBanner");
     if (offlineBanner) offlineBanner.hidden = true;
     applyPlatformRestrictions();
+    if (modalOpen) {
+      if (wasOffline)
+        toast(
+          previousConnectionState === "offline"
+            ? "Conexão com o CredMais restabelecida. Seu acesso continua liberado."
+            : "Acesso verificado novamente. Suas funções estão liberadas.",
+        );
+      return true;
+    }
     const pending = pendingSyncPayload(state.user.id),
       hadPendingSync = Boolean(pending);
     if (pending) {
@@ -1750,7 +1798,11 @@ async function refreshFromCloud({ notify = false } = {}) {
     if (!changed) {
       render();
       if (wasOffline)
-        toast("Conexão restabelecida. Seu acesso continua liberado.");
+        toast(
+          previousConnectionState === "offline"
+            ? "Conexão com o CredMais restabelecida. Seu acesso continua liberado."
+            : "Acesso verificado novamente. Suas funções estão liberadas.",
+        );
       else if (accessWasPaymentLocked)
         toast("Acesso liberado. Todas as funções estão disponíveis.");
       else if (notify && hadPendingSync)
@@ -1765,7 +1817,11 @@ async function refreshFromCloud({ notify = false } = {}) {
     localStorage.setItem("credmais_history", JSON.stringify(state.history));
     render();
     if (wasOffline)
-      toast("Conexão restabelecida. Dados atualizados e acesso liberado.");
+      toast(
+        previousConnectionState === "offline"
+          ? "Conexão com o CredMais restabelecida. Dados atualizados."
+          : "Acesso verificado novamente. Dados atualizados.",
+      );
     else if (notify)
       toast(
         hadPendingSync
@@ -3961,7 +4017,7 @@ if (offlineRefreshButton)
     try {
       await refreshFromCloud({ notify: true });
       if (state.platformAccess?.offline)
-        toast("A conexão ainda não foi restabelecida. Seus dados seguem protegidos.");
+        toast("Ainda não foi possível confirmar o acesso. O CredMais tentará novamente automaticamente.");
     } finally {
       offlineRefreshButton.disabled = false;
       offlineRefreshButton.textContent = "Tentar novamente";
@@ -4067,13 +4123,15 @@ document.addEventListener("keydown", (event) => {
   requestClose();
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshFromCloud({ notify: true });
+  if (!document.hidden)
+    void refreshFromCloud({ notify: true, allowWhileModalOpen: true });
 });
-window.addEventListener("online", () => refreshFromCloud({ notify: true }));
+window.addEventListener("online", () => {
+  void refreshFromCloud({ notify: true, allowWhileModalOpen: true });
+});
 window.addEventListener("offline", () => {
-  if (!state.user?.id) return;
-  showOfflineMode(offlinePlatformAccess());
-  toast("Sem internet. O CredMais está disponível somente para consulta.");
+  if (state.user?.id)
+    void refreshFromCloud({ notify: true, allowWhileModalOpen: true });
 });
 window.addEventListener("hashchange", () => {
   const page = location.hash.slice(1);

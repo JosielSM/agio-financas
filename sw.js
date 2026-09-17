@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v32";
+const CACHE_NAME = "credmais-shell-v33";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -45,6 +45,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith("/api/"))
+    return;
   if (event.request.mode === "navigate") {
     const page = requestUrl.pathname.endsWith("/auth-action.html")
       ? "/auth-action.html"
