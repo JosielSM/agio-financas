@@ -34,7 +34,7 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v31/);
+  assert.match(serviceWorker, /credmais-shell-v32/);
 });
 
 test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {
@@ -51,7 +51,7 @@ test("the payment dialog keeps only payment choices and non-overlapping controls
   assert.match(accessView, /id="accessDismiss"/);
   assert.match(accessView, /id="automaticPaymentButton"/);
   assert.match(accessView, /id="automaticPaymentButtonLabel"/);
-  assert.match(accessView, /Pix ou cartão pelo Mercado Pago/);
+  assert.match(accessView, /PIX com confirmação automática ou cartão/);
   assert.match(accessView, /Sem renovação automática/);
   assert.doesNotMatch(accessView, /automaticSubscriptionButton|Assinar mensalmente/);
   assert.doesNotMatch(
@@ -63,8 +63,13 @@ test("the payment dialog keeps only payment choices and non-overlapping controls
     /#accessRequestForm|#accessPhone|#accessRequestButton|#accessContinue|#accessRefresh|#accessLogout/,
   );
   assert.match(css, /\.access-card-tools\s*\{[\s\S]*?display:\s*flex/);
-  assert.match(css, /\.mercado-pay-button\s*\{[\s\S]*?min-height:\s*62px/);
+  assert.match(css, /\.mercado-pay-button\s*\{[\s\S]*?min-height:\s*78px/);
   assert.match(css, /\.mercado-pay-button\s*\{[\s\S]*?linear-gradient/);
+  assert.match(css, /\.payment-plan b\s*\{[\s\S]*?font-size:\s*15px/);
+  assert.match(css, /\.access-price b\s*\{[\s\S]*?34px Outfit/);
+  assert.match(css, /\.access-shell\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(css, /\.automatic-payment-total b\s*\{[\s\S]*?white-space:\s*nowrap/);
+  assert.match(css, /\.dark \.automatic-payment-total b\s*\{[\s\S]*?color:\s*#8bd2ff/);
   assert.match(app, /\[\$\("#headerTheme"\), \$\("#authTheme"\), \$\("#accessTheme"\)\]/);
 });
 
