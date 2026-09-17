@@ -195,6 +195,14 @@ function effectiveStatus(account) {
 }
 const isLifetimeAccount = (account) =>
   effectiveStatus(account) === "active" && !account.paid_until;
+const hasProtectedAutomaticAccess = (account) =>
+  Boolean(
+    account &&
+    effectiveStatus(account) === "active" &&
+    account.access_type === "paid" &&
+    account.paid_until &&
+    account.last_payment_transaction_id,
+  );
 const statusLabel = (status) =>
   ({
     active: "Ativo",
@@ -694,7 +702,7 @@ function closeModals() {
 function renderManagedBilling(account) {
   const payments = paymentsForUser(account.user_id),
     latest = latestApprovedPayment(account.user_id),
-    automatic = Boolean(latest),
+    automatic = hasProtectedAutomaticAccess(account),
     lifetime = isLifetimeAccount(account),
     free = isFreeAccess(account),
     manuallyPaid =
@@ -714,8 +722,8 @@ function renderManagedBilling(account) {
           : "Sem pagamento confirmado";
   $("#managePaymentOrigin").textContent = origin;
   $("#managePaymentOrigin").className = `payment-origin-badge ${automatic ? "automatic" : manuallyPaid ? "manual" : free || lifetime ? "free" : "empty"}`;
-  $("#managePaymentMethod").textContent = latest
-    ? paymentMethodLabel(latest)
+  $("#managePaymentMethod").textContent = automatic
+    ? latest ? paymentMethodLabel(latest) : "Mercado Pago"
     : manuallyPaid
       ? "Informado manualmente"
       : free
@@ -723,13 +731,13 @@ function renderManagedBilling(account) {
         : lifetime
           ? "Sem cobrança"
           : "Ainda não pagou";
-  $("#managePaymentAmount").textContent = latest
-    ? money(latest.amount)
+  $("#managePaymentAmount").textContent = automatic
+    ? money(latest?.amount ?? account.access_amount)
     : manuallyPaid
       ? money(account.access_amount)
       : money(0);
-  $("#managePaymentPlan").textContent = latest
-    ? paymentPlanLabel(latest)
+  $("#managePaymentPlan").textContent = automatic
+    ? latest ? paymentPlanLabel(latest) : "Plano pago"
     : lifetime
       ? "Vitalício"
       : free
@@ -737,8 +745,8 @@ function renderManagedBilling(account) {
         : manuallyPaid
           ? "Acesso liberado manualmente"
           : "Nenhum plano pago";
-  $("#managePaymentDate").textContent = latest
-    ? dateTimeLabel(latest.paidAt || latest.accessGrantedAt)
+  $("#managePaymentDate").textContent = automatic
+    ? dateTimeLabel(latest?.paidAt || latest?.accessGrantedAt || account.approved_at)
     : manuallyPaid
       ? dateTimeLabel(account.approved_at)
       : "Sem confirmação";
@@ -792,6 +800,14 @@ function openManage(userId) {
   );
   $("#manageCreatedAt").textContent = dateTimeLabel(account.created_at, "Data indisponível");
   renderManagedBilling(account);
+  const protectedPaidAccess = hasProtectedAutomaticAccess(account);
+  $("#managePlanProtection").hidden = !protectedPaidAccess;
+  $("#managePlanProtection").textContent = protectedPaidAccess
+    ? `✓ Período pago pelo Mercado Pago protegido até ${dateLabel(account.paid_until)}. Bloqueio, reset e troca do plano ficam indisponíveis. Você ainda pode atualizar o contato e o preço de compras futuras.`
+    : "";
+  $("#manageAccessSection").hidden = protectedPaidAccess;
+  $("#resetAccessSection").hidden = protectedPaidAccess;
+  $("#toggleBlock").hidden = protectedPaidAccess;
   $("#toggleBlock").textContent =
     status === "blocked" ? "↻ Reabrir solicitação" : "⊘ Bloquear acesso";
   $("#toggleBlock").classList.toggle("restore", status === "blocked");
@@ -895,6 +911,9 @@ async function saveManage(event) {
   });
 }
 async function grantAccess() {
+  const currentAccount = state.accounts.find((item) => item.user_id === state.managedUserId);
+  if (hasProtectedAutomaticAccess(currentAccount))
+    return feedback("manageFeedback", "O período pago automaticamente está protegido. Ajuste somente o preço de compras futuras.", "error");
   feedback("manageFeedback");
   await loading($("#grantAccess"), async () => {
     try {
@@ -940,6 +959,8 @@ async function grantAccess() {
 async function toggleBlock() {
   const account = state.accounts.find((item) => item.user_id === state.managedUserId),
     nextStatus = effectiveStatus(account) === "blocked" ? "pending" : "blocked";
+  if (hasProtectedAutomaticAccess(account))
+    return feedback("manageFeedback", "Não é possível bloquear um período pago e ativo pelo Mercado Pago.", "error");
   await loading($("#toggleBlock"), async () => {
     try {
       await bridge.setPlatformAccountStatus(state.managedUserId, nextStatus);
@@ -954,6 +975,8 @@ async function toggleBlock() {
 async function resetPlatformAccess() {
   const account = state.accounts.find((item) => item.user_id === state.managedUserId);
   if (!account) return toast("Esta conta não foi encontrada.");
+  if (hasProtectedAutomaticAccess(account))
+    return feedback("manageFeedback", "Não é possível resetar um período pago e ativo pelo Mercado Pago.", "error");
   if (state.adminIds.includes(account.user_id))
     return feedback(
       "manageFeedback",
