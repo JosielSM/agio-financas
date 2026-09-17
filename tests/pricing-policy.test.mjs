@@ -60,7 +60,7 @@ test("main app explains the active trial and lets the user subscribe early", asy
   assert.match(app, /renderTrialBanner\(access\)/);
 });
 
-test("subscription billing exposes only the automatic checkout", async () => {
+test("billing exposes only the one-time Mercado Pago checkout", async () => {
   const [mainHtml, mainApp, adminHtml, worker] = await Promise.all([
     read("index.html"),
     read("app.js"),
@@ -69,10 +69,14 @@ test("subscription billing exposes only the automatic checkout", async () => {
   ]);
 
   assert.doesNotMatch(mainHtml, /accessBillingPixKey|accessSendReceipt|accessCopyPix/);
+  assert.doesNotMatch(mainHtml, /automaticSubscriptionButton|Assinar mensalmente/);
   assert.doesNotMatch(mainApp, /copyAccessPix|sendAccessReceipt|Use o PIX manual/);
+  assert.doesNotMatch(mainApp, /startBillingCheckout\("subscription"\)/);
   assert.doesNotMatch(adminHtml, /id="billingPixKey"|id="billingRecipient"/);
   assert.match(adminHtml, /id="chargePayment"/);
   assert.doesNotMatch(worker, /Use o PIX manual/);
+  assert.match(worker, /body\.mode !== "one_time"/);
+  assert.match(worker, /recurring:\s*false/);
 });
 
 test("database pricing policy calculates server-side and invalidates stale orders", async () => {

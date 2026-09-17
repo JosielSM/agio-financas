@@ -1377,30 +1377,32 @@ function billingMonthlyFee() {
 function renderBillingPanel() {
   const panel = $("#automaticPayment");
   if (!panel) return;
-  const fee = billingMonthlyFee();
+  const fee = billingMonthlyFee(),
+    selectedMonths = state.billing.selectedMonths,
+    total = fee * selectedMonths;
   document.querySelectorAll("[data-payment-months]").forEach((button) => {
     const months = Number(button.dataset.paymentMonths),
-      active = months === state.billing.selectedMonths;
+      active = months === selectedMonths;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
-    button.disabled = state.billing.configured === false;
     const price = $(`#paymentPlan${months}Price`);
     if (price) price.textContent = money(fee * months);
   });
-  $("#automaticPaymentTotal").textContent = money(
-    fee * state.billing.selectedMonths,
-  );
-  const payButton = $("#automaticPaymentButton"),
-    subscriptionButton = $("#automaticSubscriptionButton");
-  payButton.disabled = state.billing.configured === false;
-  subscriptionButton.disabled = state.billing.configured === false;
-  subscriptionButton.querySelector("small").textContent =
-    `Renovação automática de ${money(fee)}/mês no cartão`;
+  $("#automaticPaymentTotal").textContent = money(total);
+  $("#automaticPaymentPeriod").textContent =
+    `${selectedMonths} ${selectedMonths === 1 ? "mês" : "meses"} de acesso`;
+  $("#automaticPaymentButtonLabel").textContent = `Pagar ${money(total)} agora`;
   panel.classList.toggle("is-sandbox", state.billing.environment === "sandbox");
 }
-async function loadBillingConfig() {
-  if (state.billing.configured !== null || billingConfigPromise)
-    return billingConfigPromise;
+async function loadBillingConfig({ force = false } = {}) {
+  if (billingConfigPromise) return billingConfigPromise;
+  if (!force && state.billing.configured !== null) {
+    return {
+      enabled: state.billing.configured,
+      environment: state.billing.environment,
+      plans: state.billing.plans,
+    };
+  }
   if (!window.credmaisBridge?.billingConfig) {
     state.billing.configured = false;
     renderBillingPanel();
@@ -1418,7 +1420,7 @@ async function loadBillingConfig() {
       if (!config.enabled) {
         setFeedback(
           "automaticPaymentFeedback",
-          "Pagamento automático temporariamente indisponível. Tente novamente em alguns instantes.",
+          "Pagamento pelo Mercado Pago temporariamente indisponível. Tente novamente em alguns instantes.",
           "error",
         );
       } else if (config.environment === "sandbox") {
@@ -1434,7 +1436,7 @@ async function loadBillingConfig() {
       renderBillingPanel();
       setFeedback(
         "automaticPaymentFeedback",
-        error.message || "Pagamento automático indisponível no momento.",
+        error.message || "Pagamento pelo Mercado Pago indisponível no momento.",
         "error",
       );
       return null;
@@ -1451,23 +1453,20 @@ function selectBillingPlan(months) {
   renderBillingPanel();
   setFeedback("automaticPaymentFeedback");
 }
-async function startBillingCheckout(mode = "one_time") {
+async function startBillingCheckout() {
   if (submissionLocks.has("billing-checkout")) {
     return toast("Seu pagamento já está sendo preparado.");
   }
-  await loadBillingConfig();
+  await loadBillingConfig({ force: state.billing.configured === false });
   if (!state.billing.configured) {
     setFeedback(
       "automaticPaymentFeedback",
-      "O pagamento automático ainda não está disponível. Tente novamente em alguns instantes.",
+      "O pagamento pelo Mercado Pago ainda não está disponível. Tente novamente em alguns instantes.",
       "error",
     );
     return;
   }
-  const buttons = [
-    $("#automaticPaymentButton"),
-    $("#automaticSubscriptionButton"),
-  ];
+  const buttons = [$("#automaticPaymentButton")];
   submissionLocks.add("billing-checkout");
   buttons.forEach((button) => {
     button.disabled = true;
@@ -1475,14 +1474,11 @@ async function startBillingCheckout(mode = "one_time") {
   });
   setFeedback(
     "automaticPaymentFeedback",
-    mode === "subscription"
-      ? "Preparando sua assinatura mensal segura..."
-      : "Preparando seu checkout seguro...",
+    "Preparando seu checkout seguro...",
   );
   try {
     const result = await window.credmaisBridge.createBillingCheckout(
-      mode === "subscription" ? 1 : state.billing.selectedMonths,
-      mode,
+      state.billing.selectedMonths,
     );
     setFeedback(
       "automaticPaymentFeedback",
@@ -1500,7 +1496,7 @@ async function startBillingCheckout(mode = "one_time") {
   } finally {
     submissionLocks.delete("billing-checkout");
     buttons.forEach((button) => {
-      button.disabled = state.billing.configured === false;
+      button.disabled = false;
       button.removeAttribute("aria-busy");
     });
   }
@@ -3975,9 +3971,7 @@ $("#accessDismiss").onclick = dismissAccessPrompt;
 document.querySelectorAll("[data-payment-months]").forEach((button) => {
   button.onclick = () => selectBillingPlan(button.dataset.paymentMonths);
 });
-$("#automaticPaymentButton").onclick = () => startBillingCheckout("one_time");
-$("#automaticSubscriptionButton").onclick = () =>
-  startBillingCheckout("subscription");
+$("#automaticPaymentButton").onclick = startBillingCheckout;
 $("#subscriptionRequestButton").onclick = () =>
   showAccessGate(state.platformAccess, { openPrompt: true });
 $("#trialUpgradeButton").onclick = () =>

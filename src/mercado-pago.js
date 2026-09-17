@@ -289,33 +289,6 @@ async function createOneTimeCheckout(env, order) {
   };
 }
 
-async function createSubscriptionCheckout(env, order) {
-  const origin = applicationOrigin(env);
-  const subscription = await mercadoRequest(env, "/preapproval", {
-    method: "POST",
-    idempotencyKey: order.requestKey,
-    body: {
-      reason: "CredMais Premium - assinatura mensal",
-      external_reference: order.orderId,
-      payer_email: order.email,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: "months",
-        transaction_amount: Number(order.amount),
-        currency_id: "BRL",
-      },
-      back_url: `${origin}/?pagamento=assinatura`,
-      status: "pending",
-    },
-  });
-  return {
-    reference: String(subscription.id || ""),
-    checkoutUrl: subscription.init_point,
-    sandboxCheckoutUrl: "",
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  };
-}
-
 async function checkout(request, env) {
   if (request.method !== "POST") return methodNotAllowed("POST");
   if (!billingConfigured(env)) {
@@ -323,7 +296,7 @@ async function checkout(request, env) {
       {
         ok: false,
         error: "BILLING_NOT_CONFIGURED",
-        message: "O pagamento automático está temporariamente indisponível. Tente novamente em alguns instantes.",
+        message: "O pagamento pelo Mercado Pago está temporariamente indisponível. Tente novamente em alguns instantes.",
       },
       503,
     );
@@ -333,19 +306,22 @@ async function checkout(request, env) {
   if (!body || Array.isArray(body) || typeof body !== "object") {
     throw new HttpError(400, "INVALID_REQUEST", "Os dados enviados são inválidos.");
   }
-  if (!["one_time", "subscription"].includes(body.mode)) {
-    throw new HttpError(400, "INVALID_PAYMENT_MODE", "Escolha uma forma de pagamento válida.");
+  if (body.mode !== "one_time") {
+    throw new HttpError(
+      400,
+      "INVALID_PAYMENT_MODE",
+      "Use o pagamento único por Pix ou cartão.",
+    );
   }
-  const mode = body.mode;
   const months = Number(body.months);
-  if (!CHECKOUT_PLANS.includes(months) || (mode === "subscription" && months !== 1)) {
+  if (!CHECKOUT_PLANS.includes(months)) {
     throw new HttpError(400, "INVALID_PLAN", "Escolha um período de pagamento válido.");
   }
 
   const order = await supabaseRpc(
     env,
     "create_platform_payment_order_v1",
-    { p_plan_months: months, p_payment_mode: mode },
+    { p_plan_months: months, p_payment_mode: "one_time" },
     { accessToken },
   );
   if (order.processing) {
@@ -365,10 +341,7 @@ async function checkout(request, env) {
   }
 
   try {
-    const created =
-      mode === "subscription"
-        ? await createSubscriptionCheckout(env, order)
-        : await createOneTimeCheckout(env, order);
+    const created = await createOneTimeCheckout(env, order);
     if (!created.reference || !validCheckoutUrl(created.checkoutUrl)) {
       throw new HttpError(502, "INVALID_PROVIDER_RESPONSE", "Checkout inválido.");
     }
@@ -602,7 +575,7 @@ async function handleBillingRequest(request, env) {
         enabled: billingConfigured(env),
         environment: isProduction(env) ? "production" : "sandbox",
         plans: CHECKOUT_PLANS,
-        recurring: true,
+        recurring: false,
       });
     }
     if (pathname === "/api/billing/checkout") return await checkout(request, env);

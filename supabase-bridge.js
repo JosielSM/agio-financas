@@ -124,7 +124,7 @@
     const result = await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(
-        result?.message || "Não foi possível acessar o pagamento automático.",
+        result?.message || "Não foi possível acessar o pagamento pelo Mercado Pago.",
       );
       error.code = result?.error || "BILLING_REQUEST_FAILED";
       throw error;
@@ -261,11 +261,11 @@
     async billingConfig() {
       return billingApi("/api/billing/config");
     },
-    async createBillingCheckout(months, mode = "one_time") {
+    async createBillingCheckout(months) {
       return billingApi("/api/billing/checkout", {
         method: "POST",
         auth: true,
-        body: { months: Number(months), mode },
+        body: { months: Number(months), mode: "one_time" },
       });
     },
     async billingStatus() {
