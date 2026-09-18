@@ -1912,11 +1912,11 @@ function openInstall() {
     confirmButton.hidden = false;
   } else if (isiOS) {
     instructions.innerHTML =
-      '<p>No iPhone, a instalação é concluída pelo menu do navegador:</p><ol class="install-steps"><li>Toque no botão <b>Compartilhar</b>.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Confirme tocando em <b>Adicionar</b>.</li></ol>';
+      '<p>No iPhone, abra este link no <b>Safari</b> e siga estes passos:</p><ol class="install-steps"><li>Toque no botão <b>Compartilhar</b>.</li><li>Escolha <b>Adicionar à Tela de Início</b>.</li><li>Confirme tocando em <b>Adicionar</b>.</li></ol><p>Se o link abriu dentro do WhatsApp, use a opção <b>Abrir no Safari</b> antes de instalar.</p>';
     confirmButton.hidden = true;
   } else {
     instructions.innerHTML =
-      "<p>Abra o menu do navegador e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</p>";
+      "<p>Abra o menu do navegador e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>. Se a opção não aparecer, abra este link no Chrome ou Edge.</p>";
     confirmButton.hidden = true;
   }
   openModal("installModal");
@@ -1934,16 +1934,19 @@ async function installPWA() {
   );
 }
 function setupPWA() {
-  const installButton = $("#profileInstallButton");
-  if (isStandalone()) installButton.hidden = true;
+  const installButtons = [$("#profileInstallButton"), $("#authInstallButton")];
+  const syncInstallButtons = () => installButtons.forEach((button) => {
+    button.hidden = isStandalone();
+  });
+  syncInstallButtons();
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    installButton.hidden = false;
+    syncInstallButtons();
   });
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    installButton.hidden = true;
+    installButtons.forEach((button) => { button.hidden = true; });
     toast("CredMais instalado com sucesso.");
   });
   if ("serviceWorker" in navigator) {
@@ -4188,6 +4191,7 @@ $("#profileInstallButton").onclick = () => {
   closeModals();
   openInstall();
 };
+$("#authInstallButton").onclick = openInstall;
 $("#profileLogoutButton").onclick = async () => {
   closeModals();
   await signOutCurrentUser();

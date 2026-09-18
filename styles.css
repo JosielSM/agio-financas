@@ -852,6 +852,51 @@ button {
   opacity: 0.8;
   margin: 0;
 }
+.auth-install-button {
+  width: min(330px, 100%);
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 26px;
+  padding: 11px 14px;
+  border: 1px solid #ffffffb8;
+  border-radius: 14px;
+  background: #fff;
+  color: #123a2a;
+  box-shadow: 0 14px 30px #032d2260;
+  text-align: left;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.auth-install-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 17px 34px #032d2273;
+}
+.auth-install-button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 4px;
+}
+.auth-install-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #e3f7ed;
+  color: #087450;
+  font-size: 26px;
+  font-weight: 700;
+}
+.auth-install-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.auth-install-copy strong { font: 700 16px Outfit; }
+.auth-install-copy small { color: #547365; font-size: 12px; line-height: 1.25; }
+.auth-install-arrow { color: #087450; font-size: 25px; line-height: 1; }
 .auth-points {
   margin-top: 50px;
   display: grid;
@@ -2251,6 +2296,13 @@ body.dark {
   .auth-brand > p {
     font-size: 15px;
   }
+  .auth-install-button {
+    width: 100%;
+    min-height: 62px;
+    margin-top: 18px;
+    padding: 9px 12px;
+  }
+  .auth-install-icon { width: 38px; height: 38px; flex-basis: 38px; }
   .auth-points {
     display: none;
   }
