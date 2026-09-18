@@ -325,7 +325,7 @@ button {
 }
 .payment-plan-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 9px;
   margin-top: 18px;
 }
@@ -4240,12 +4240,15 @@ button.profile-menu-item:hover:not(:disabled) {
     font-size: 16px;
   }
   .modal {
-    top: calc(12px + env(safe-area-inset-top));
+    top: var(--modal-visual-top, calc(12px + env(safe-area-inset-top)));
     bottom: auto;
     transform: translateX(-50%) !important;
-    max-height: calc(
-      100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    max-height: var(
+      --modal-visual-height,
+      calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))
     ) !important;
+    overflow-y: auto;
+    scrollbar-gutter: auto;
     padding-bottom: calc(48px + env(safe-area-inset-bottom)) !important;
     touch-action: pan-y;
   }

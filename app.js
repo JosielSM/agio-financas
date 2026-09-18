@@ -21,7 +21,7 @@ const state = {
     configured: null,
     environment: "sandbox",
     selectedMonths: 1,
-    plans: [1, 2, 3, 6, 12],
+    plans: [1, 2, 3, 6],
   },
 };
 if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
@@ -1225,6 +1225,18 @@ function accessContent(access) {
       },
     };
   }
+  if (status === "active") {
+    return {
+      status,
+      content: {
+        badge: "ACESSO ATIVO",
+        icon: "✓",
+        title: "Seu CredMais está liberado",
+        message:
+          "Você pode escolher um novo período de acesso. Confira o valor e a duração antes de pagar.",
+      },
+    };
+  }
   if (status === "expired" && access?.accessType === "free") {
     return {
       status,
@@ -1349,7 +1361,7 @@ function startAccessRecovery() {
   accessRecoveryTimer = setInterval(() => {
     if (!document.hidden)
       void refreshFromCloud({ allowWhileModalOpen: true });
-  }, 12000);
+  }, 2000);
 }
 function stopAccessRecovery() {
   if (!accessRecoveryTimer) return;
@@ -1384,6 +1396,7 @@ function showAccessGate(access, { openPrompt = true } = {}) {
     showOfflineMode(access);
     return;
   }
+  const wasOpen = !$("#accessView").hidden;
   stopAccessRecovery();
   state.platformAccess = access;
   renderPlatformSupport(access);
@@ -1416,7 +1429,8 @@ function showAccessGate(access, { openPrompt = true } = {}) {
   );
   $("#subscriptionRequestButton").textContent = "Ver planos";
   applyPlatformRestrictions();
-  if (openPrompt) requestAnimationFrame(() => $("#accessDismiss").focus());
+  if (openPrompt && !wasOpen)
+    requestAnimationFrame(() => $("#accessDismiss").focus());
 }
 function renderTrialBanner(access = state.platformAccess) {
   const banner = $("#trialBanner");
@@ -1616,7 +1630,9 @@ async function handleBillingReturn() {
 function dismissAccessPrompt() {
   $("#accessView").hidden = true;
   state.accessPromptDismissed = true;
-  toast("Modo de visualização ativo. Use o aviso no topo para solicitar acesso.");
+  toast(platformPaymentLocked()
+    ? "Modo de visualização ativo. Use o aviso no topo para abrir os planos."
+    : "Planos fechados. Você pode abri-los novamente pelo aviso no topo.");
 }
 async function refreshPlatformAccess() {
   const buttons = [$("#subscriptionRefreshButton")].filter(Boolean);
@@ -1780,6 +1796,7 @@ async function refreshFromCloud({ notify = false, allowWhileModalOpen = false } 
       previousConnectionState = state.platformAccess?.connectionState,
       accessWasPaymentLocked = platformPaymentLocked();
     const access = await resolvePlatformAccess();
+    const accessPromptVisible = !$("#accessView").hidden;
     if (access?.offline) {
       showOfflineMode(access);
       if (notify && !wasOffline)
@@ -1789,13 +1806,17 @@ async function refreshFromCloud({ notify = false, allowWhileModalOpen = false } 
     stopAccessRecovery();
     if (access?.enabled && !platformAccessAllowed(access)) {
       renderTrialBanner(access);
-      showAccessGate(access, { openPrompt: !state.accessPromptDismissed });
+      showAccessGate(access, {
+        openPrompt: accessPromptVisible || !state.accessPromptDismissed,
+      });
       return false;
     }
     state.platformAccess = access;
     renderPlatformSupport(access);
     renderTrialBanner(access);
-    $("#accessView").hidden = true;
+    if (accessPromptVisible)
+      showAccessGate(access, { openPrompt: true });
+    else $("#accessView").hidden = true;
     const offlineBanner = $("#offlineBanner");
     if (offlineBanner) offlineBanner.hidden = true;
     applyPlatformRestrictions();
@@ -2194,6 +2215,35 @@ function rememberModalState(id) {
   if (form && !form.hasAttribute("data-passive-form"))
     modal.dataset.initialState = formSnapshot(modal);
 }
+function syncModalViewport() {
+  if (!document.body.classList.contains("modal-open")) return;
+  const root = document.documentElement;
+  if (window.innerWidth > 680) {
+    root.style.removeProperty("--modal-visual-top");
+    root.style.removeProperty("--modal-visual-height");
+    return;
+  }
+  const viewport = window.visualViewport;
+  const visibleHeight = Math.min(window.innerHeight, viewport?.height || window.innerHeight);
+  const visibleTop = Math.max(0, viewport?.offsetTop || 0);
+  root.style.setProperty("--modal-visual-top", `${Math.round(visibleTop + 8)}px`);
+  root.style.setProperty("--modal-visual-height", `${Math.max(80, Math.floor(visibleHeight - 16))}px`);
+}
+function clearModalViewport() {
+  document.documentElement.style.removeProperty("--modal-visual-top");
+  document.documentElement.style.removeProperty("--modal-visual-height");
+}
+function keepFocusedModalFieldVisible() {
+  const field = document.activeElement;
+  const modal = field?.closest?.(".modal");
+  if (!modal || modal.hidden || !field.matches("input, select, textarea")) return;
+  const modalBounds = modal.getBoundingClientRect();
+  const fieldBounds = field.getBoundingClientRect();
+  if (fieldBounds.bottom > modalBounds.bottom - 20)
+    modal.scrollTop += fieldBounds.bottom - modalBounds.bottom + 20;
+  else if (fieldBounds.top < modalBounds.top + 20)
+    modal.scrollTop -= modalBounds.top + 20 - fieldBounds.top;
+}
 function openModal(id) {
   if (id === "loanModal" && !state.clients.length) {
     toast("Cadastre um cliente antes de criar um empréstimo.");
@@ -2201,7 +2251,10 @@ function openModal(id) {
   }
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
-  $(`#${id}`).hidden = false;
+  const modal = $(`#${id}`);
+  modal.hidden = false;
+  modal.scrollTop = 0;
+  syncModalViewport();
   rememberModalState(id);
 }
 function closeModals() {
@@ -2210,6 +2263,7 @@ function closeModals() {
   });
   $("#modalBackdrop").hidden = true;
   document.body.classList.remove("modal-open");
+  clearModalViewport();
   pendingModalId = null;
 }
 function requestClose() {
@@ -2240,6 +2294,7 @@ function discardChanges() {
   $("#discardModal").hidden = true;
   $("#modalBackdrop").hidden = true;
   document.body.classList.remove("modal-open");
+  clearModalViewport();
   pendingModalId = null;
 }
 function askDelete({ title, message, action }) {
@@ -2249,6 +2304,7 @@ function askDelete({ title, message, action }) {
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $("#confirmDeleteModal").hidden = false;
+  syncModalViewport();
 }
 function cancelDelete() {
   pendingDelete = null;
@@ -2259,6 +2315,7 @@ function cancelDelete() {
   if (!anotherModal) {
     $("#modalBackdrop").hidden = true;
     document.body.classList.remove("modal-open");
+    clearModalViewport();
   }
 }
 async function confirmDelete() {
@@ -2326,6 +2383,8 @@ function openLoan(id) {
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $("#loanModal").hidden = false;
+  $("#loanModal").scrollTop = 0;
+  syncModalViewport();
   prepareLoan(id);
   rememberModalState("loanModal");
 }
@@ -4153,6 +4212,21 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   $(".sidebar").classList.remove("open");
   requestClose();
+});
+window.addEventListener("resize", syncModalViewport);
+window.visualViewport?.addEventListener("resize", () => {
+  syncModalViewport();
+  requestAnimationFrame(keepFocusedModalFieldVisible);
+});
+window.visualViewport?.addEventListener("scroll", syncModalViewport);
+document.addEventListener("focusin", (event) => {
+  const modal = event.target.closest?.(".modal");
+  if (!modal || modal.hidden || !event.target.matches("input, select, textarea"))
+    return;
+  window.setTimeout(() => {
+    syncModalViewport();
+    requestAnimationFrame(keepFocusedModalFieldVisible);
+  }, 320);
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden)

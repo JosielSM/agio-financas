@@ -107,7 +107,7 @@ test("the recovery timer retries without a user click or browser online event", 
     window: { credmaisBridge: { enabled: true } },
     document: { hidden: false },
     accessRecoveryTimer: null,
-    setInterval: (callback, delay) => { tick = callback; assert.equal(delay, 12000); return 1; },
+    setInterval: (callback, delay) => { tick = callback; assert.equal(delay, 2000); return 1; },
     clearInterval: () => {},
     refreshFromCloud: async ({ allowWhileModalOpen }) => {
       assert.equal(allowWhileModalOpen, true);
@@ -128,12 +128,13 @@ test("access verification fails closed and recovers automatically", async () => 
     app.match(/async function refreshFromCloud\([\s\S]*?\n\}/)?.[0] || "";
 
   assert.match(app, /function startAccessRecovery\(/);
-  assert.match(app, /setInterval\(\(\) => \{[\s\S]*?refreshFromCloud\(\{ allowWhileModalOpen: true \}\)[\s\S]*?\}, 12000\)/);
+  assert.match(app, /setInterval\(\(\) => \{[\s\S]*?refreshFromCloud\(\{ allowWhileModalOpen: true \}\)[\s\S]*?\}, 2000\)/);
   assert.match(app, /function stopAccessRecovery\(/);
   assert.match(app, /window\.addEventListener\("offline"/);
   assert.match(app, /window\.addEventListener\("online", \(\) => \{/);
   assert.doesNotMatch(app.match(/window\.addEventListener\("offline", \(\) => \{[\s\S]*?\n\}\);/)?.[0] || "", /showOfflineMode/);
-  assert.doesNotMatch(refresh, /!\$\("#accessView"\)\.hidden/);
+  assert.match(refresh, /accessPromptVisible = !\$\("#accessView"\)\.hidden/);
+  assert.match(refresh, /if \(access\?\.offline\) \{\s*showOfflineMode\(access\)/);
   assert.match(refresh, /stopAccessRecovery\(\)/);
 });
 

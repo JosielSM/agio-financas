@@ -28,7 +28,7 @@ test("billing configuration never exposes payment secrets", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.enabled, true);
   assert.equal(body.recurring, false);
-  assert.deepEqual(body.plans, [1, 2, 3, 6, 12]);
+  assert.deepEqual(body.plans, [1, 2, 3, 6]);
   assert.doesNotMatch(JSON.stringify(body), /access-token|service-role|webhook-secret/);
 });
 
@@ -73,6 +73,28 @@ test("checkout rejects a manipulated plan before contacting providers", async (t
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ months: 4, mode: "one_time" }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "INVALID_PLAN");
+  assert.equal(fetchCalls, 0);
+});
+
+test("checkout rejects the retired twelve-month plan before contacting providers", async (t) => {
+  let fetchCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    fetchCalls += 1;
+    return new Response("{}");
+  });
+  const response = await handleRequest(
+    new Request("https://credmais.test/api/billing/checkout", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer firebase-id-token-long-enough",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ months: 12, mode: "one_time" }),
     }),
     environment(),
   );

@@ -1,5 +1,5 @@
 const MERCADO_PAGO_API = "https://api.mercadopago.com";
-const CHECKOUT_PLANS = Object.freeze([1, 2, 3, 6, 12]);
+const CHECKOUT_PLANS = Object.freeze([1, 2, 3, 6]);
 const USER_BODY_LIMIT = 8 * 1024;
 const WEBHOOK_BODY_LIMIT = 32 * 1024;
 
