@@ -17,6 +17,7 @@ const state = {
     : [],
   platformAccess: null,
   accessPromptDismissed: false,
+  paidView: "loans",
   billing: {
     configured: null,
     environment: "sandbox",
@@ -2876,36 +2877,64 @@ function renderLoans() {
     : '<div class="empty"><span>◫</span><h4>Nenhum empréstimo ativo</h4><p>Crie uma operação quando estiver pronto.</p><button class="outline add-loan">Criar empréstimo</button></div>';
 }
 function renderPaid() {
+  const paidLoans = state.loans
+    .filter((loan) => Number(loan.installments) > 0 && isLoanFullyPaid(loan))
+    .map((loan) => ({
+      loan,
+      paidAt: Array.from({ length: loan.installments }, (_, index) =>
+        paidInstallmentDate(loan, index),
+      ).sort((a, b) => b - a)[0],
+    }))
+    .sort((a, b) => b.paidAt - a.paidAt);
   const paidInstallments = state.loans
     .flatMap((loan) =>
       Array.from({ length: loan.installments }, (_, index) => ({
         loan,
         index,
         status: paymentStateFor(loan, index),
-        payment: loan.paymentStates?.[index],
+        paidAt: paidInstallmentDate(loan, index),
       })),
     )
     .filter((item) => item.status === "paid")
-    .sort((a, b) => {
-      const dateA = a.payment?.createdAt || dateFor(a.loan, a.index).toISOString(),
-        dateB = b.payment?.createdAt || dateFor(b.loan, b.index).toISOString();
-      return dateB.localeCompare(dateA);
-    });
-  $("#paidList").innerHTML = paidInstallments.length
-    ? paidInstallments
-        .map(({ loan, index, payment }) => {
-          const client = state.clients.find((item) => item.id === loan.clientId),
-            info = installmentInfo(loan, index),
-            received = Number(
-              payment?.receivedTotal ?? payment?.lastPayment ?? info.due ?? 0,
-            ),
-            paidAt = payment?.createdAt
-              ? new Date(payment.createdAt).toLocaleDateString("pt-BR")
-              : dateFor(loan, index).toLocaleDateString("pt-BR");
-          return `<article class="paid-card"><span class="paid-check">✓</span><div><span class="eyebrow">${escapeHtml(loan.contract)}</span><h3>${escapeHtml(client?.name || "Cliente removido")}</h3><p>Parcela ${index + 1} de ${loan.installments} · quitada em ${paidAt}</p></div><strong>${money(received)}</strong><button class="outline small" data-details="${escapeHtml(loan.id)}">Ver empréstimo</button></article>`;
+    .sort((a, b) => b.paidAt - a.paidAt);
+  $("#paidLoanCount").textContent = paidLoans.length;
+  $("#paidInstallmentCount").textContent = paidInstallments.length;
+  $("#paidLoansList").innerHTML = paidLoans.length
+    ? paidLoans
+        .map(({ loan, paidAt }) => {
+          const client = state.clients.find((item) => item.id === loan.clientId);
+          return `<article class="settlement-card"><span class="settlement-icon" aria-hidden="true">✓</span><div class="settlement-content"><span class="settlement-kicker">${escapeHtml(loan.contract || "Empréstimo")} · CONTRATO QUITADO</span><div class="settlement-heading"><h3>${escapeHtml(client?.name || "Cliente removido")}</h3><strong>${money(financialsForLoan(loan).received)}</strong></div><div class="settlement-bottom"><p>${loan.installments} ${loan.installments === 1 ? "parcela" : "parcelas"} · quitado em ${paidAt.toLocaleDateString("pt-BR")}</p><button class="outline small" type="button" data-details="${escapeHtml(loan.id)}">Detalhes →</button></div></div></article>`;
         })
         .join("")
-    : '<div class="empty"><span>✓</span><h4>Nenhuma parcela quitada</h4><p>As parcelas marcadas como quitadas aparecerão aqui.</p></div>';
+    : '<div class="empty compact"><span>✓</span><h4>Nenhum empréstimo quitado</h4><p>Os contratos aparecerão aqui quando todas as parcelas forem pagas.</p><button class="outline" type="button" data-paid-view="installments">Ver parcelas quitadas</button></div>';
+  $("#paidInstallmentsList").innerHTML = paidInstallments.length
+    ? paidInstallments
+        .map(({ loan, index, paidAt }) => {
+          const client = state.clients.find((item) => item.id === loan.clientId),
+            info = installmentInfo(loan, index),
+            received = receivedAmountFor(loan, index, info);
+          return `<article class="settlement-card"><span class="settlement-icon" aria-hidden="true">✓</span><div class="settlement-content"><span class="settlement-kicker">${escapeHtml(loan.contract || "Empréstimo")} · PARCELA ${index + 1}/${loan.installments}</span><div class="settlement-heading"><h3>${escapeHtml(client?.name || "Cliente removido")}</h3><strong>${money(received)}</strong></div><div class="settlement-bottom"><p>Quitada em ${paidAt.toLocaleDateString("pt-BR")}</p><button class="outline small" type="button" data-details="${escapeHtml(loan.id)}">Detalhes →</button></div></div></article>`;
+        })
+        .join("")
+    : '<div class="empty compact"><span>✓</span><h4>Nenhuma parcela quitada</h4><p>As parcelas pagas aparecerão aqui conforme os recebimentos forem registrados.</p></div>';
+  selectPaidView(state.paidView);
+}
+function paidInstallmentDate(loan, index) {
+  const recorded = loan.paymentStates?.[index]?.createdAt,
+    paidAt = recorded ? new Date(recorded) : null;
+  return paidAt && !Number.isNaN(paidAt.getTime())
+    ? paidAt
+    : dateFor(loan, index);
+}
+function selectPaidView(view) {
+  if (view !== "loans" && view !== "installments") return;
+  state.paidView = view;
+  $("#paidLoansPanel").hidden = view !== "loans";
+  $("#paidInstallmentsPanel").hidden = view !== "installments";
+  document.querySelectorAll("[data-paid-view]").forEach((button) => {
+    if (!button.classList.contains("paid-view-tab")) return;
+    button.setAttribute("aria-pressed", String(button.dataset.paidView === view));
+  });
 }
 function renderHistory() {
   const archived = state.loans.filter((loan) => loan.archived);
@@ -4142,6 +4171,10 @@ document.addEventListener("click", (event) => {
   if (button.dataset.page) {
     event.preventDefault();
     setPage(button.dataset.page);
+    return;
+  }
+  if (button.dataset.paidView) {
+    selectPaidView(button.dataset.paidView);
     return;
   }
   if (button.dataset.passwordToggle) {

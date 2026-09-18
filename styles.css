@@ -1579,43 +1579,137 @@ textarea {
   background: transparent;
   font-weight: 700;
 }
-.paid-list {
+.paid-switcher {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
 }
-.paid-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+.paid-view-tab {
+  display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 17px 20px;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+}
+.paid-view-tab[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--soft);
+  color: var(--brand);
+}
+.paid-view-tab:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.paid-view-tab b {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.paid-panel-caption {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.settlement-list {
+  display: grid;
+  gap: 10px;
+}
+.settlement-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+  padding: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: var(--shadow);
 }
-.paid-check {
+.settlement-icon {
   width: 38px;
   height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: 12px;
   color: #08795d;
   background: #dff7eb;
+  font-size: 19px;
   font-weight: 800;
 }
-.paid-card h3 {
-  margin: 3px 0;
-  font: 600 15px Outfit;
+.dark .settlement-icon {
+  color: #9ef0d1;
+  background: #174a39;
 }
-.paid-card p {
+.settlement-content {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.settlement-kicker {
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  overflow-wrap: anywhere;
+}
+.settlement-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.settlement-heading h3 {
+  margin: 0;
+  min-width: 0;
+  font: 600 17px/1.25 Outfit;
+  overflow-wrap: anywhere;
+}
+.settlement-heading strong {
+  flex: 0 0 auto;
+  color: #08795d;
+  font: 700 19px/1.2 Outfit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dark .settlement-heading strong {
+  color: #9ef0d1;
+}
+.settlement-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.settlement-bottom p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
 }
-.paid-card > strong {
-  color: #08795d;
-  font: 700 16px Outfit;
+.settlement-bottom button {
+  min-height: 32px;
+  padding: 5px 9px;
   white-space: nowrap;
 }
 .modal-backdrop {
@@ -2263,18 +2357,6 @@ body.dark {
   }
   .loan-row .loan-value {
     font-size: 13px;
-  }
-  .paid-card {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 11px;
-    padding: 14px;
-  }
-  .paid-card > strong {
-    grid-column: 2;
-  }
-  .paid-card > button {
-    grid-column: 3;
-    grid-row: 1 / span 2;
   }
   .form-grid {
     grid-template-columns: 1fr;
@@ -3055,15 +3137,8 @@ body.dark {
 .dark .panel,
 .dark .client-card,
 .dark .loan-row,
-.dark .paid-card {
+.dark .settlement-card {
   border-color: #304038;
-}
-.dark .paid-check {
-  color: #a7f3d5;
-  background: #174a39;
-}
-.dark .paid-card > strong {
-  color: #9ef0d1;
 }
 .bottom-link {
   padding: 5px;
@@ -4345,14 +4420,12 @@ button.profile-menu-item:hover:not(:disabled) {
 #appView .client-card p,
 #appView .client-card footer,
 #appView .loan-row p,
-#appView .paid-card p,
 #appView .chart-legend p {
   font-size: 14px;
   line-height: 1.45;
 }
 #appView .client-card h3,
-#appView .loan-row h3,
-#appView .paid-card h3 {
+#appView .loan-row h3 {
   font-size: 17px;
 }
 #appView .activity-item p,
@@ -4367,7 +4440,6 @@ button.profile-menu-item:hover:not(:disabled) {
 #appView .donut b,
 #appView .loan-extra b,
 #appView .loan-value b,
-#appView .paid-card > strong,
 .details-summary b,
 .installment-side strong,
 .calculation b,
@@ -4392,17 +4464,6 @@ button.profile-menu-item:hover:not(:disabled) {
 #appView .loan-value small,
 #appView .loan-extra p {
   font-size: 12px;
-}
-#appView .paid-card > strong {
-  font: 700 21px/1.2 Outfit;
-}
-.dark #appView .paid-card > strong {
-  color: #79e4ad;
-}
-#appView .paid-check {
-  width: 44px;
-  height: 44px;
-  font-size: 21px;
 }
 .details-summary div {
   min-width: 0;
@@ -4604,15 +4665,28 @@ button.profile-menu-item:hover:not(:disabled) {
     grid-column: 2;
     grid-row: 1;
   }
-  #appView .paid-card {
-    grid-template-columns: 44px minmax(0, 1fr);
+  .paid-switcher {
+    gap: 8px;
   }
-  #appView .paid-card > strong,
-  #appView .paid-card > button {
-    grid-column: 2;
+  .paid-view-tab {
+    min-height: 58px;
+    padding: 9px 10px;
+    font-size: 13px;
   }
-  #appView .paid-card > button {
-    justify-self: start;
+  .settlement-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+  .settlement-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .settlement-heading strong {
+    font-size: 18px;
+  }
+  .settlement-bottom p {
+    font-size: 12px;
   }
   .details-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
