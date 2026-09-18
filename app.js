@@ -29,6 +29,9 @@ if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
   localStorage.setItem("credmais_cache_owner", state.user.id);
 let pendingModalId = null;
 let expandedInstallment = null;
+let selectedClientProfileId = null;
+let clientProfileTab = "loans";
+let returnToClientId = null;
 let pendingDelete = null;
 let toastTimer = null;
 let autoRefreshTimer = null;
@@ -2266,6 +2269,7 @@ function closeModals() {
   document.body.classList.remove("modal-open");
   clearModalViewport();
   pendingModalId = null;
+  returnToClientId = null;
 }
 function requestClose() {
   if (!$("#confirmDeleteModal").hidden) return cancelDelete();
@@ -2417,6 +2421,7 @@ function setPage(page) {
 function render() {
   renderStats();
   renderClients();
+  if (!$("#clientProfileModal").hidden) renderClientProfile();
   renderLoans();
   renderPaid();
   renderHistory();
@@ -2836,10 +2841,88 @@ function renderClients() {
           const count = state.loans.filter(
             (loan) => loan.clientId === client.id,
           ).length;
-          return `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><div class="card-actions"><button class="edit-button" data-edit-client="${escapeHtml(client.id)}" aria-label="Editar ${escapeHtml(client.name)}">✎</button><button class="edit-button delete-button" data-delete-client="${escapeHtml(client.id)}" aria-label="Excluir ${escapeHtml(client.name)}">⌫</button></div></div><h3>${escapeHtml(client.name)}</h3><p>${escapeHtml(client.phone || client.email || "Sem contato informado")}</p><footer><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span></footer></article>`;
+          return `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><div class="card-actions"><button class="edit-button" type="button" data-edit-client="${escapeHtml(client.id)}" aria-label="Editar ${escapeHtml(client.name)}">✎</button><button class="edit-button delete-button" type="button" data-delete-client="${escapeHtml(client.id)}" aria-label="Excluir ${escapeHtml(client.name)}">⌫</button></div></div><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || client.email || "Sem contato informado")}</span><span class="client-card-meta"><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span><span class="client-card-arrow" aria-hidden="true">›</span></span></button></article>`;
         })
         .join("")
     : '<div class="empty"><span>♙</span><h4>Nenhum cliente encontrado</h4><p>Cadastre seu primeiro cliente para começar.</p><button class="outline" data-open-client>Novo cliente</button></div>';
+}
+function openClientProfile(clientId, preserveTab = false) {
+  if (!state.clients.some((client) => client.id === clientId)) {
+    toast("Este cliente não está mais disponível. A lista foi atualizada.");
+    renderClients();
+    return;
+  }
+  selectedClientProfileId = clientId;
+  if (!preserveTab) clientProfileTab = "loans";
+  renderClientProfile();
+  openModal("clientProfileModal");
+}
+function renderClientProfile() {
+  const client = state.clients.find((item) => item.id === selectedClientProfileId);
+  if (!client) {
+    closeModals();
+    return;
+  }
+  const loans = state.loans
+    .filter((loan) => loan.clientId === client.id)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const activeCount = loans.filter((loan) => !loan.archived && (Number(loan.installments) <= 0 || !isLoanFullyPaid(loan))).length;
+  const paidCount = loans.filter((loan) => Number(loan.installments) > 0 && isLoanFullyPaid(loan)).length;
+  const installments = loans.flatMap((loan) =>
+    Array.from({ length: Math.max(0, Number(loan.installments) || 0) }, (_, index) => ({ loan, index, due: dateFor(loan, index) })),
+  ).sort((a, b) => {
+    const aPaid = paymentStateFor(a.loan, a.index) === "paid";
+    const bPaid = paymentStateFor(b.loan, b.index) === "paid";
+    return Number(aPaid) - Number(bPaid) || a.due - b.due;
+  });
+  if (!installments.length) clientProfileTab = "loans";
+  const loanCards = loans.length
+    ? loans.map((loan) => {
+      const settled = Number(loan.installments) > 0 && isLoanFullyPaid(loan);
+      const status = settled ? "Quitado" : loan.archived ? "Arquivado" : "Em andamento";
+      const statusClass = settled ? "settled" : loan.archived ? "archived" : "active";
+      const paidInstallments = Array.from({ length: Number(loan.installments) || 0 }, (_, index) => paymentStateFor(loan, index)).filter((item) => item === "paid").length;
+      const financials = financialsForLoan(loan);
+      const created = loan.createdAt ? new Date(loan.createdAt) : null;
+      const createdLabel = created && !Number.isNaN(created.getTime()) ? `Criado em ${created.toLocaleDateString("pt-BR")}` : "Empréstimo cadastrado";
+      return `<article class="client-loan-card"><div class="client-loan-top"><div><span class="client-loan-contract">${escapeHtml(loan.contract || "Empréstimo")}</span><small>${createdLabel}</small></div><span class="client-loan-status ${statusClass}">${status}</span></div><div class="client-loan-values"><span><small>Emprestado</small><strong>${money(loan.amount)}</strong></span><span><small>Saldo a receber</small><strong>${money(financials.receivable)}</strong></span></div><div class="client-loan-bottom"><span>${paidInstallments} de ${Number(loan.installments) || 0} parcelas quitadas</span><button class="outline small" type="button" data-client-loan="${escapeHtml(loan.id)}">${Number(loan.installments) > 0 ? "Ver parcelas" : "Ver empréstimo"} →</button></div></article>`;
+    }).join("")
+    : '<div class="client-profile-empty"><span aria-hidden="true">◫</span><h3>Nenhum empréstimo ainda</h3><p>Quando houver um empréstimo para este cliente, ele aparecerá aqui.</p><button class="primary" type="button" data-client-new-loan>Fazer primeiro empréstimo</button></div>';
+  const installmentCards = installments.map(({ loan, index, due }) => {
+    const status = installmentStatus(loan, index, due);
+    const info = installmentInfo(loan, index);
+    const lateValue = status === "Vencida" || status === "Não pagou" ? lateCharge(loan, due).value : 0;
+    const amount = status === "Quitada" ? receivedAmountFor(loan, index, info)
+      : status === "Só juros" ? Number(info.interestOnlyValue || 0)
+        : status === "Pagamento parcial" ? Number(info.partial?.adjustedRemaining || 0)
+          : Number(info.due || 0) + lateValue;
+    return `<button class="client-installment-row" type="button" data-client-loan="${escapeHtml(loan.id)}" data-client-installment="${index}" aria-label="Ver parcela ${index + 1} de ${escapeHtml(loan.contract || "empréstimo")}"><span class="client-installment-main"><b>Parcela ${index + 1} de ${Number(loan.installments) || 0}</b><small>${escapeHtml(loan.contract || "Empréstimo")} · vence ${due.toLocaleDateString("pt-BR")}</small></span><span class="client-installment-end"><em class="due ${installmentStatusClass(status)}">${status}</em><strong>${money(amount)}</strong></span><span class="client-installment-arrow" aria-hidden="true">›</span></button>`;
+  }).join("");
+  $("#clientProfileContent").innerHTML = `<div class="client-profile-hero"><div class="client-profile-avatar" aria-hidden="true">${escapeHtml(initials(client.name))}</div><div><span class="eyebrow">PERFIL DO CLIENTE</span><h2 id="clientProfileTitle">${escapeHtml(client.name)}</h2><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Cliente cadastrado"}</span></div></div><div class="client-profile-info"><div><small>Telefone / WhatsApp</small><b>${escapeHtml(client.phone || "Não informado")}</b></div>${client.cpf ? `<div><small>CPF</small><b>${escapeHtml(client.cpf)}</b></div>` : ""}${client.note ? `<div class="client-profile-note"><small>Observação</small><p>${escapeHtml(client.note)}</p></div>` : ""}</div><div class="client-profile-stats" aria-label="Resumo dos empréstimos"><div><strong>${loans.length}</strong><span>Empréstimos</span></div><div><strong>${activeCount}</strong><span>Em andamento</span></div><div><strong>${paidCount}</strong><span>Quitados</span></div></div><div class="client-profile-actions"><button class="primary" type="button" data-client-new-loan>＋ Novo empréstimo</button><button class="outline" type="button" data-edit-client="${escapeHtml(client.id)}">Editar cliente</button></div><div class="client-profile-tabs" role="group" aria-label="Histórico do cliente"><button type="button" data-client-profile-tab="loans" aria-pressed="${clientProfileTab === "loans"}">Empréstimos <b>${loans.length}</b></button>${installments.length ? `<button type="button" data-client-profile-tab="installments" aria-pressed="${clientProfileTab === "installments"}">Parcelas <b>${installments.length}</b></button>` : ""}</div><div class="client-profile-list">${clientProfileTab === "installments" ? installmentCards : loanCards}</div>`;
+}
+function openClientLoanDetails(loanId, installmentIndex) {
+  const loan = state.loans.find((item) => item.id === loanId && item.clientId === selectedClientProfileId);
+  if (!loan) {
+    toast("Este empréstimo não está mais disponível. O perfil foi atualizado.");
+    renderClientProfile();
+    return;
+  }
+  const clientId = selectedClientProfileId;
+  closeModals();
+  returnToClientId = clientId;
+  expandedInstallment = Number.isInteger(installmentIndex) && installmentIndex >= 0 && installmentIndex < Number(loan.installments)
+    ? `${loanId}:${installmentIndex}` : null;
+  details(loanId);
+}
+function openLoanForClient() {
+  const clientId = selectedClientProfileId;
+  if (!state.clients.some((item) => item.id === clientId) || !requirePlatformAccess("criar empréstimos")) return;
+  closeModals();
+  openLoan();
+  if ($("#loanModal").hidden) return;
+  $("#loanClient").value = clientId;
+  calc();
+  rememberModalState("loanModal");
 }
 function renderBlacklist() {
   const clients = state.clients.filter((client) => client.blacklisted);
@@ -2847,7 +2930,7 @@ function renderBlacklist() {
     ? clients
         .map(
           (client) =>
-            `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><button class="edit-button" data-toggle-blacklist="${escapeHtml(client.id)}" aria-label="Remover ${escapeHtml(client.name)} da lista negra">✓</button></div><h3>${escapeHtml(client.name)}</h3><p>${escapeHtml(client.phone || "Sem telefone")}</p><footer><span>Marcado para atenção</span><span class="badge danger">Lista negra</span></footer></article>`,
+            `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><button class="edit-button" type="button" data-toggle-blacklist="${escapeHtml(client.id)}" aria-label="Remover ${escapeHtml(client.name)} da lista negra">✓</button></div><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || "Sem telefone")}</span><span class="client-card-meta"><span>Marcado para atenção</span><span class="badge danger">Lista negra</span><span class="client-card-arrow" aria-hidden="true">›</span></span></button></article>`,
         )
         .join("")
     : '<div class="empty"><span>✓</span><h4>Nenhum cliente na lista</h4><p>Clientes marcados aparecem aqui.</p></div>';
@@ -3250,7 +3333,7 @@ function details(id) {
     return `<article class="installment-card ${visualStatus} ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${visualStatus}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div><div class="payment-actions"><button data-payment="paid" data-loan="${loan.id}" data-installment="${index}">✓ Quitado</button><button data-payment="interest" data-loan="${loan.id}" data-installment="${index}">◔ Só juros</button><button class="partial-button" data-partial="${loan.id}" data-installment="${index}">◑ Pagamento parcial</button><button data-postpone="${loan.id}" data-installment="${index}">◷ Adiar</button><button class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">✕ Não pagou</button><button class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>↶ Deixar em aberto</button></div></div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small contract-message-action" data-contract-whatsapp="${escapeHtml(loan.id)}"><span>◉</span> Enviar resumo do contrato no WhatsApp</button><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `${returnToClientId === loan.clientId ? '<button class="details-back-client" type="button" data-return-client>← Voltar ao cliente</button>' : ""}<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small contract-message-action" data-contract-whatsapp="${escapeHtml(loan.id)}"><span>◉</span> Enviar resumo do contrato no WhatsApp</button><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
   if (expandedInstallment?.startsWith(`${loan.id}:`)) {
     const installmentIndex = expandedInstallment.split(":")[1];
@@ -4168,6 +4251,29 @@ $(".logo").onclick = (event) => {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.dataset.clientProfile) {
+    openClientProfile(button.dataset.clientProfile);
+    return;
+  }
+  if (button.dataset.clientProfileTab) {
+    clientProfileTab = button.dataset.clientProfileTab;
+    renderClientProfile();
+    return;
+  }
+  if (button.dataset.clientLoan) {
+    openClientLoanDetails(button.dataset.clientLoan, button.dataset.clientInstallment == null ? null : Number(button.dataset.clientInstallment));
+    return;
+  }
+  if (button.hasAttribute("data-client-new-loan")) {
+    openLoanForClient();
+    return;
+  }
+  if (button.hasAttribute("data-return-client")) {
+    const clientId = returnToClientId;
+    closeModals();
+    openClientProfile(clientId, true);
+    return;
+  }
   if (button.dataset.page) {
     event.preventDefault();
     setPage(button.dataset.page);
@@ -4189,7 +4295,10 @@ document.addEventListener("click", (event) => {
   if (button.classList.contains("add-loan")) openLoan();
   if (button.hasAttribute("data-close")) requestClose();
   if (button.dataset.pageLink) setPage(button.dataset.pageLink);
-  if (button.dataset.details) details(button.dataset.details);
+  if (button.dataset.details) {
+    returnToClientId = null;
+    details(button.dataset.details);
+  }
   if (button.dataset.whatsapp)
     openWhatsApp(button.dataset.whatsapp, button.dataset.installment);
   if (button.dataset.contractWhatsapp)
