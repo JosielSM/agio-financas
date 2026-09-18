@@ -3995,6 +3995,9 @@ $("#loanDueDate").addEventListener("input", updateLoanDuePreview);
 $("#reportMonth").addEventListener("input", updateReportPreview);
 $("#clientSearch").addEventListener("input", renderClients);
 $("#addClientBtn").onclick = () => openClient();
+document
+  .querySelectorAll(".nav-link i, .bottom-link i, .stat-icon")
+  .forEach((icon) => icon.setAttribute("aria-hidden", "true"));
 $("#menuBtn").onclick = () => $(".sidebar").classList.toggle("open");
 $("#pixBtn").onclick = openPix;
 $("#profileBtn").onclick = openProfile;

@@ -4314,3 +4314,324 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 /* CPF opcional com validação visível e acessível */
 .field-hint{min-height:14px}.field-hint.error{color:var(--danger);font-weight:700}input[aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 3px #c8484315}
+
+/* Financial data must remain readable before secondary labels and decoration. */
+#appView .stats article {
+  min-width: 0;
+}
+#appView .stats p {
+  font-size: 14px;
+  line-height: 1.35;
+}
+#appView .stats strong {
+  display: block;
+  color: var(--text);
+  font: 700 clamp(20px, 1.7vw, 26px)/1.14 Outfit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+#appView .client-stat-values small {
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: clip;
+  white-space: normal;
+}
+#appView .panel-head p,
+#appView .page-heading p,
+#appView .client-card p,
+#appView .client-card footer,
+#appView .loan-row p,
+#appView .paid-card p,
+#appView .chart-legend p {
+  font-size: 14px;
+  line-height: 1.45;
+}
+#appView .client-card h3,
+#appView .loan-row h3,
+#appView .paid-card h3 {
+  font-size: 17px;
+}
+#appView .activity-item p,
+#appView .activity-item time,
+#appView .due-item span {
+  font-size: 13px;
+}
+#appView .due-item b {
+  font-size: 15px;
+}
+#appView .chart-legend b,
+#appView .donut b,
+#appView .loan-extra b,
+#appView .loan-value b,
+#appView .paid-card > strong,
+.details-summary b,
+.installment-side strong,
+.calculation b,
+.contract-share-values b,
+.postpone-summary b,
+.partial-preview b,
+.partial-preview strong {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+#appView .chart-legend b {
+  font: 700 18px/1.25 Outfit;
+}
+#appView .donut b {
+  font: 700 17px/1.2 Outfit;
+}
+#appView .loan-extra b,
+#appView .loan-value b {
+  font: 700 19px/1.2 Outfit;
+}
+#appView .loan-value small,
+#appView .loan-extra p {
+  font-size: 12px;
+}
+#appView .paid-card > strong {
+  font: 700 21px/1.2 Outfit;
+}
+.dark #appView .paid-card > strong {
+  color: #79e4ad;
+}
+#appView .paid-check {
+  width: 44px;
+  height: 44px;
+  font-size: 21px;
+}
+.details-summary div {
+  min-width: 0;
+  padding: 14px;
+}
+.details-summary span {
+  font-size: 12px;
+  line-height: 1.3;
+}
+.details-summary b {
+  font: 700 19px/1.2 Outfit;
+}
+.installment-summary {
+  min-height: 72px;
+}
+.installment-summary b {
+  font-size: 15px;
+}
+.installment-summary small {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.installment-side strong {
+  font: 700 20px/1.2 Outfit;
+}
+.due {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+.calculation b {
+  font: 700 19px/1.2 Outfit;
+}
+.calculation span,
+.contract-share-values small {
+  font-size: 12px;
+}
+.contract-share-values b {
+  font: 700 18px/1.2 Outfit;
+}
+.postpone-summary,
+.partial-preview {
+  font-size: 14px;
+}
+.postpone-summary b,
+.partial-preview b,
+.partial-preview strong {
+  font: 700 18px/1.2 Outfit;
+}
+.modal label {
+  font-size: 15px;
+}
+.installment-help,
+.charge-note,
+.details-late-fee,
+.partial-preview small,
+.interest-mode-guidance,
+.interest-mode-intro,
+.loan-due-preview small,
+.contract-share-plan small {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.modal input,
+.modal select,
+.modal textarea {
+  font-size: 16px;
+}
+.details-actions-menu button,
+.payment-actions button {
+  min-height: 44px;
+  font-size: 13px;
+}
+#appView .due-item .whatsapp {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.badge {
+  font-size: 12px;
+}
+
+/* Consistent vector pictograms keep navigation recognizable at a glance. */
+.stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  font-size: 0;
+}
+.stat-icon::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  background: currentColor;
+  -webkit-mask: var(--stat-icon) center / contain no-repeat;
+  mask: var(--stat-icon) center / contain no-repeat;
+}
+.stat-icon.green { --stat-icon: url("icons/wallet.svg"); }
+.stat-icon.blue { --stat-icon: url("icons/chart-up.svg"); }
+.stat-icon.received { --stat-icon: url("icons/circle-check.svg"); }
+.stat-icon.orange { --stat-icon: url("icons/users.svg"); }
+.stat-icon.purple { --stat-icon: url("icons/file-text.svg"); }
+.nav-link i,
+.bottom-link i {
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  display: block;
+  background: currentColor;
+  font-size: 0;
+  -webkit-mask: var(--nav-icon) center / contain no-repeat;
+  mask: var(--nav-icon) center / contain no-repeat;
+}
+.nav-link[data-page="dashboard"], .bottom-link[data-page="dashboard"] { --nav-icon: url("icons/home.svg"); }
+.nav-link[data-page="clients"], .bottom-link[data-page="clients"] { --nav-icon: url("icons/users.svg"); }
+.nav-link[data-page="loans"], .bottom-link[data-page="loans"] { --nav-icon: url("icons/file-text.svg"); }
+.nav-link[data-page="paid"], .bottom-link[data-page="paid"] { --nav-icon: url("icons/circle-check.svg"); }
+.nav-link[data-page="history"] { --nav-icon: url("icons/history.svg"); }
+.nav-link[data-page="blacklist"] { --nav-icon: url("icons/alert.svg"); }
+.report-link { --nav-icon: url("icons/chart-up.svg"); }
+.bottom-create {
+  font-size: 0;
+}
+.bottom-create::before {
+  content: "";
+  width: 27px;
+  height: 27px;
+  background: #fff;
+  -webkit-mask: url("icons/plus.svg") center / contain no-repeat;
+  mask: url("icons/plus.svg") center / contain no-repeat;
+}
+.edit-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  font-size: 0;
+}
+.edit-button::before {
+  content: "";
+  width: 21px;
+  height: 21px;
+  background: currentColor;
+  -webkit-mask: var(--action-icon) center / contain no-repeat;
+  mask: var(--action-icon) center / contain no-repeat;
+}
+.edit-button[data-edit-client] { --action-icon: url("icons/pencil.svg"); }
+.edit-button[data-delete-client] { --action-icon: url("icons/trash.svg"); }
+.edit-button[data-toggle-blacklist] { --action-icon: url("icons/circle-check.svg"); }
+
+@media (max-width: 680px) {
+  #appView .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #appView .stats article:nth-child(-n + 3) {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 13px;
+    padding: 15px;
+  }
+  #appView .stats article:nth-child(-n + 3) .stat-icon {
+    grid-row: span 2;
+  }
+  #appView .stats article:nth-child(-n + 3) p {
+    margin: 0 0 2px;
+  }
+  #appView .stats article:nth-child(-n + 3) strong {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+  #appView .stats article:nth-child(n + 4) strong {
+    font-size: 23px;
+  }
+  #appView .chart-wrap {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+  #appView .donut {
+    align-self: center;
+  }
+  #appView .chart-legend {
+    width: 100%;
+    min-width: 0;
+  }
+  #appView .loan-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  #appView .loan-row .loan-value {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: 11px;
+    border-top: 1px solid var(--line);
+  }
+  #appView .loan-row .loan-value b {
+    font-size: 22px;
+  }
+  #appView .loan-row > button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  #appView .paid-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  #appView .paid-card > strong,
+  #appView .paid-card > button {
+    grid-column: 2;
+  }
+  #appView .paid-card > button {
+    justify-self: start;
+  }
+  .details-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .details-summary div:last-child {
+    grid-column: 1 / -1;
+  }
+  .calculation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .calculation div:last-of-type {
+    grid-column: 1 / -1;
+  }
+  .bottom-link {
+    font-size: 11px;
+  }
+  .bottom-link i {
+    width: 24px;
+    height: 24px;
+  }
+  #appView .bottom-create {
+    width: 48px;
+    height: 48px;
+  }
+}

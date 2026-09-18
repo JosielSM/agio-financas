@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v34";
+const CACHE_NAME = "credmais-shell-v35";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -23,7 +23,18 @@ const APP_SHELL = [
   "/icons/eye.svg",
   "/icons/eye-off.svg",
   "/icons/google.svg",
-  "/icons/whatsapp.svg"
+  "/icons/whatsapp.svg",
+  "/icons/home.svg",
+  "/icons/users.svg",
+  "/icons/wallet.svg",
+  "/icons/chart-up.svg",
+  "/icons/circle-check.svg",
+  "/icons/file-text.svg",
+  "/icons/history.svg",
+  "/icons/alert.svg",
+  "/icons/plus.svg",
+  "/icons/pencil.svg",
+  "/icons/trash.svg"
 ];
 
 self.addEventListener("install", (event) => {
