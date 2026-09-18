@@ -62,3 +62,55 @@ test("a second dialog blurs the previous one and restores it when closed", async
   runInNewContext(`${source}\nsyncModalLayers();`, context);
   assert.equal(background.inert, false);
 });
+
+test("closing a nested action returns to the previous dialog, including after discarding edits", async () => {
+  const app = await read("app.js");
+  const source = app.match(/function openModal\(id\) \{[\s\S]*?\n\}\nasync function confirmDelete/)?.[0]
+    .replace(/\nasync function confirmDelete$/, "");
+  assert.ok(source, "modal navigation functions should exist");
+  const modalIds = ["clientProfileModal", "detailsModal", "partialModal", "clientModal", "discardModal", "confirmDeleteModal"];
+  const nodes = Object.fromEntries(modalIds.map((id) => [id, {
+    id, hidden: true, scrollTop: 0, dataset: { initialState: "" },
+    querySelector: () => id === "clientModal" ? { hasAttribute: () => false } : null,
+  }]));
+  nodes.modalBackdrop = { hidden: true };
+  const classes = new Set();
+  let edited = false;
+  const context = {
+    modalStack: [], state: { clients: [{}] },
+    $: (selector) => nodes[selector.slice(1)],
+    document: {
+      body: { classList: { add: (value) => classes.add(value), remove: (value) => classes.delete(value) } },
+      querySelectorAll: () => Object.values(nodes).filter((node) => node.id),
+    },
+    syncModalLayers: () => {}, syncModalViewport: () => {}, clearModalViewport: () => {},
+    rememberModalState: () => {}, formSnapshot: () => edited ? "changed" : "",
+    toast: () => { throw new Error("unexpected toast"); },
+  };
+  runInNewContext(`${source}\nopenModal("clientProfileModal"); openModal("detailsModal"); openModal("partialModal"); requestClose();`, context);
+  assert.equal(nodes.partialModal.hidden, true);
+  assert.equal(nodes.detailsModal.hidden, false);
+  assert.equal(nodes.clientProfileModal.hidden, false);
+  assert.equal(nodes.modalBackdrop.hidden, false);
+  runInNewContext(`requestClose();`, context);
+  assert.equal(nodes.detailsModal.hidden, true);
+  assert.equal(nodes.clientProfileModal.hidden, false);
+  edited = true;
+  runInNewContext(`openModal("clientModal"); requestClose();`, context);
+  assert.equal(nodes.discardModal.hidden, false);
+  runInNewContext(`discardChanges();`, context);
+  assert.equal(nodes.clientModal.hidden, true);
+  assert.equal(nodes.clientProfileModal.hidden, false);
+  assert.equal(nodes.modalBackdrop.hidden, false);
+});
+
+test("WhatsApp actions in both apps display the WhatsApp icon", async () => {
+  const [mainHtml, mainApp, adminHtml] = await Promise.all([
+    read("index.html"), read("app.js"), read("admin/index.html"),
+  ]);
+  assert.match(mainApp, /data-whatsapp="[^\n]+whatsapp-button-icon/);
+  assert.match(mainApp, /data-contract-whatsapp="[^\n]+whatsapp-button-icon/);
+  assert.match(mainHtml, /id="contractShareButton"[^>]*>\s*<img class="whatsapp-button-icon"/);
+  assert.match(adminHtml, /id="sendCharge"[^>]*>\s*<img class="whatsapp-button-icon"/);
+  assert.match(adminHtml, /id="contactUser"[^>]*>\s*<img class="whatsapp-button-icon"/);
+});

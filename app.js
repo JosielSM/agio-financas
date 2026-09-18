@@ -28,6 +28,7 @@ const state = {
 if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
   localStorage.setItem("credmais_cache_owner", state.user.id);
 let pendingModalId = null;
+const modalStack = [];
 let expandedInstallment = null;
 let selectedClientProfileId = null;
 let clientProfileTab = "loans";
@@ -833,7 +834,6 @@ function openDeleteAccount() {
     form = $("#deleteAccountForm"),
     passwordField = $("#deleteAccountPasswordField"),
     passwordInput = $("#deleteAccountPassword");
-  closeModals();
   form.reset();
   setFeedback("deleteAccountFeedback");
   $("#deleteAccountEmail").textContent =
@@ -954,7 +954,6 @@ function openProfilePasswordSettings() {
     sendProfilePasswordReset($("#profilePasswordButton"));
     return;
   }
-  closeModals();
   openSecurity();
 }
 async function changePassword(event) {
@@ -2278,13 +2277,17 @@ function openModal(id) {
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   const modal = $(`#${id}`);
+  const previousIndex = modalStack.indexOf(id);
+  if (previousIndex !== -1) modalStack.splice(previousIndex, 1);
+  modalStack.push(id);
   modal.hidden = false;
-  modal.scrollTop = 0;
+  if (previousIndex === -1) modal.scrollTop = 0;
   syncModalLayers(modal);
   syncModalViewport();
   rememberModalState(id);
 }
 function closeModals() {
+  modalStack.length = 0;
   document.querySelectorAll(".modal").forEach((modal) => {
     modal.hidden = true;
   });
@@ -2295,13 +2298,22 @@ function closeModals() {
   pendingModalId = null;
   returnToClientId = null;
 }
+function closeTopModal() {
+  const id = modalStack.pop();
+  if (id) $(`#${id}`).hidden = true;
+  const previous = modalStack.length ? $(`#${modalStack.at(-1)}`) : null;
+  if (previous && !previous.hidden) {
+    syncModalLayers(previous);
+    syncModalViewport();
+    return;
+  }
+  closeModals();
+}
 function requestClose() {
-  if (!$("#confirmDeleteModal").hidden) return cancelDelete();
-  if (!$("#discardModal").hidden) return keepEditing();
-  const modal = Array.from(document.querySelectorAll(".modal")).find(
-    (item) => !item.hidden && item.id !== "discardModal",
-  );
+  const modal = modalStack.length ? $(`#${modalStack.at(-1)}`) : null;
   if (!modal) return closeModals();
+  if (modal.id === "confirmDeleteModal") return cancelDelete();
+  if (modal.id === "discardModal") return keepEditing();
   const form = modal.querySelector("form");
   if (
     form &&
@@ -2309,48 +2321,30 @@ function requestClose() {
     modal.dataset.initialState !== formSnapshot(modal)
   ) {
     pendingModalId = modal.id;
-    $("#discardModal").hidden = false;
-    syncModalLayers($("#discardModal"));
+    openModal("discardModal");
     return;
   }
-  closeModals();
+  closeTopModal();
 }
 function keepEditing() {
-  $("#discardModal").hidden = true;
-  syncModalLayers();
+  closeTopModal();
   pendingModalId = null;
 }
 function discardChanges() {
-  if (pendingModalId) $(`#${pendingModalId}`).hidden = true;
-  $("#discardModal").hidden = true;
-  syncModalLayers();
-  $("#modalBackdrop").hidden = true;
-  document.body.classList.remove("modal-open");
-  clearModalViewport();
+  const discardedId = pendingModalId;
+  closeTopModal();
+  if (discardedId && modalStack.at(-1) === discardedId) closeTopModal();
   pendingModalId = null;
 }
 function askDelete({ title, message, action }) {
   pendingDelete = action;
   $("#confirmDeleteTitle").textContent = title;
   $("#confirmDeleteMessage").textContent = message;
-  document.body.classList.add("modal-open");
-  $("#modalBackdrop").hidden = false;
-  $("#confirmDeleteModal").hidden = false;
-  syncModalLayers($("#confirmDeleteModal"));
-  syncModalViewport();
+  openModal("confirmDeleteModal");
 }
 function cancelDelete() {
   pendingDelete = null;
-  $("#confirmDeleteModal").hidden = true;
-  syncModalLayers();
-  const anotherModal = Array.from(document.querySelectorAll(".modal")).some(
-    (modal) => !modal.hidden && modal.id !== "confirmDeleteModal",
-  );
-  if (!anotherModal) {
-    $("#modalBackdrop").hidden = true;
-    document.body.classList.remove("modal-open");
-    clearModalViewport();
-  }
+  closeTopModal();
 }
 async function confirmDelete() {
   if (!pendingDelete) return cancelDelete();
@@ -2414,14 +2408,8 @@ function openLoan(id) {
   if (!requirePlatformAccess(id ? "editar empréstimos" : "criar empréstimos"))
     return;
   if (!state.clients.length) return openModal("loanModal");
-  document.body.classList.add("modal-open");
-  $("#modalBackdrop").hidden = false;
-  $("#loanModal").hidden = false;
-  $("#loanModal").scrollTop = 0;
-  syncModalLayers($("#loanModal"));
-  syncModalViewport();
   prepareLoan(id);
-  rememberModalState("loanModal");
+  openModal("loanModal");
 }
 function setPage(page) {
   const target = $(`#${page}Page`);
@@ -2850,7 +2838,7 @@ function renderDueLoans() {
               (item) => item.id === loan.clientId,
             ),
             late = lateCharge(loan, date);
-          return `<div class="due-item"><div><b>${escapeHtml(client?.name || "Cliente removido")}</b><span>${installmentStatus(loan, index, date)}${late.value ? ` · +${money(late.value)}` : ""}</span></div><button class="whatsapp" data-whatsapp="${escapeHtml(loan.id)}" data-installment="${index}">Cobrar</button></div>`;
+          return `<div class="due-item"><div><b>${escapeHtml(client?.name || "Cliente removido")}</b><span>${installmentStatus(loan, index, date)}${late.value ? ` · +${money(late.value)}` : ""}</span></div><button class="whatsapp" data-whatsapp="${escapeHtml(loan.id)}" data-installment="${index}"><img class="whatsapp-button-icon" src="icons/whatsapp.svg" alt="" aria-hidden="true">Cobrar</button></div>`;
         })
         .join("")
     : '<div class="empty compact"><span>✓</span><h4>Tudo em dia</h4><p>Não há cobranças vencidas ou para hoje.</p></div>';
@@ -2938,7 +2926,6 @@ function openClientLoanDetails(loanId, installmentIndex) {
     return;
   }
   const clientId = selectedClientProfileId;
-  closeModals();
   returnToClientId = clientId;
   expandedInstallment = Number.isInteger(installmentIndex) && installmentIndex >= 0 && installmentIndex < Number(loan.installments)
     ? `${loanId}:${installmentIndex}` : null;
@@ -2947,7 +2934,6 @@ function openClientLoanDetails(loanId, installmentIndex) {
 function openLoanForClient() {
   const clientId = selectedClientProfileId;
   if (!state.clients.some((item) => item.id === clientId) || !requirePlatformAccess("criar empréstimos")) return;
-  closeModals();
   openLoan();
   if ($("#loanModal").hidden) return;
   $("#loanClient").value = clientId;
@@ -3370,10 +3356,10 @@ function details(id) {
       <button type="button" class="danger-button" data-payment="missed" data-loan="${loan.id}" data-installment="${index}">${actionIcon}<span>Não pagou</span></button>
       <button type="button" class="open-button" data-payment="open" data-loan="${loan.id}" data-installment="${index}" ${loan.paymentStates?.[index] ? "" : 'disabled title="A parcela já está em aberto"'}>${actionIcon}<span>Deixar em aberto</span></button>
     </div>`;
-    return `<article class="installment-card ${visualStatus} ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${visualStatus}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}">Enviar mensagem no WhatsApp</button></div>${paymentActions}</div>` : ""}</article>`;
+    return `<article class="installment-card ${visualStatus} ${expanded ? "expanded" : ""}" data-installment-card="${index}"><button class="installment-summary" data-toggle-installment="${loan.id}" data-installment="${index}" aria-expanded="${expanded}"><span><b>Parcela ${index + 1} de ${loan.installments}</b><small>📅 ${date.toLocaleDateString("pt-BR")}${charge ? ` · ${charge}` : ""}</small></span><span class="installment-side"><em class="due ${visualStatus}">${status}</em><strong>${money(value)}</strong><i>${expanded ? "⌃" : "⌄"}</i></span></button>${expanded ? `<div class="installment-body"><p class="installment-help">${status === "Pagamento parcial" ? partialGuide : status === "Só juros" ? index < loan.installments - 1 ? `💡 Juros recebidos: ${money(info.interestOnlyValue)}. O próximo pagamento passa a ser ${money(info.nextDue)}.` : `💡 Juros recebidos: ${money(info.interestOnlyValue)}. Esta última parcela foi renovada e o saldo principal continua em aberto.` : interestGuide}</p><div class="installment-main-action"><button class="whatsapp" data-whatsapp="${loan.id}" data-installment="${index}"><img class="whatsapp-button-icon" src="icons/whatsapp.svg" alt="" aria-hidden="true">Enviar mensagem no WhatsApp</button></div>${paymentActions}</div>` : ""}</article>`;
   }).join("");
   $("#loanDetails").innerHTML =
-    `${returnToClientId === loan.clientId ? '<button class="details-back-client" type="button" data-return-client>← Voltar ao cliente</button>' : ""}<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small contract-message-action" data-contract-whatsapp="${escapeHtml(loan.id)}"><span>◉</span> Enviar resumo do contrato no WhatsApp</button><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
+    `${returnToClientId === loan.clientId ? '<button class="details-back-client" type="button" data-return-client>← Voltar ao cliente</button>' : ""}<div class="details-head"><div><span class="eyebrow">${escapeHtml(loan.contract || "EMP-S/CONTRATO")}</span><h2>${escapeHtml(client?.name || "Cliente")}</h2><p class="muted">${formatFrequency(loan.frequency || 30, loan.businessDays)} · ${interestDescription(loan)}</p></div><button class="outline small details-actions-trigger" data-toggle-details-actions aria-expanded="false">Ações ⋮</button></div><div class="details-actions-menu" data-details-actions-menu hidden><button class="outline small contract-message-action" data-contract-whatsapp="${escapeHtml(loan.id)}"><img class="whatsapp-button-icon" src="icons/whatsapp.svg" alt="" aria-hidden="true"> Enviar resumo do contrato no WhatsApp</button><button class="outline small" data-edit-loan="${escapeHtml(loan.id)}"><span>✎</span> Editar empréstimo</button><button class="outline small" data-edit-client="${escapeHtml(client?.id || "")}"><span>♙</span> Editar cliente</button><button class="outline small" data-toggle-blacklist="${escapeHtml(client?.id || "")}" data-loan-context="${escapeHtml(loan.id)}"><span>⚑</span> ${client?.blacklisted ? "Remover da lista negra" : "Adicionar à lista negra"}</button><button class="outline small" data-archive-loan="${escapeHtml(loan.id)}"><span>◷</span> ${loan.archived ? "Restaurar empréstimo" : "Arquivar empréstimo"}</button><button class="outline small delete-button" data-delete-loan="${escapeHtml(loan.id)}"><span>⌫</span> Excluir empréstimo</button></div><div class="details-summary"><div><span>Valor emprestado</span><b>${money(loan.amount)}</b></div><div><span>Saldo a receber</span><b>${money(financials.receivable)}</b></div><div><span>Valor recebido</span><b>${money(financials.received)}</b></div></div><p class="details-late-fee">Juros no atraso: ${money(loan.lateFee || 0)} por ${loan.businessDays ? "dia útil" : "dia"}.</p><h3>Parcelas</h3><p class="muted charge-note">Toque em uma parcela para ver as ações e a explicação do pagamento.</p><div class="installment-list">${items}</div>`;
   openModal("detailsModal");
   if (expandedInstallment?.startsWith(`${loan.id}:`)) {
     const installmentIndex = expandedInstallment.split(":")[1];
@@ -4221,11 +4207,9 @@ $("#profilePasswordButton").onclick = openProfilePasswordSettings;
 $("#profileSecurityButton").onclick = openProfilePasswordSettings;
 $("#profileResetPasswordButton").onclick = () => sendProfilePasswordReset();
 $("#profilePixButton").onclick = () => {
-  closeModals();
   openPix();
 };
 $("#profileInstallButton").onclick = () => {
-  closeModals();
   openInstall();
 };
 $("#authInstallButton").onclick = openInstall;
@@ -4311,8 +4295,11 @@ document.addEventListener("click", (event) => {
   }
   if (button.hasAttribute("data-return-client")) {
     const clientId = returnToClientId;
-    closeModals();
-    openClientProfile(clientId, true);
+    if (modalStack.at(-2) === "clientProfileModal") closeTopModal();
+    else {
+      closeModals();
+      openClientProfile(clientId, true);
+    }
     return;
   }
   if (button.dataset.page) {
@@ -4345,13 +4332,11 @@ document.addEventListener("click", (event) => {
   if (button.dataset.contractWhatsapp)
     openContractWhatsApp(button.dataset.contractWhatsapp);
   if (button.dataset.editClient) {
-    closeModals();
     openClient(button.dataset.editClient);
   }
   if (button.dataset.deleteClient)
     requestDeleteClient(button.dataset.deleteClient);
   if (button.dataset.editLoan) {
-    closeModals();
     openLoan(button.dataset.editLoan);
   }
   if (button.dataset.payment)

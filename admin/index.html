@@ -106,14 +106,14 @@
     <div class="profile-primary-actions"><button class="primary" id="openManageActions" type="button">Ações do usuário</button><button class="outline" id="viewAccountHistory" type="button">Ver histórico completo</button></div>
     <section class="profile-recent"><div class="profile-recent-head"><b>Últimos acontecimentos</b><small>Liberações e pagamentos</small></div><div class="user-payment-history" id="managePaymentHistory"></div></section>
     <div class="manage-summary profile-meta"><article><small>Último acesso</small><b id="manageLastSeen">Ainda não acessou</b></article><article><small>Solicitação</small><b id="manageRequestedAt">Não solicitou</b></article><article><small>Conta criada</small><b id="manageCreatedAt">Data indisponível</b></article></div>
-    <div class="profile-shortcuts" aria-label="Atalhos do usuário"><button id="copyUserEmail" type="button">✉️ Copiar e-mail</button><button id="copyUserPhone" type="button">📋 Copiar WhatsApp</button><button id="contactUser" type="button">💬 Abrir WhatsApp</button></div>
+    <div class="profile-shortcuts" aria-label="Atalhos do usuário"><button id="copyUserEmail" type="button">✉️ Copiar e-mail</button><button id="copyUserPhone" type="button">📋 Copiar WhatsApp</button><button id="contactUser" type="button"><img class="whatsapp-button-icon" src="../icons/whatsapp.svg" alt="" aria-hidden="true"> Abrir WhatsApp</button></div>
     <p class="feedback profile-feedback" id="profileFeedback" aria-live="polite"></p>
   </section>
 
   <section class="modal action-list-modal" id="actionsModal" hidden aria-labelledby="actionsTitle" role="dialog" aria-modal="true">
     <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
     <header class="action-modal-head"><span class="eyebrow">GERENCIAR USUÁRIO</span><h2 id="actionsTitle">Escolha uma ação</h2><p>As informações do perfil ficam separadas das mudanças.</p></header>
-    <div class="action-choices"><button id="actionEdit" type="button"><span>✎</span><div><b>Editar dados e preço</b><small>WhatsApp, observações e valor para compras futuras</small></div><em>›</em></button><button id="actionGrant" type="button"><span>✓</span><div><b>Liberar ou renovar</b><small>Registre acesso gratuito ou pagamento recebido fora da plataforma</small></div><em>›</em></button><button id="chargeAccount" type="button"><span>💬</span><div><b>Mensagem de cobrança</b><small>Prepare e envie um lembrete pelo WhatsApp</small></div><em>›</em></button><button id="actionDanger" type="button" class="danger-choice"><span>⚠</span><div><b>Bloqueio e reset</b><small>Ações sensíveis para contas sem período automático ativo</small></div><em>›</em></button></div>
+    <div class="action-choices"><button id="actionEdit" type="button"><span>✎</span><div><b>Editar dados e preço</b><small>WhatsApp, observações e valor para compras futuras</small></div><em>›</em></button><button id="actionGrant" type="button"><span>✓</span><div><b>Liberar ou renovar</b><small>Registre acesso gratuito ou pagamento recebido fora da plataforma</small></div><em>›</em></button><button id="chargeAccount" type="button"><span><img class="whatsapp-button-icon" src="../icons/whatsapp.svg" alt="" aria-hidden="true"></span><div><b>Mensagem de cobrança</b><small>Prepare e envie um lembrete pelo WhatsApp</small></div><em>›</em></button><button id="actionDanger" type="button" class="danger-choice"><span>⚠</span><div><b>Bloqueio e reset</b><small>Ações sensíveis para contas sem período automático ativo</small></div><em>›</em></button></div>
     <button class="back-link" data-back-profile type="button">← Voltar ao perfil</button>
   </section>
 
@@ -162,7 +162,7 @@
     </div>
     <textarea id="chargePreview" hidden aria-hidden="true"></textarea>
     <p class="feedback charge-feedback" id="chargeFeedback" aria-live="polite"></p>
-    <div class="modal-actions charge-actions"><button class="outline" id="copyCharge" type="button">📋 Copiar mensagem</button><button class="whatsapp-button" id="sendCharge" type="button">💬 Enviar no WhatsApp</button></div>
+    <div class="modal-actions charge-actions"><button class="outline" id="copyCharge" type="button">📋 Copiar mensagem</button><button class="whatsapp-button" id="sendCharge" type="button"><img class="whatsapp-button-icon" src="../icons/whatsapp.svg" alt="" aria-hidden="true"> Enviar no WhatsApp</button></div>
   </section>
   <div class="toast" id="adminToast" role="status" aria-live="polite"></div>
 

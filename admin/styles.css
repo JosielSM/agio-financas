@@ -80,3 +80,19 @@
 .dark .backdrop {
   background: #020b08a8;
 }
+.whatsapp-button,
+#contactUser {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.whatsapp-button-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 3px;
+  border-radius: 50%;
+  background: #168f56;
+}

@@ -3120,6 +3120,26 @@ body.dark {
   border: 1px solid #a5dfbc;
   box-shadow: 0 2px 5px #087a4f1a;
 }
+.whatsapp,
+.contract-share-button,
+.contract-message-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.whatsapp-button-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 3px;
+  border-radius: 50%;
+  background: #168f56;
+}
+.contract-share-button .whatsapp-button-icon {
+  background: #087145;
+}
 .due-item .whatsapp {
   min-width: 64px;
 }
