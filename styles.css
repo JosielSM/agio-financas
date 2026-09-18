@@ -5138,3 +5138,221 @@ button.profile-menu-item:hover:not(:disabled) {
   .client-installment-row { gap: 8px; padding: 11px; }
   .client-installment-end strong { font-size: 15px; }
 }
+
+/* Clear, touch-friendly actions inside each expanded installment. */
+#loanDetails .installment-summary {
+  cursor: pointer;
+}
+#loanDetails .installment-summary:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: -3px;
+}
+#loanDetails .installment-side i {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--soft);
+  font-size: 18px;
+}
+#loanDetails .details-actions-menu button {
+  min-height: 54px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 2px 0 var(--line);
+  font: 700 13px/1.25 "DM Sans", sans-serif;
+  cursor: pointer;
+}
+#loanDetails .details-actions-menu button span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--brand);
+  font-size: 19px;
+}
+#loanDetails .details-actions-menu .contract-message-action {
+  border-color: #b9e4cd;
+  background: #e9f9f0;
+  color: #087c4d;
+}
+#loanDetails .details-actions-menu .delete-button {
+  border-color: #efb4af;
+  background: #fee7e4;
+  color: #a53d35;
+}
+#loanDetails .details-actions-menu .delete-button span {
+  background: #fbd6d1;
+  color: #a53d35;
+}
+.dark #loanDetails .details-actions-menu .contract-message-action {
+  border-color: #2a684b;
+  background: #163e2c;
+  color: #bcf6d5;
+}
+.dark #loanDetails .details-actions-menu .delete-button {
+  border-color: #8e4a45;
+  background: #4b2927;
+  color: #ffd6d1;
+}
+.dark #loanDetails .details-actions-menu .delete-button span {
+  background: #61332f;
+  color: #ffd6d1;
+}
+#loanDetails .details-actions-menu button:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+#loanDetails .payment-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+#loanDetails .payment-actions-heading {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  color: var(--text);
+  font: 700 14px/1.3 Outfit;
+}
+#loanDetails .payment-actions button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 9px;
+  border: 1px solid var(--action-border);
+  border-radius: 12px;
+  background: var(--action-bg);
+  color: var(--action-color);
+  box-shadow: 0 2px 0 var(--action-border), 0 5px 12px #10251a0a;
+  font: 700 13px/1.25 "DM Sans", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+#loanDetails .payment-actions button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#loanDetails .payment-action-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--icon-bg);
+}
+#loanDetails .payment-action-icon::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: var(--action-icon) center / contain no-repeat;
+  mask: var(--action-icon) center / contain no-repeat;
+}
+#loanDetails .payment-actions button[data-payment="paid"] {
+  --action-bg: #eaf8ef;
+  --action-border: #abdcbc;
+  --action-color: #126b43;
+  --icon-bg: #d1eedb;
+  --action-icon: url("icons/circle-check.svg");
+}
+#loanDetails .payment-actions button[data-payment="interest"] {
+  --action-bg: #f2effc;
+  --action-border: #d7cbf0;
+  --action-color: #5e459a;
+  --icon-bg: #e5dcf9;
+  --action-icon: url("icons/chart-up.svg");
+}
+#loanDetails .payment-actions button[data-partial] {
+  --action-bg: #eaf3ff;
+  --action-border: #c0d9f6;
+  --action-color: #275d9b;
+  --icon-bg: #d5e8ff;
+  --action-icon: url("icons/wallet.svg");
+}
+#loanDetails .payment-actions button[data-postpone] {
+  --action-bg: #fff6e9;
+  --action-border: #efd6ad;
+  --action-color: #825b20;
+  --icon-bg: #ffebc9;
+  --action-icon: url("icons/history.svg");
+}
+#loanDetails .payment-actions button[data-payment="missed"] {
+  --action-bg: #fff0ee;
+  --action-border: #eebdb8;
+  --action-color: #a53d35;
+  --icon-bg: #fbdcd8;
+  --action-icon: url("icons/alert.svg");
+}
+#loanDetails .payment-actions button[data-payment="open"] {
+  grid-column: auto;
+  --action-bg: #f1f4f7;
+  --action-border: #cbd7e1;
+  --action-color: #40566d;
+  --icon-bg: #e2eaf0;
+  --action-icon: url("icons/history.svg");
+}
+#loanDetails .payment-actions button:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
+#loanDetails .payment-actions button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--action-border);
+}
+#loanDetails .payment-actions button:disabled {
+  opacity: .52;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  #loanDetails .payment-actions button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 0 var(--action-border), 0 9px 16px #10251a18;
+  }
+  #loanDetails .installment-summary:hover {
+    background: var(--soft);
+  }
+  #loanDetails .details-actions-menu button:hover {
+    box-shadow: 0 3px 0 var(--line), 0 9px 16px #10251a18;
+    transform: translateY(-1px);
+  }
+}
+.dark #loanDetails .payment-actions button[data-payment="paid"] {
+  --action-bg: #173d2b; --action-border: #397b56; --action-color: #baf3cb; --icon-bg: #255b3c;
+}
+.dark #loanDetails .payment-actions button[data-payment="interest"] {
+  --action-bg: #342b4c; --action-border: #675591; --action-color: #e2d7ff; --icon-bg: #493b68;
+}
+.dark #loanDetails .payment-actions button[data-partial] {
+  --action-bg: #233d58; --action-border: #48749c; --action-color: #d1e9ff; --icon-bg: #305573;
+}
+.dark #loanDetails .payment-actions button[data-postpone] {
+  --action-bg: #493b22; --action-border: #806836; --action-color: #ffe6a8; --icon-bg: #604c29;
+}
+.dark #loanDetails .payment-actions button[data-payment="missed"] {
+  --action-bg: #4b2927; --action-border: #8e4a45; --action-color: #ffd6d1; --icon-bg: #61332f;
+}
+.dark #loanDetails .payment-actions button[data-payment="open"] {
+  --action-bg: #2b3944; --action-border: #536a7a; --action-color: #deedfa; --icon-bg: #3b4d5b;
+}
+@media (max-width: 360px) {
+  #loanDetails .payment-actions {
+    grid-template-columns: 1fr;
+  }
+  #loanDetails .payment-actions button {
+    min-height: 56px;
+  }
+}
