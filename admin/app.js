@@ -82,14 +82,14 @@ function toast(message) {
   toast.timer = setTimeout(() => element.classList.remove("show"), 3200);
 }
 async function loading(button, action) {
-  const label = button.textContent;
+  const content = button.innerHTML;
   button.disabled = true;
   button.textContent = "Aguarde...";
   try {
     return await action();
   } finally {
     button.disabled = false;
-    button.textContent = label;
+    button.innerHTML = content;
   }
 }
 function setAuthView(name) {
@@ -1481,6 +1481,16 @@ $("#modalBackdrop").onclick = closeModals;
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (button) {
+    if (button.dataset.passwordToggle) {
+      const input = document.getElementById(button.dataset.passwordToggle);
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      button.classList.toggle("is-visible", show);
+      button.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+      button.setAttribute("aria-pressed", String(show));
+      return;
+    }
     if (button.dataset.authView) setAuthView(button.dataset.authView);
     if (button.dataset.section) setSection(button.dataset.section);
     if (button.dataset.sectionTarget) setSection(button.dataset.sectionTarget);

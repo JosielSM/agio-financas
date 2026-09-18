@@ -566,6 +566,11 @@ button {
 .platform-support-button > span:first-child {
   font-size: 19px;
 }
+.platform-support-button > .support-whatsapp-icon {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 auto;
+}
 .platform-support-button > span:last-child {
   display: grid;
   gap: 1px;
@@ -1139,6 +1144,15 @@ textarea {
 }
 .support-link i {
   color: #1eaa65;
+}
+.support-whatsapp-icon {
+  width: 27px;
+  height: 27px;
+  display: block;
+  flex: 0 0 auto;
+  padding: 5px;
+  border-radius: 50%;
+  background: #168f56;
 }
 .report-link {
   color: #26715a;
@@ -3082,6 +3096,27 @@ body.dark {
   background: var(--soft);
   color: var(--brand);
 }
+.password-toggle {
+  display: grid;
+  place-items: center;
+  font-size: 0;
+}
+.password-toggle::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url("icons/eye.svg") center / contain no-repeat;
+  mask: url("icons/eye.svg") center / contain no-repeat;
+}
+.password-toggle.is-visible::before {
+  -webkit-mask-image: url("icons/eye-off.svg");
+  mask-image: url("icons/eye-off.svg");
+}
+.password-toggle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
 .password-rule,
 .form-feedback {
   margin: -9px 0 0;
@@ -3157,6 +3192,20 @@ body.dark {
   border-radius: 50%;
   color: #fff;
   background: #ffffff1f;
+}
+.modal.profile-modal .modal-close {
+  display: grid;
+  place-items: center;
+  color: #075b43;
+  background: #fff;
+  border: 1px solid #cfe7d9;
+  box-shadow: 0 2px 10px #062b1c35;
+}
+.modal.profile-modal .modal-close:hover,
+.modal.profile-modal .modal-close:focus-visible {
+  background: #e5f6ef;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 .profile-hero {
   display: flex;
@@ -3289,6 +3338,21 @@ button.profile-menu-item:hover:not(:disabled) {
   background: #fff;
   border: 1px solid #dde5e1;
   font-family: Arial, sans-serif;
+}
+.google-icon img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+.profile-method-actions {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+}
+.profile-method-actions strong {
+  color: var(--brand);
+  font-size: 11px;
+  white-space: nowrap;
 }
 .profile-method b,
 .profile-method small,

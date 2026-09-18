@@ -681,6 +681,7 @@ function openProfile() {
     photo = $("#profilePhoto"),
     googleButton = $("#profileGoogleButton"),
     googleStatus = $("#profileGoogleStatus"),
+    passwordButton = $("#profilePasswordButton"),
     resetButton = $("#profileResetPasswordButton");
   $("#profileName").textContent = user.name || "Usuário";
   $("#profileEmail").textContent = user.email || "E-mail não informado";
@@ -709,7 +710,23 @@ function openProfile() {
     "connected",
     passwordConnected,
   );
+  $("#profilePasswordDescription").textContent = passwordConnected
+    ? "Você pode entrar com e-mail e senha."
+    : "Sem senha de acesso configurada.";
+  $("#profilePasswordAction").textContent = passwordConnected
+    ? "Alterar →"
+    : usesFirebase ? "Configurar →" : "Indisponível";
+  passwordButton.disabled = !passwordConnected && (!usesFirebase || !user.email);
+  passwordButton.setAttribute(
+    "aria-label",
+    passwordConnected ? "Alterar senha do CredMais" : "Configurar senha do CredMais por e-mail",
+  );
+  $("#profileSecurityDescription").textContent = passwordConnected
+    ? "Altere sua senha com segurança"
+    : "Configure uma senha pelo link enviado ao e-mail";
+  $("#profileSecurityAction").textContent = passwordConnected ? "Abrir →" : "Configurar →";
   resetButton.disabled = !usesFirebase || !user.email;
+  resetButton.hidden = !passwordConnected;
   $("#profileLastAccess").textContent = formatAccountDate(user.lastSignInAt);
   if (user.photoURL) {
     photo.src = user.photoURL;
@@ -763,8 +780,7 @@ async function linkProfileGoogle() {
     if (!hasAccountProvider("google.com", "google")) button.disabled = false;
   }
 }
-async function sendProfilePasswordReset() {
-  const button = $("#profileResetPasswordButton");
+async function sendProfilePasswordReset(button = $("#profileResetPasswordButton")) {
   if (button.disabled || submissionLocks.has("profile-password-reset")) return;
   submissionLocks.add("profile-password-reset");
   button.disabled = true;
@@ -776,10 +792,10 @@ async function sendProfilePasswordReset() {
     addHistory(
       "settings",
       "Recuperação de senha solicitada",
-      `O link de recuperação foi enviado para ${state.user.email}.`,
+      `Foi solicitado um link de recuperação para ${state.user.email}.`,
     );
     await save({ allowReadOnly: true });
-    toast("E-mail de recuperação enviado. Confira também a pasta Spam.");
+    toast("Se o e-mail puder receber um link de senha, confira a caixa de entrada e a pasta Spam.");
   } catch (error) {
     toast(error.message || "Não foi possível enviar o e-mail de recuperação.");
   } finally {
@@ -920,13 +936,27 @@ async function deleteAccountAndData(event) {
   }
 }
 function openSecurity() {
+  if (!hasAccountProvider("password", "email")) {
+    sendProfilePasswordReset($("#profilePasswordButton"));
+    return;
+  }
   $("#passwordChangeForm").reset();
   setFeedback("passwordChangeFeedback");
   $(".sidebar").classList.remove("open");
   openModal("securityModal");
 }
+function openProfilePasswordSettings() {
+  if (!hasAccountProvider("password", "email")) {
+    sendProfilePasswordReset($("#profilePasswordButton"));
+    return;
+  }
+  closeModals();
+  openSecurity();
+}
 async function changePassword(event) {
   event.preventDefault();
+  if (!hasAccountProvider("password", "email"))
+    return setFeedback("passwordChangeFeedback", "Configure a senha pelo link enviado ao seu e-mail.", "error");
   const form = event.currentTarget,
     newPassword = $("#newPassword").value,
     confirmation = $("#confirmNewPassword").value;
@@ -3973,11 +4003,9 @@ document
   .querySelectorAll("[data-platform-support]")
   .forEach((button) => (button.onclick = openPlatformSupport));
 $("#profileGoogleButton").onclick = linkProfileGoogle;
-$("#profileSecurityButton").onclick = () => {
-  closeModals();
-  openSecurity();
-};
-$("#profileResetPasswordButton").onclick = sendProfilePasswordReset;
+$("#profilePasswordButton").onclick = openProfilePasswordSettings;
+$("#profileSecurityButton").onclick = openProfilePasswordSettings;
+$("#profileResetPasswordButton").onclick = () => sendProfilePasswordReset();
 $("#profilePixButton").onclick = () => {
   closeModals();
   openPix();
@@ -4058,8 +4086,9 @@ document.addEventListener("click", (event) => {
     const input = $(`#${button.dataset.passwordToggle}`),
       show = input.type === "password";
     input.type = show ? "text" : "password";
-    button.textContent = show ? "◉" : "◌";
+    button.classList.toggle("is-visible", show);
     button.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+    button.setAttribute("aria-pressed", String(show));
     return;
   }
   if (button.classList.contains("add-loan")) openLoan();

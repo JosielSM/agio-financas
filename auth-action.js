@@ -128,8 +128,9 @@
     const input = document.getElementById(button.dataset.passwordToggle);
     const show = input.type === "password";
     input.type = show ? "text" : "password";
-    button.textContent = show ? "◉" : "◌";
+    button.classList.toggle("is-visible", show);
     button.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+    button.setAttribute("aria-pressed", String(show));
   });
 
   handleAction();
