@@ -5482,3 +5482,103 @@ button.profile-menu-item:hover:not(:disabled) {
     line-height: 1.18;
   }
 }
+
+/* People and active contracts complete the same visual language as money. */
+#appView .stats article:nth-child(4) {
+  --metric-accent: #25828a;
+  --metric-number: #176b72;
+  --metric-icon: #176b72;
+  --metric-icon-bg: #dff3f3;
+  --metric-surface: #edf9f8;
+  --metric-surface-end: #fbfefe;
+  --metric-border: #bfe3e3;
+  --metric-shadow: #176b7215;
+}
+#appView .stats article:nth-child(5) {
+  --metric-accent: #8066bd;
+  --metric-number: #6749a2;
+  --metric-icon: #6c4eaa;
+  --metric-icon-bg: #eee6fb;
+  --metric-surface: #f5f0fc;
+  --metric-surface-end: #fdfbff;
+  --metric-border: #d9c9ef;
+  --metric-shadow: #6749a215;
+}
+#appView .stats article:nth-child(n + 4) {
+  border: 1px solid var(--metric-border);
+  border-top: 4px solid var(--metric-accent);
+  background: linear-gradient(150deg, var(--metric-surface-end), var(--metric-surface));
+  box-shadow: 0 8px 20px var(--metric-shadow), inset 0 1px #ffffff80;
+}
+#appView .stats article:nth-child(n + 4) .stat-icon {
+  color: var(--metric-icon);
+  background: var(--metric-icon-bg);
+}
+#appView .stats article:nth-child(n + 4) p {
+  color: var(--text);
+  font-weight: 700;
+}
+#appView .stats article:nth-child(n + 4) > strong,
+#appView .stats article:nth-child(4) .client-stat-values strong {
+  color: var(--metric-number);
+}
+#appView .stats article:nth-child(4) .client-stat-values {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+#appView .stats article:nth-child(4) .client-stat-values > span {
+  min-width: 0;
+  grid-template-columns: 29px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 5px;
+  padding: 7px 8px;
+  border: 1px solid var(--metric-border);
+  border-radius: 9px;
+  background: var(--metric-icon-bg);
+}
+#appView .stats article:nth-child(4) .client-stat-values > span + span {
+  border-left: 1px solid var(--metric-border);
+}
+#appView .stats article:nth-child(4) .client-stat-values small {
+  color: var(--text);
+  overflow-wrap: normal;
+}
+.dark #appView .stats article:nth-child(4) {
+  --metric-accent: #67cbd0;
+  --metric-number: #9de4e3;
+  --metric-icon: #9de4e3;
+  --metric-icon-bg: #254e50;
+  --metric-surface: #1d3c3d;
+  --metric-surface-end: #1b2e2e;
+  --metric-border: #3c7072;
+  --metric-shadow: #00000026;
+}
+.dark #appView .stats article:nth-child(5) {
+  --metric-accent: #ba9bf3;
+  --metric-number: #d6beff;
+  --metric-icon: #d6beff;
+  --metric-icon-bg: #493b63;
+  --metric-surface: #332b49;
+  --metric-surface-end: #282733;
+  --metric-border: #665486;
+  --metric-shadow: #00000026;
+}
+@media (max-width: 680px) {
+  #appView .stats article:nth-child(n + 4) {
+    min-height: 132px;
+  }
+  #appView .stats article:nth-child(4) .client-stat-values {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  #appView .stats article:nth-child(4) .client-stat-values > span {
+    grid-template-columns: 29px minmax(0, 1fr);
+    padding: 4px 6px;
+  }
+  #appView .stats article:nth-child(4) .client-stat-values strong {
+    font-size: 18px;
+  }
+  #appView .stats article:nth-child(5) > strong {
+    font: 700 28px/1 Outfit, sans-serif;
+  }
+}
