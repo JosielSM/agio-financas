@@ -6,6 +6,7 @@ const state = {
   settings: null,
   log: [],
   payments: [],
+  paymentTotals: null,
   adminIds: [],
   filter: "all",
   paymentFilter: "all",
@@ -14,6 +15,15 @@ const state = {
   section: "overview",
   managedUserId: null,
   chargedUserId: null,
+  currentPayment: null,
+  recentAccountEvents: [],
+  profileRequestId: 0,
+  historyUserId: null,
+  historyOffset: 0,
+  historyEvents: [],
+  historyLoading: false,
+  historyRequestId: 0,
+  refreshFailed: false,
 };
 const DEFAULT_MESSAGE = `Olá, *{nome}*! 👋
 
@@ -356,6 +366,13 @@ const paymentMethodLabel = (payment) => {
   if (type === "account_money") return "Saldo Mercado Pago";
   return method ? method.replaceAll("_", " ") : "Mercado Pago";
 };
+const manualPaymentLabel = (method) => ({
+  cash: "Dinheiro em espécie",
+  pix_direct: "Pix direto",
+  bank_transfer: "Transferência bancária",
+  card_external: "Cartão fora da plataforma",
+  other: "Outro meio",
+})[method] || "Meio não registrado";
 const paymentPlanLabel = (payment) => {
   if (!payment) return "Nenhum plano pago";
   if (payment.mode === "subscription") return "Assinatura mensal automática";
@@ -382,13 +399,10 @@ function renderStats() {
     );
   $("#statTotal").textContent = customers.length;
   $("#statRecent").textContent = recentCustomerAccounts().length;
-  $("#statAutomaticPaid").textContent = new Set(
-    automaticPayments.map((payment) => payment.userId),
-  ).size;
+  $("#statAutomaticPaid").textContent = customers.filter(hasProtectedAutomaticAccess).length;
   $("#statActive").textContent = statuses.filter((status) => status === "active").length;
-  $("#statReceivedMonth").textContent = money(
-    receivedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0),
-  );
+  $("#statReceivedMonth").textContent = money(state.paymentTotals?.approvedAmountMonth ??
+    receivedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0));
 }
 const expiryNoticeStorageKey = () =>
   `credmais_admin_expiry_notices:${state.user?.id || "owner"}`;
@@ -488,12 +502,12 @@ function renderPayments() {
     failed = state.payments.filter(
       (payment) => paymentStatusGroup(payment.status) === "failed",
     );
-  $("#paymentApprovedMonth").textContent = approvedThisMonth.length;
+  $("#paymentApprovedMonth").textContent = state.paymentTotals?.approvedCountMonth ?? approvedThisMonth.length;
   $("#paymentApprovedAmount").textContent = `${money(
-    approvedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0),
+    state.paymentTotals?.approvedAmountMonth ?? approvedThisMonth.reduce((total, payment) => total + Number(payment.amount || 0), 0),
   )} recebidos`;
-  $("#paymentPendingCount").textContent = pending.length;
-  $("#paymentFailedCount").textContent = failed.length;
+  $("#paymentPendingCount").textContent = state.paymentTotals?.pendingCount ?? pending.length;
+  $("#paymentFailedCount").textContent = state.paymentTotals?.failedCount ?? failed.length;
   document.querySelectorAll("[data-payment-filter]").forEach((button) =>
     button.classList.toggle("active", button.dataset.paymentFilter === state.paymentFilter),
   );
@@ -556,7 +570,7 @@ function renderAccounts() {
         const status = effectiveStatus(account),
           lifetime = isLifetimeAccount(account),
           recent = recentCustomerAccounts().some((item) => item.user_id === account.user_id),
-          automaticPaid = Boolean(latestApprovedPayment(account.user_id)),
+          automaticPaid = hasProtectedAutomaticAccess(account),
           matchesFilter =
             state.filter === "all" ||
             (state.filter === "lifetime"
@@ -594,14 +608,13 @@ function renderAccounts() {
           const status = effectiveStatus(account),
             lifetime = isLifetimeAccount(account),
             freeAccess = isFreeAccess(account),
-            automaticPayment = latestApprovedPayment(account.user_id),
             recent = recentCustomerAccounts().some((item) => item.user_id === account.user_id);
           const userId = escapeHtml(account.user_id),
             name = escapeHtml(account.display_name || "Conta sem nome"),
             email = escapeHtml(account.email || "E-mail não informado");
           return `<article class="account-row" data-manage-row="${userId}">
             <div class="account-user"><span class="account-avatar">${escapeHtml(accountInitials(account))}</span><div><b>${name}${recent ? '<em class="new-tag">Novo</em>' : ""}</b><small>${email}</small></div></div>
-            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${automaticPayment ? `Pago por ${paymentMethodLabel(automaticPayment)}` : accountPricingLabel(account)} · vence: ${accessDateLabel(account)}`}</small></div>
+            <div class="account-compact-access"><b>${lifetime ? "Colaborador" : freeAccess ? "Teste gratuito" : hasProtectedAutomaticAccess(account) ? "Pago pelo Mercado Pago" : money(accountFee(account))}</b><small>${lifetime ? "Acesso vitalício" : `${hasProtectedAutomaticAccess(account) ? "Pagamento confirmado" : accountPricingLabel(account)} · vence: ${accessDateLabel(account)}`}</small></div>
             <div class="account-compact-status"><span class="status ${lifetime ? "lifetime" : status}">${lifetime ? "Vitalício" : statusLabel(status)}</span></div>
             <div class="account-actions"><button data-manage="${userId}" aria-label="Abrir perfil e ações de ${name}" title="Abrir perfil">›</button></div>
           </article>`;
@@ -627,22 +640,43 @@ function renderSettings() {
       ? `O CredMais está em lançamento por ${money(launchFee)}. Ativar o preço normal afetará somente novas contas e usuários no valor global.`
       : `O preço normal de ${money(standardFee)} está ativo. Os primeiros usuários continuam protegidos por ${money(launchFee)}.`;
   $("#supportPhone").value = formatPhone(state.settings?.support_phone || "");
+  $("#settingsSupportSummary").textContent = state.settings?.support_phone
+    ? `Suporte: ${formatPhone(state.settings.support_phone)}`
+    : "Suporte: não configurado";
   const savedMessage = state.settings?.billing_message || "";
   $("#billingMessage").value = /\{pix\}|\{recebedor\}|chave\s+pix|envie\s+o\s+comprovante/i.test(savedMessage)
     ? DEFAULT_MESSAGE
     : savedMessage || DEFAULT_MESSAGE;
 }
 async function loadDashboard(notify = false) {
-  const result = await bridge.loadPlatformAdmin();
+  const indicator = $("#syncIndicator");
+  indicator.textContent = "Atualizando…";
+  indicator.className = "sync-indicator loading";
+  let result;
+  try {
+    result = await bridge.loadPlatformAdmin();
+  } catch (error) {
+    indicator.textContent = "Falha ao atualizar";
+    indicator.className = "sync-indicator error";
+    if (notify || !state.refreshFailed)
+      toast(error.message || "Não foi possível atualizar o painel. Os dados exibidos podem estar desatualizados.");
+    state.refreshFailed = true;
+    throw error;
+  }
   state.accounts = result.accounts;
   state.settings = result.settings;
   state.log = result.log;
   state.payments = result.payments || [];
+  state.paymentTotals = result.paymentTotals || null;
   state.adminIds = result.adminIds || [];
   renderOverview();
   renderAccounts();
   renderPayments();
   renderSettings();
+  indicator.textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+  indicator.className = "sync-indicator success";
+  if (state.refreshFailed) toast("Conexão restabelecida. Painel atualizado.");
+  state.refreshFailed = false;
   const informedExpiration = notifyAutomaticExpirations(result.expirySync);
   if (notify && !informedExpiration) toast("Painel atualizado.");
 }
@@ -688,6 +722,7 @@ function setSection(section) {
   document.querySelector(".admin-app aside").classList.remove("open");
 }
 function openModal(id) {
+  document.querySelectorAll(".modal").forEach((modal) => (modal.hidden = true));
   $("#modalBackdrop").hidden = false;
   const modal = $(`#${id}`);
   modal.hidden = false;
@@ -699,45 +734,145 @@ function closeModals() {
   $("#modalBackdrop").hidden = true;
   document.body.style.overflow = "";
 }
-function renderManagedBilling(account) {
-  const payments = paymentsForUser(account.user_id),
-    latest = latestApprovedPayment(account.user_id),
+function renderHistoryEvent(event) {
+  const account = state.accounts.find((item) => item.user_id === event.userId),
+    method = event.kind === "payment"
+      ? paymentMethodLabel(event)
+      : event.paymentMethod ? manualPaymentLabel(event.paymentMethod) : "Alteração administrativa",
+    amount = event.amount == null ? "" : ` · ${money(event.amount)}`;
+  return `<article class="history-event"><span class="history-event-icon ${event.kind === "payment" ? "payment" : "access"}">${event.kind === "payment" ? "◆" : "✓"}</span><div><b>${escapeHtml(event.label || "Atividade registrada")}</b><small>${account && state.historyUserId === null ? `${escapeHtml(account.display_name || account.email || "Conta")} · ` : ""}${dateTimeLabel(event.occurredAt)} · ${escapeHtml(method)}${amount}</small></div></article>`;
+}
+async function loadProfileHistory(userId, requestId) {
+  try {
+    const result = await bridge.loadPlatformHistory(userId, 0, 4);
+    if (state.managedUserId !== userId || state.profileRequestId !== requestId) return;
+    state.currentPayment = result.currentPayment || null;
+    state.recentAccountEvents = result.events || [];
+    const account = state.accounts.find((item) => item.user_id === userId);
+    if (account) renderManagedBilling(account, state.currentPayment);
+  } catch (error) {
+    if (state.managedUserId !== userId || state.profileRequestId !== requestId) return;
+    $("#managePaymentHistory").innerHTML = '<div class="payment-history-empty">Não foi possível carregar o histórico. Tente abrir o perfil novamente.</div>';
+    feedback("profileFeedback", error.message || "Falha ao consultar o histórico.", "error");
+  }
+}
+async function loadMoreHistory() {
+  if (state.historyLoading) return;
+  state.historyLoading = true;
+  const userId = state.historyUserId,
+    offset = state.historyOffset,
+    requestId = state.historyRequestId,
+    button = $("#historyLoadMore");
+  button.disabled = true;
+  feedback("historyFeedback", "Carregando histórico…");
+  try {
+    const result = await bridge.loadPlatformHistory(userId, offset, 20);
+    if (state.historyRequestId !== requestId || state.historyUserId !== userId || state.historyOffset !== offset) return;
+    state.historyEvents.push(...(result.events || []));
+    state.historyOffset = result.nextOffset;
+    $("#historyList").innerHTML = state.historyEvents.length
+      ? state.historyEvents.map(renderHistoryEvent).join("")
+      : '<p class="history-empty">Nenhum acontecimento registrado.</p>';
+    button.hidden = !result.hasMore;
+    feedback("historyFeedback");
+  } catch (error) {
+    if (state.historyRequestId === requestId)
+      feedback("historyFeedback", error.message || "Não foi possível carregar o histórico.", "error");
+  } finally {
+    if (state.historyRequestId === requestId) {
+      state.historyLoading = false;
+      button.disabled = false;
+    }
+  }
+}
+function openHistory(userId = null) {
+  state.historyRequestId += 1;
+  state.historyLoading = false;
+  state.historyUserId = userId;
+  state.historyOffset = 0;
+  state.historyEvents = [];
+  const account = state.accounts.find((item) => item.user_id === userId);
+  $("#historyTitle").textContent = account
+    ? `Histórico de ${account.display_name || account.email || "usuário"}`
+    : "Histórico do painel";
+  $("#historySubtitle").textContent = account
+    ? "Pagamentos, liberações e mudanças de acesso desta conta."
+    : "Pagamentos e alterações de todos os usuários.";
+  $("#historyBackProfile").hidden = !userId;
+  $("#historyList").innerHTML = "";
+  $("#historyLoadMore").hidden = true;
+  openModal("historyModal");
+  loadMoreHistory();
+}
+function openAccountAction(id) {
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId);
+  if (!account) return toast("Esta conta não foi encontrada.");
+  if (["accessModal", "dangerModal"].includes(id) && hasProtectedAutomaticAccess(account))
+    return toast("Este período pago está protegido; só dados e preço futuro podem ser alterados.");
+  if (id === "accessModal" && isLifetimeAccount(account))
+    return toast("Para alterar um colaborador vitalício, use primeiro o reset em ações sensíveis.");
+  if (id === "accessModal") {
+    $("#manageMonths").value = "months:1";
+    $("#manualPaymentMethod").value = "";
+    document.querySelector('[name="manageGrantType"][value="paid"]').checked = true;
+    syncManagePeriod();
+  }
+  if (id === "editAccountModal") syncPricingMode(false);
+  openModal(id);
+}
+function renderManagedBilling(account, currentPayment = null) {
+  const events = state.recentAccountEvents,
     automatic = hasProtectedAutomaticAccess(account),
     lifetime = isLifetimeAccount(account),
-    free = isFreeAccess(account),
+    free = account.access_type === "free" && Boolean(account.paid_until),
     manuallyPaid =
       !automatic &&
       !lifetime &&
       !free &&
-      effectiveStatus(account) === "active" &&
-      account.access_type === "paid";
-  const origin = automatic
-    ? "Mercado Pago automático"
+      account.access_type === "paid" && Number(account.access_amount) > 0 &&
+      Boolean(account.approved_at) && !account.last_payment_transaction_id;
+  const verifiedPayment = Boolean(account.last_payment_transaction_id) &&
+    String(currentPayment?.transactionId) === String(account.last_payment_transaction_id)
+      ? currentPayment : null;
+  const recordedAutomatic = automatic || Boolean(verifiedPayment),
+    expired = effectiveStatus(account) === "expired",
+    blocked = effectiveStatus(account) === "blocked",
+    reversed = ["refunded", "charged_back"].includes(verifiedPayment?.status);
+  const origin = recordedAutomatic
+    ? reversed ? "Mercado Pago · revertido" : expired ? "Mercado Pago · encerrado" : "Mercado Pago"
     : lifetime
       ? "Colaborador vitalício"
       : free
-        ? "Teste gratuito"
+        ? expired ? "Teste encerrado" : "Teste gratuito"
         : manuallyPaid
-          ? "Liberação manual paga"
+          ? expired ? "Manual · encerrado" : "Liberação manual paga"
           : "Sem pagamento confirmado";
   $("#managePaymentOrigin").textContent = origin;
-  $("#managePaymentOrigin").className = `payment-origin-badge ${automatic ? "automatic" : manuallyPaid ? "manual" : free || lifetime ? "free" : "empty"}`;
-  $("#managePaymentMethod").textContent = automatic
-    ? latest ? paymentMethodLabel(latest) : "Mercado Pago"
+  $("#managePaymentOrigin").className = `payment-origin-badge ${recordedAutomatic ? "automatic" : manuallyPaid ? "manual" : free || lifetime ? "free" : "empty"}`;
+  $("#managePaymentStatus").textContent = recordedAutomatic
+    ? reversed ? verifiedPayment.status === "refunded" ? "Pagamento estornado; acesso não está liberado" : "Pagamento contestado; acesso não está liberado"
+      : expired ? "Pagamento anterior confirmado; o acesso está vencido"
+      : verifiedPayment ? "Pagamento confirmado para o acesso atual" : "Consultando confirmação do pagamento atual…"
+    : manuallyPaid ? expired ? "Pagamento manual anterior; o acesso está vencido"
+      : blocked ? "Pagamento manual registrado; acesso bloqueado" : "Pagamento recebido e liberado manualmente"
+      : free ? expired ? "Cortesia encerrada, sem pagamento" : "Cortesia ativa, sem pagamento" : lifetime ? "Colaborador com acesso sem vencimento"
+        : "Nenhum pagamento ativo nesta conta";
+  $("#managePaymentMethod").textContent = recordedAutomatic
+    ? verifiedPayment ? paymentMethodLabel(verifiedPayment) : "Mercado Pago (consultando)"
     : manuallyPaid
-      ? "Informado manualmente"
+      ? manualPaymentLabel(account.manual_payment_method)
       : free
         ? "Cortesia"
         : lifetime
           ? "Sem cobrança"
           : "Ainda não pagou";
-  $("#managePaymentAmount").textContent = automatic
-    ? money(latest?.amount ?? account.access_amount)
+  $("#managePaymentAmount").textContent = recordedAutomatic
+    ? money(verifiedPayment?.amount ?? account.access_amount)
     : manuallyPaid
       ? money(account.access_amount)
       : money(0);
-  $("#managePaymentPlan").textContent = automatic
-    ? latest ? paymentPlanLabel(latest) : "Plano pago"
+  $("#managePaymentPlan").textContent = recordedAutomatic
+    ? verifiedPayment?.planMonths ? `${verifiedPayment.planMonths} ${verifiedPayment.planMonths === 1 ? "mês" : "meses"}` : "Plano pago"
     : lifetime
       ? "Vitalício"
       : free
@@ -745,25 +880,22 @@ function renderManagedBilling(account) {
         : manuallyPaid
           ? "Acesso liberado manualmente"
           : "Nenhum plano pago";
-  $("#managePaymentDate").textContent = automatic
-    ? dateTimeLabel(latest?.paidAt || latest?.accessGrantedAt || account.approved_at)
+  $("#managePaymentDate").textContent = recordedAutomatic
+    ? dateTimeLabel(verifiedPayment?.paidAt || verifiedPayment?.accessGrantedAt || account.approved_at)
     : manuallyPaid
       ? dateTimeLabel(account.approved_at)
       : "Sem confirmação";
-  $("#managePaymentHistory").innerHTML = payments.length
-    ? `<div class="payment-history-title"><b>Histórico automático</b><small>Últimos pagamentos e tentativas</small></div>${payments
-        .slice(0, 5)
-        .map((payment) => {
-          const group = paymentStatusGroup(payment.status);
-          return `<article><span class="history-dot ${group}"></span><div><b>${paymentStatusLabel(payment.status)} · ${money(payment.amount)}</b><small>${escapeHtml(paymentPlanLabel(payment))} · ${dateTimeLabel(payment.paidAt || payment.updatedAt || payment.createdAt)}</small></div><em>${group === "approved" ? escapeHtml(paymentMethodLabel(payment)) : "Mercado Pago"}</em></article>`;
-        })
-        .join("")}`
-    : '<div class="payment-history-empty">Nenhuma tentativa automática registrada para esta conta.</div>';
+  $("#managePaymentHistory").innerHTML = events.length
+    ? events.map(renderHistoryEvent).join("")
+    : '<div class="payment-history-empty">Nenhum acontecimento registrado para esta conta.</div>';
 }
 function openManage(userId) {
   const account = state.accounts.find((item) => item.user_id === userId);
   if (!account) return toast("Esta conta não foi encontrada.");
   state.managedUserId = userId;
+  state.currentPayment = null;
+  state.recentAccountEvents = [];
+  const requestId = ++state.profileRequestId;
   $("#manageUserId").value = userId;
   $("#manageName").textContent = account.display_name || "Conta sem nome";
   $("#manageEmail").textContent = account.email || "E-mail não informado";
@@ -791,8 +923,17 @@ function openManage(userId) {
   $("#managePaidUntil").textContent = lifetime
     ? "Vitalício, sem vencimento"
     : account.paid_until
-      ? `${isFreeAccess(account) ? "Teste gratuito" : "Acesso pago"} até ${dateLabel(account.paid_until)}`
+      ? `${account.access_type === "free" ? "Teste gratuito" : "Acesso pago"} até ${dateLabel(account.paid_until)}`
       : "Ainda não liberado";
+  $("#manageAccessDescription").textContent = lifetime
+    ? "Colaborador sem cobrança recorrente."
+    : status === "active" ? `Acesso disponível até ${dateLabel(account.paid_until)}.`
+      : status === "expired" ? `O período terminou em ${dateLabel(account.paid_until)}.`
+        : status === "blocked" ? "Bloqueio manual registrado no painel."
+          : "Conta sem acesso liberado no momento.";
+  $("#manageNextPrice").textContent = lifetime
+    ? "Sem mensalidade"
+    : `${money(accountFee(account))}/mês · ${accountPricingLabel(account)}`;
   $("#manageLastSeen").textContent = dateTimeLabel(account.last_seen_at, "Ainda não acessou");
   $("#manageRequestedAt").textContent = dateTimeLabel(
     account.access_requested_at,
@@ -800,14 +941,17 @@ function openManage(userId) {
   );
   $("#manageCreatedAt").textContent = dateTimeLabel(account.created_at, "Data indisponível");
   renderManagedBilling(account);
+  $("#managePaymentHistory").innerHTML = '<div class="payment-history-empty">Carregando acontecimentos…</div>';
   const protectedPaidAccess = hasProtectedAutomaticAccess(account);
   $("#managePlanProtection").hidden = !protectedPaidAccess;
   $("#managePlanProtection").textContent = protectedPaidAccess
     ? `✓ Período pago pelo Mercado Pago protegido até ${dateLabel(account.paid_until)}. Bloqueio, reset e troca do plano ficam indisponíveis. Você ainda pode atualizar o contato e o preço de compras futuras.`
     : "";
-  $("#manageAccessSection").hidden = protectedPaidAccess;
+  $("#manageAccessSection").hidden = protectedPaidAccess || lifetime;
   $("#resetAccessSection").hidden = protectedPaidAccess;
   $("#toggleBlock").hidden = protectedPaidAccess;
+  $("#actionGrant").hidden = protectedPaidAccess || lifetime;
+  $("#actionDanger").hidden = protectedPaidAccess;
   $("#toggleBlock").textContent =
     status === "blocked" ? "↻ Reabrir solicitação" : "⊘ Bloquear acesso";
   $("#toggleBlock").classList.toggle("restore", status === "blocked");
@@ -825,9 +969,13 @@ function openManage(userId) {
   $("#contactUser").disabled = !hasPhone;
   $("#copyUserPhone").title = hasPhone ? "Copiar número" : "WhatsApp não cadastrado";
   $("#contactUser").title = hasPhone ? "Abrir conversa" : "WhatsApp não cadastrado";
+  feedback("profileFeedback");
   feedback("manageFeedback");
+  feedback("grantFeedback");
+  feedback("dangerFeedback");
   syncManagePeriod();
   openModal("manageModal");
+  loadProfileHistory(userId, requestId);
 }
 function syncManagePeriod() {
   const period = selectedAccessPeriod(),
@@ -840,10 +988,11 @@ function syncManagePeriod() {
   } else {
     $("#managePeriodHelp").textContent = `A validade será definida até ${accessDateFromToday(period)}, contando a partir de hoje. Uma nova liberação substituirá a data anterior.`;
   }
-  syncPricingMode(true);
+  syncGrantType(true);
 }
 function syncPricingMode(resetAmount = true) {
-  const lifetime = selectedAccessPeriod().lifetime,
+  const account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    lifetime = isLifetimeAccount(account),
     pricingTier = selectedPricingTier(),
     feeField = $("#manageFeeField"),
     feeInput = $("#manageFee");
@@ -860,20 +1009,25 @@ function syncPricingMode(resetAmount = true) {
   $("#manageEffectiveFee").textContent = lifetime
     ? "Sem cobrança mensal"
     : `${money(managedMonthlyFee())} por mês · ${sourceLabel}`;
-  if (!lifetime && resetAmount) syncGrantType(true);
 }
 function syncGrantType(resetAmount = false) {
   const period = selectedAccessPeriod();
-  if (period.lifetime) return;
+  if (period.lifetime) {
+    $("#manualPaymentMethodField").hidden = true;
+    return;
+  }
   const accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
     free = accessType === "free",
     amountInput = $("#manageGrantAmount"),
-    monthlyFee = managedMonthlyFee(),
+    account = state.accounts.find((item) => item.user_id === state.managedUserId),
+    monthlyFee = account ? accountFee(account) : 0,
     suggestedAmount = period.unit === "days"
       ? Math.round((monthlyFee * period.value / 30) * 100) / 100
       : monthlyFee * period.value;
   if (resetAmount || free) setMoneyInput(amountInput, free ? 0 : suggestedAmount);
   amountInput.disabled = free;
+  $("#manualPaymentMethodField").hidden = free;
+  $("#manualPaymentMethod").required = !free;
   $("#manageGrantTypeHelp").textContent = free
     ? "Será registrado como cortesia. A mensalidade cadastrada continuará disponível para cobranças futuras."
     : "Informe o valor que você recebeu. O histórico registrará esta liberação como paga.";
@@ -904,7 +1058,7 @@ async function saveManage(event) {
   await loading(button, async () => {
     try {
       await saveManagedAccount();
-      closeModals();
+      openManage(state.managedUserId);
     } catch (error) {
       feedback("manageFeedback", error.message || "Não foi possível salvar.", "error");
     }
@@ -912,19 +1066,26 @@ async function saveManage(event) {
 }
 async function grantAccess() {
   const currentAccount = state.accounts.find((item) => item.user_id === state.managedUserId);
+  if (!currentAccount) return feedback("grantFeedback", "Esta conta não foi encontrada.", "error");
   if (hasProtectedAutomaticAccess(currentAccount))
-    return feedback("manageFeedback", "O período pago automaticamente está protegido. Ajuste somente o preço de compras futuras.", "error");
-  feedback("manageFeedback");
+    return feedback("grantFeedback", "O período pago automaticamente está protegido. Ajuste somente o preço de compras futuras.", "error");
+  if (isLifetimeAccount(currentAccount))
+    return feedback("grantFeedback", "Resete primeiro o acesso vitalício para alterar o plano.", "error");
+  feedback("grantFeedback");
   await loading($("#grantAccess"), async () => {
     try {
       const period = selectedAccessPeriod(),
         accessType = document.querySelector('[name="manageGrantType"]:checked')?.value || "paid",
-        pricingTier = selectedPricingTier(),
-        monthlyFee = pricingTier === "custom" ? readMoneyInput($("#manageFee")) : null,
+        pricingTier = accountPricingTier(currentAccount),
+        monthlyFee = pricingTier === "custom" ? Number(currentAccount.monthly_fee) : null,
+        paymentMethod = accessType === "paid" && !period.lifetime
+          ? $("#manualPaymentMethod").value : null,
         accountDetails = {
-          phone: formatPhone($("#managePhone").value),
-          notes: $("#manageNotes").value.trim(),
+          phone: currentAccount.phone || "",
+          notes: currentAccount.notes || "",
         };
+      if (!period.lifetime && accessType === "paid" && !paymentMethod)
+        throw new Error("Selecione como recebeu o pagamento.");
       if (!period.lifetime && pricingTier === "custom" && (!Number.isFinite(monthlyFee) || monthlyFee <= 0))
         throw new Error("Informe uma mensalidade personalizada maior que zero.");
       let updatedAccount;
@@ -942,17 +1103,18 @@ async function grantAccess() {
           pricingTier,
           accessType,
           readMoneyInput($("#manageGrantAmount")),
+          paymentMethod,
           accountDetails,
         );
-      closeModals();
       await loadDashboard();
+      openManage(state.managedUserId);
       toast(
         period.lifetime
           ? "Acesso vitalício liberado para o colaborador."
           : `${accessType === "free" ? "Teste gratuito" : "Acesso pago"} de ${accessPeriodLabel(period)} liberado até ${dateLabel(updatedAccount.paid_until)}.`,
       );
     } catch (error) {
-      feedback("manageFeedback", error.message || "Não foi possível liberar.", "error");
+      feedback("grantFeedback", error.message || "Não foi possível liberar.", "error");
     }
   });
 }
@@ -960,15 +1122,15 @@ async function toggleBlock() {
   const account = state.accounts.find((item) => item.user_id === state.managedUserId),
     nextStatus = effectiveStatus(account) === "blocked" ? "pending" : "blocked";
   if (hasProtectedAutomaticAccess(account))
-    return feedback("manageFeedback", "Não é possível bloquear um período pago e ativo pelo Mercado Pago.", "error");
+    return feedback("dangerFeedback", "Não é possível bloquear um período pago e ativo pelo Mercado Pago.", "error");
   await loading($("#toggleBlock"), async () => {
     try {
       await bridge.setPlatformAccountStatus(state.managedUserId, nextStatus);
-      closeModals();
       await loadDashboard();
+      openManage(state.managedUserId);
       toast(nextStatus === "blocked" ? "Acesso bloqueado." : "Solicitação reaberta.");
     } catch (error) {
-      feedback("manageFeedback", error.message || "Não foi possível alterar o acesso.", "error");
+      feedback("dangerFeedback", error.message || "Não foi possível alterar o acesso.", "error");
     }
   });
 }
@@ -976,10 +1138,10 @@ async function resetPlatformAccess() {
   const account = state.accounts.find((item) => item.user_id === state.managedUserId);
   if (!account) return toast("Esta conta não foi encontrada.");
   if (hasProtectedAutomaticAccess(account))
-    return feedback("manageFeedback", "Não é possível resetar um período pago e ativo pelo Mercado Pago.", "error");
+    return feedback("dangerFeedback", "Não é possível resetar um período pago e ativo pelo Mercado Pago.", "error");
   if (state.adminIds.includes(account.user_id))
     return feedback(
-      "manageFeedback",
+      "dangerFeedback",
       "A conta proprietária do painel não pode ter o acesso resetado.",
       "error",
     );
@@ -991,20 +1153,20 @@ async function resetPlatformAccess() {
       "Cobranças pendentes serão invalidadas. Esta ação não estorna pagamentos já realizados.",
   );
   if (!confirmed) {
-    feedback("manageFeedback", "Reset cancelado. Nenhum dado foi alterado.");
+    feedback("dangerFeedback", "Reset cancelado. Nenhum dado foi alterado.");
     return;
   }
 
-  feedback("manageFeedback");
+  feedback("dangerFeedback");
   await loading($("#resetPlatformAccess"), async () => {
     try {
       await bridge.resetPlatformAccess(account.user_id);
-      closeModals();
       await loadDashboard();
+      openManage(state.managedUserId);
       toast("Plano resetado. A conta agora está sem validade e pronta para um novo teste.");
     } catch (error) {
       feedback(
-        "manageFeedback",
+        "dangerFeedback",
         error.message || "Não foi possível resetar o plano.",
         "error",
       );
@@ -1129,20 +1291,20 @@ async function copyManagedContact(field) {
   try {
     await writeClipboard(value);
     feedback(
-      "manageFeedback",
+      "profileFeedback",
       field === "email" ? "E-mail copiado com sucesso." : "WhatsApp copiado com sucesso.",
       "success",
     );
     toast(field === "email" ? "E-mail copiado." : "WhatsApp copiado.");
   } catch {
-    feedback("manageFeedback", "Não foi possível copiar. Tente novamente.", "error");
+    feedback("profileFeedback", "Não foi possível copiar. Tente novamente.", "error");
   }
 }
 function contactManagedUser() {
   const account = state.accounts.find((item) => item.user_id === state.managedUserId),
     phone = digits(account?.phone);
   if (phone.length < 10) return toast("Cadastre um WhatsApp válido nesta conta.");
-  feedback("manageFeedback", "Abrindo a conversa no WhatsApp...", "success");
+  feedback("profileFeedback", "Abrindo a conversa no WhatsApp...", "success");
   window.open(`https://wa.me/55${phone}`, "_blank", "noopener");
 }
 async function saveSettings(event) {
@@ -1177,6 +1339,8 @@ async function saveSettings(event) {
           : "Preço normal ativado para novas contas; os usuários de lançamento foram preservados.",
         "success",
       );
+      closeModals();
+      toast("Política comercial atualizada.");
     } catch (error) {
       feedback("settingsFeedback", error.message || "Não foi possível salvar.", "error");
     }
@@ -1224,6 +1388,23 @@ document.querySelectorAll('[name="managePricing"]').forEach((input) =>
 );
 $("#toggleBlock").onclick = toggleBlock;
 $("#resetPlatformAccess").onclick = resetPlatformAccess;
+$("#openEditAccount").onclick = () => openAccountAction("editAccountModal");
+$("#openManageActions").onclick = () => openAccountAction("actionsModal");
+$("#actionEdit").onclick = () => openAccountAction("editAccountModal");
+$("#actionGrant").onclick = () => openAccountAction("accessModal");
+$("#actionDanger").onclick = () => openAccountAction("dangerModal");
+$("#viewAccountHistory").onclick = () => openHistory(state.managedUserId);
+$("#historyLoadMore").onclick = loadMoreHistory;
+$("#openPaymentHistory").onclick = () => openHistory();
+$("#openGlobalHistory").onclick = () => {
+  setActivityMenu(false);
+  openHistory();
+};
+$("#openSettingsEdit").onclick = () => {
+  renderSettings();
+  feedback("settingsFeedback");
+  openModal("settingsModal");
+};
 $("#chargeAccount").onclick = () => openCharge(state.managedUserId);
 $("#copyUserEmail").onclick = () => copyManagedContact("email");
 $("#copyUserPhone").onclick = () => copyManagedContact("phone");
@@ -1237,8 +1418,6 @@ document.querySelectorAll("[data-charge-part]").forEach((input) =>
   }),
 );
 $("#settingsForm").addEventListener("submit", saveSettings);
-$("#refreshAccounts").onclick = () => loading($("#refreshAccounts"), () => loadDashboard(true));
-$("#refreshPayments").onclick = () => loading($("#refreshPayments"), () => loadDashboard(true));
 $("#headerRefresh").onclick = () => loading($("#headerRefresh"), () => loadDashboard(true));
 $("#openCurrentFeed").onclick = () => {
   if (state.overviewFeed === "paid") {
@@ -1285,7 +1464,7 @@ $("#pricingPhase").addEventListener("change", () => {
 });
 $("#manageFee").addEventListener("input", (event) => {
   maskMoney(event);
-  if (!selectedAccessPeriod().lifetime) syncPricingMode(true);
+  syncPricingMode(false);
 });
 $("#manageGrantAmount").addEventListener("input", maskMoney);
 [$("#supportPhone"), $("#managePhone")].forEach((input) =>
@@ -1322,6 +1501,7 @@ document.addEventListener("click", (event) => {
     }
     if (button.dataset.manage) openManage(button.dataset.manage);
     if (button.dataset.charge) openCharge(button.dataset.charge);
+    if (button.hasAttribute("data-back-profile")) openManage(state.managedUserId);
     if (button.hasAttribute("data-close-modal")) closeModals();
   }
   const accountRow = event.target.closest("[data-manage-row]");

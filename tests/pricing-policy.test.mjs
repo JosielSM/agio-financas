@@ -23,7 +23,7 @@ test("admin exposes launch, standard, lifetime and per-user pricing choices", as
   assert.match(app, /account\.monthly_fee \?\? state\.settings\?\.default_monthly_fee/);
   assert.match(bridge, /admin_update_platform_settings_v3/);
   assert.match(bridge, /admin_update_platform_account_v3/);
-  assert.match(bridge, /admin_grant_platform_access_v5/);
+  assert.match(bridge, /admin_grant_platform_access_v6/);
   assert.match(bridge, /p_pricing_tier/);
   assert.match(bridge, /pricingTier === "custom"/);
 });

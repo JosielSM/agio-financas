@@ -37,7 +37,7 @@ test("admin shows paid protection while retaining future-price editing", async (
   ]);
   assert.match(html, /id="managePlanProtection"/);
   assert.match(html, /Preço de compras futuras/);
-  assert.match(app, /function renderManagedBilling\(account\)/);
+  assert.match(app, /function renderManagedBilling\(account, currentPayment = null\)/);
   assert.match(app, /const hasProtectedAutomaticAccess =/);
   for (const id of ["manageAccessSection", "resetAccessSection", "toggleBlock"]) {
     assert.match(app, new RegExp(`\\#${id}.*hidden = protectedPaidAccess`));

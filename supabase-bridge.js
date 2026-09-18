@@ -311,9 +311,23 @@
         settings: settingsResult.data,
         log: logResult.data || [],
         payments: billingResult.data?.payments || [],
+        paymentTotals: billingResult.data?.totals || null,
         adminIds: (adminsResult.data || []).map((admin) => admin.user_id),
         expirySync: { available: true, ...(expirySyncResult.data || {}) },
       };
+    },
+    async loadPlatformHistory(userId = null, offset = 0, limit = 20) {
+      if (!client) throw new Error("O banco do painel não está conectado.");
+      const { data, error } = await client.rpc(
+        "admin_get_platform_account_history_v1",
+        {
+          p_user_id: userId,
+          p_offset: Number(offset),
+          p_limit: Number(limit),
+        },
+      );
+      if (error) throw accessError(error);
+      return data;
     },
     async savePlatformSettings(settings) {
       // v3 mantém a coorte de lançamento protegida ao ativar o preço normal.
@@ -337,9 +351,10 @@
       pricingTier,
       accessType = "paid",
       accessAmount = 0,
+      paymentMethod = null,
       accountDetails = {},
     ) {
-      const { data, error } = await client.rpc("admin_grant_platform_access_v5", {
+      const { data, error } = await client.rpc("admin_grant_platform_access_v6", {
         p_user_id: userId,
         p_period_value: Number(periodValue),
         p_period_unit: periodUnit,
@@ -347,6 +362,7 @@
         p_monthly_fee: pricingTier === "custom" ? Number(monthlyFee) : null,
         p_access_type: accessType,
         p_access_amount: Number(accessAmount),
+        p_payment_method: paymentMethod,
         p_phone: accountDetails.phone || "",
         p_notes: accountDetails.notes || "",
       });

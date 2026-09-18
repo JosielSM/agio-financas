@@ -17,7 +17,7 @@ test("admin dashboard prioritizes new users and automatic payments", async () =>
   assert.match(html, /data-overview-feed="recent"[^>]*>Recém-cadastrados/);
   assert.match(html, /data-overview-feed="paid"[^>]*>Pagaram automaticamente/);
   assert.match(html, /data-filter="recent"[^>]*>Novos/);
-  assert.match(html, /data-filter="auto_paid"[^>]*>Pagamento automático/);
+  assert.match(html, /data-filter="auto_paid"[^>]*>Pagos agora/);
   assert.match(html, /id="paymentsSection"/);
   assert.match(html, /data-section="payments"/);
   assert.match(app, /function renderOverviewFeed\(\)/);
@@ -53,11 +53,11 @@ test("user profile explains billing status and payment origin", async () => {
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(app, /function renderManagedBilling\(account\)/);
-  assert.match(app, /Mercado Pago automático/);
+  assert.match(app, /function renderManagedBilling\(account, currentPayment = null\)/);
+  assert.match(app, /"Mercado Pago"/);
   assert.match(app, /Liberação manual paga/);
   assert.match(app, /Teste gratuito/);
-  assert.match(app, /Histórico automático/);
+  assert.match(app, /loadProfileHistory/);
 });
 
 test("payment dashboard RPC is admin-only and does not expose checkout secrets", async () => {

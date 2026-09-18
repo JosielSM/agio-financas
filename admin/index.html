@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075b43">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,46 +31,57 @@
 
   <div class="admin-app" id="adminView" hidden>
     <aside><div class="brand-lockup"><span>C</span><b>CredMais <em>Controle</em></b></div><nav><button class="active" data-section="overview"><i>⌂</i>Visão geral</button><button data-section="accounts"><i>♙</i>Usuários</button><button data-section="payments"><i>◆</i>Pagamentos</button><button data-section="settings"><i>⚙</i>Configurações</button></nav><div class="aside-bottom"><button id="installAdmin"><i>⇩</i>Instalar painel</button><button id="adminLogout"><i>↪</i>Sair</button></div></aside>
-    <header class="admin-topbar"><button class="menu-button" id="menuButton" aria-label="Abrir menu">☰</button><div class="header-context"><small>PAINEL DO PROPRIETÁRIO</small><h1 id="sectionTitle">Visão geral</h1></div><div class="header-actions"><button class="header-refresh" id="headerRefresh" type="button" aria-label="Atualizar painel" title="Atualizar dados">↻</button><button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar tema" title="Mudar tema">☾</button><div class="owner"><span id="ownerInitial">A</span><div><b id="ownerName">Administrador</b><small>Conta protegida</small></div></div></div></header>
+    <header class="admin-topbar"><button class="menu-button" id="menuButton" aria-label="Abrir menu">☰</button><div class="header-context"><small>PAINEL DO PROPRIETÁRIO</small><h1 id="sectionTitle">Visão geral</h1></div><div class="header-actions"><span class="sync-indicator" id="syncIndicator" role="status" aria-live="polite">Atualizando…</span><button class="header-refresh" id="headerRefresh" type="button" aria-label="Atualizar painel" title="Atualizar dados">↻</button><button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar tema" title="Mudar tema">☾</button><div class="owner"><span id="ownerInitial">A</span><div><b id="ownerName">Administrador</b><small>Conta protegida</small></div></div></div></header>
     <main>
       <section class="page active" id="overviewSection">
         <div class="welcome"><div><span class="eyebrow">CENTRAL DE ACOMPANHAMENTO</span><h2>Olá, <span id="ownerGreeting">Administrador</span> 👋</h2><p>Veja quem chegou, quem pagou e quem precisa da sua atenção.</p></div><button class="primary" data-section-target="accounts">Gerenciar usuários</button></div>
         <section class="expiry-alert" id="expiryAlert" hidden aria-live="polite"><span class="expiry-alert-icon">!</span><div><small>BLOQUEIO AUTOMÁTICO</small><b id="expiryAlertTitle">Acesso bloqueado por falta de pagamento</b><p id="expiryAlertMessage"></p></div><button id="openExpiredAccounts" type="button">Ver usuários bloqueados</button></section>
-        <div class="stats dashboard-stats"><article><span class="stat-icon total">♙</span><p>Usuários</p><b id="statTotal">0</b><small>Contas cadastradas</small></article><article><span class="stat-icon new">＋</span><p>Novos em 7 dias</p><b id="statRecent">0</b><small>Cadastros recentes</small></article><article><span class="stat-icon paid">◆</span><p>Pagos automáticos</p><b id="statAutomaticPaid">0</b><small>Mercado Pago</small></article><article><span class="stat-icon active">✓</span><p>Acessos ativos</p><b id="statActive">0</b><small>Inclui testes e vitalícios</small></article><article><span class="stat-icon revenue">R$</span><p>Recebido no mês</p><b id="statReceivedMonth">R$ 0,00</b><small>Pagamentos aprovados</small></article></div>
+        <div class="stats dashboard-stats"><article><span class="stat-icon total">♙</span><p>Usuários</p><b id="statTotal">0</b><small>Contas cadastradas</small></article><article><span class="stat-icon new">＋</span><p>Novos em 7 dias</p><b id="statRecent">0</b><small>Cadastros recentes</small></article><article><span class="stat-icon paid">◆</span><p>Pagos ativos</p><b id="statAutomaticPaid">0</b><small>Mercado Pago, com acesso atual</small></article><article><span class="stat-icon active">✓</span><p>Acessos ativos</p><b id="statActive">0</b><small>Inclui testes e vitalícios</small></article><article><span class="stat-icon revenue">R$</span><p>Recebido no mês</p><b id="statReceivedMonth">R$ 0,00</b><small>Pagamentos aprovados</small></article></div>
         <section class="panel follow-panel"><div class="panel-head follow-head"><div><h3>Acompanhar agora</h3><p>Informações mais importantes sem procurar em várias telas.</p></div><div class="segmented-control" aria-label="Selecionar acompanhamento"><button class="active" data-overview-feed="recent">Recém-cadastrados</button><button data-overview-feed="paid">Pagaram automaticamente</button></div></div><div id="overviewFeed" class="overview-feed" aria-live="polite"></div><button class="panel-link" id="openCurrentFeed" type="button">Ver lista completa →</button></section>
-        <div class="overview-grid clean-overview"><section class="panel attention-panel"><div class="panel-head"><div><h3>Precisam de atenção</h3><p>Pendentes, bloqueados ou próximos do vencimento.</p></div><button class="panel-more-button" id="activityMenuButton" type="button" aria-label="Abrir atividades recentes" aria-haspopup="dialog" aria-expanded="false" title="Atividades recentes">•••</button></div><section class="activity-popover" id="activityMenu" role="dialog" aria-labelledby="activityMenuTitle" hidden><header><div><small>HISTÓRICO DO PAINEL</small><h3 id="activityMenuTitle">Atividades recentes</h3></div><button id="activityMenuClose" type="button" aria-label="Fechar atividades recentes">×</button></header><p>Liberações, renovações e bloqueios registrados.</p><div id="accessLog" class="access-log"></div></section><div id="attentionList" class="attention-list"></div></section></div>
+        <div class="overview-grid clean-overview"><section class="panel attention-panel"><div class="panel-head"><div><h3>Precisam de atenção</h3><p>Pendentes, bloqueados ou próximos do vencimento.</p></div><button class="panel-more-button" id="activityMenuButton" type="button" aria-label="Abrir atividades recentes" aria-haspopup="dialog" aria-expanded="false" title="Atividades recentes">Atividades</button></div><section class="activity-popover" id="activityMenu" role="dialog" aria-labelledby="activityMenuTitle" hidden><header><div><small>HISTÓRICO DO PAINEL</small><h3 id="activityMenuTitle">Atividades recentes</h3></div><button id="activityMenuClose" type="button" aria-label="Fechar atividades recentes">×</button></header><p>Últimos acontecimentos. Consulte o histórico completo para ver os anteriores.</p><div id="accessLog" class="access-log"></div><button id="openGlobalHistory" class="outline wide-action" type="button">Ver histórico completo</button></section><div id="attentionList" class="attention-list"></div></section></div>
       </section>
 
       <section class="page" id="accountsSection">
-        <div class="page-head"><div><h2>Usuários e assinaturas</h2><p>Consulte o status e toque em uma conta para ver todas as ações.</p></div><button class="outline" id="refreshAccounts">↻ Atualizar</button></div>
+        <div class="page-head"><div><h2>Usuários e assinaturas</h2><p>Consulte o estado atual e abra um perfil para ver os detalhes.</p></div></div>
         <div class="accounts-toolbar">
           <div class="filters">
             <label class="search">⌕<input id="accountSearch" placeholder="Buscar por nome, e-mail ou WhatsApp" aria-label="Buscar usuário"></label>
             <div class="filter-buttons" aria-label="Filtrar usuários">
-              <button class="active" data-filter="all">Todos</button><button data-filter="recent">Novos</button><button data-filter="auto_paid">Pagamento automático</button><button data-filter="pending">Pendentes</button><button data-filter="active">Ativos</button><button data-filter="lifetime">Vitalícios</button><button data-filter="expired">Atrasados</button><button data-filter="blocked">Bloqueados</button>
+              <button class="active" data-filter="all">Todos</button><button data-filter="recent">Novos</button><button data-filter="auto_paid">Pagos agora (MP)</button><button data-filter="pending">Pendentes</button><button data-filter="active">Ativos</button><button data-filter="lifetime">Vitalícios</button><button data-filter="expired">Atrasados</button><button data-filter="blocked">Bloqueados</button>
             </div>
           </div>
-          <div class="accounts-summary"><b id="accountsResultCount">0 usuários</b><small>Selecione um usuário para liberar, renovar, cobrar ou bloquear.</small></div>
+          <div class="accounts-summary"><b id="accountsResultCount">0 usuários</b><small>Toque em um usuário para ver acesso, pagamento e ações.</small></div>
         </div>
         <div class="accounts-list" id="accountsList" aria-live="polite"></div>
       </section>
 
       <section class="page" id="paymentsSection">
-        <div class="page-head"><div><h2>Pagamentos automáticos</h2><p>Acompanhe confirmações do Mercado Pago e a liberação correspondente.</p></div><button class="outline" id="refreshPayments">↻ Atualizar</button></div>
+        <div class="page-head"><div><h2>Pagamentos automáticos</h2><p>Acompanhe confirmações do Mercado Pago e a liberação correspondente.</p></div></div>
         <div class="payment-stats"><article><small>APROVADOS NO MÊS</small><b id="paymentApprovedMonth">0</b><span id="paymentApprovedAmount">R$ 0,00 recebidos</span></article><article><small>AGUARDANDO</small><b id="paymentPendingCount">0</b><span>Checkouts ainda não aprovados</span></article><article><small>COM FALHA</small><b id="paymentFailedCount">0</b><span>Recusados, cancelados ou com erro</span></article></div>
-        <section class="panel payments-panel"><div class="panel-head payments-head"><div><h3>Histórico do Mercado Pago</h3><p>Toque em um pagamento para abrir o perfil do usuário.</p></div><div class="filter-buttons payment-filters"><button class="active" data-payment-filter="all">Todos</button><button data-payment-filter="approved">Aprovados</button><button data-payment-filter="pending">Aguardando</button><button data-payment-filter="failed">Falhas</button></div></div><div class="payment-list" id="paymentList" aria-live="polite"></div></section>
+        <section class="panel payments-panel"><div class="panel-head payments-head"><div><h3>Pagamentos recentes</h3><p>Últimos registros do Mercado Pago. Toque para abrir o perfil.</p></div><div class="filter-buttons payment-filters"><button class="active" data-payment-filter="all">Todos</button><button data-payment-filter="approved">Aprovados</button><button data-payment-filter="pending">Aguardando</button><button data-payment-filter="failed">Falhas</button></div></div><div class="payment-list" id="paymentList" aria-live="polite"></div><button class="panel-link" id="openPaymentHistory" type="button">Ver histórico completo →</button></section>
       </section>
 
       <section class="page" id="settingsSection">
-        <div class="page-head"><div><h2>Política comercial</h2><p>Controle o lançamento, o preço normal e o teste gratuito sem alterar contratos protegidos.</p></div></div>
-        <section class="panel settings-panel">
-          <form id="settingsForm">
-            <div class="pricing-policy-board">
-              <article class="policy-card launch"><span>🚀 LANÇAMENTO</span><b id="launchPricePreview">R$ 39,90/mês</b><small>Protegido para os primeiros usuários enquanto mantiverem a conta.</small></article>
-              <article class="policy-card standard"><span>💎 PREÇO NORMAL</span><b id="standardPricePreview">R$ 59,90/mês</b><small>Aplicado a novas contas quando a fase normal for ativada.</small></article>
-              <article class="policy-card trial"><span>🎁 TESTE GRATUITO</span><b id="trialDaysPreview">15 dias</b><small>Concedido automaticamente uma única vez, com acesso completo.</small></article>
-            </div>
-            <div class="active-policy-summary"><span id="pricingPhaseBadge">FASE DE LANÇAMENTO</span><div><b id="globalPricePreview">R$ 39,90 por mês</b><small>Preço atual para novas contas e contas que seguem o valor global.</small></div></div>
+        <div class="page-head"><div><h2>Política comercial</h2><p>Veja os valores atuais. Abra a edição somente quando precisar alterar algo.</p></div></div>
+        <section class="panel settings-panel settings-readonly">
+          <div class="pricing-policy-board">
+            <article class="policy-card launch"><span>🚀 LANÇAMENTO</span><b id="launchPricePreview">R$ 39,90/mês</b><small>Protegido para os primeiros usuários enquanto mantiverem a conta.</small></article>
+            <article class="policy-card standard"><span>💎 PREÇO NORMAL</span><b id="standardPricePreview">R$ 59,90/mês</b><small>Aplicado a novas contas quando a fase normal for ativada.</small></article>
+            <article class="policy-card trial"><span>🎁 TESTE GRATUITO</span><b id="trialDaysPreview">15 dias</b><small>Concedido automaticamente uma única vez, com acesso completo.</small></article>
+          </div>
+          <div class="active-policy-summary"><span id="pricingPhaseBadge">FASE DE LANÇAMENTO</span><div><b id="globalPricePreview">R$ 39,90 por mês</b><small>Preço atual para novas contas e contas que seguem o valor global.</small></div></div>
+          <div class="settings-readonly-foot"><span id="settingsSupportSummary">Suporte: não configurado</span><button class="primary" id="openSettingsEdit" type="button">Editar política comercial</button></div>
+        </section>
+      </section>
+    </main>
+    <nav class="bottom-nav"><button class="active" data-section="overview"><i>⌂</i><span>Início</span></button><button data-section="accounts"><i>♙</i><span>Usuários</span></button><button data-section="payments"><i>◆</i><span>Pagamentos</span></button><button data-section="settings"><i>⚙</i><span>Ajustes</span></button></nav>
+  </div>
+
+  <div class="backdrop" id="modalBackdrop" hidden></div>
+  <section class="modal settings-edit-modal" id="settingsModal" hidden aria-labelledby="settingsModalTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">AJUSTES GLOBAIS</span><h2 id="settingsModalTitle">Editar política comercial</h2><p>As mudanças de preço não alteram períodos já pagos.</p></header>
+    <form id="settingsForm">
             <div class="form-grid">
               <label>Fase para novas contas<select id="pricingPhase"><option value="launch">Lançamento — R$ 39,90</option><option value="standard">Preço normal — valor configurado</option></select><small>Ao ativar o preço normal, os primeiros usuários continuam com R$ 39,90.</small></label>
               <label>Preço normal futuro<input id="standardMonthlyFee" inputmode="decimal" required><small>Inicialmente R$ 59,90. Pode ser ajustado antes de ativar.</small></label>
@@ -79,54 +90,65 @@
             </div>
             <p class="policy-warning" id="pricingPhaseWarning">O CredMais está em lançamento. Mudar para o preço normal afeta somente novas contas e usuários no valor global.</p>
             <p class="feedback" id="settingsFeedback"></p><button class="primary" type="submit">Salvar política comercial</button>
-          </form>
-        </section>
-      </section>
-    </main>
-    <nav class="bottom-nav"><button class="active" data-section="overview"><i>⌂</i><span>Início</span></button><button data-section="accounts"><i>♙</i><span>Usuários</span></button><button data-section="payments"><i>◆</i><span>Pagamentos</span></button><button data-section="settings"><i>⚙</i><span>Ajustes</span></button></nav>
-  </div>
-
-  <div class="backdrop" id="modalBackdrop" hidden></div>
-  <section class="modal account-detail-modal" id="manageModal" hidden aria-labelledby="manageName">
-    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
-    <header class="manage-hero">
-      <span class="manage-avatar" id="manageAvatar">U</span>
-      <div><span class="eyebrow">PERFIL DO USUÁRIO</span><h2 id="manageName">Conta</h2><p id="manageEmail" class="muted"></p><span class="status pending" id="manageStatus">Pendente</span></div>
-    </header>
-    <div class="manage-summary">
-      <article><small>Acesso</small><b id="managePaidUntil">Não liberado</b></article>
-      <article><small>Último acesso</small><b id="manageLastSeen">Ainda não acessou</b></article>
-      <article><small>Solicitação</small><b id="manageRequestedAt">Não solicitou</b></article>
-      <article><small>Conta criada</small><b id="manageCreatedAt">Data indisponível</b></article>
-    </div>
-    <section class="billing-overview" aria-labelledby="billingOverviewTitle"><div class="billing-overview-head"><div><span class="billing-icon">◆</span><div><small>COBRANÇA E PAGAMENTO</small><b id="billingOverviewTitle">Situação financeira da conta</b></div></div><span class="payment-origin-badge" id="managePaymentOrigin">Sem pagamento</span></div><div class="billing-facts"><article><small>Como foi pago</small><b id="managePaymentMethod">Ainda não pagou</b></article><article><small>Último valor</small><b id="managePaymentAmount">R$ 0,00</b></article><article><small>Plano</small><b id="managePaymentPlan">Nenhum plano pago</b></article><article><small>Confirmação</small><b id="managePaymentDate">Sem confirmação</b></article></div><div class="user-payment-history" id="managePaymentHistory"></div></section>
-    <p class="paid-plan-protection" id="managePlanProtection" hidden></p>
-    <div class="profile-shortcuts" aria-label="Atalhos do usuário"><button id="copyUserEmail" type="button"><span>✉️</span> Copiar e-mail</button><button id="contactUser" type="button"><span>💬</span> Abrir WhatsApp</button></div>
-    <form id="manageForm">
-      <input id="manageUserId" type="hidden">
-      <section class="manage-section">
-        <div class="manage-section-title"><div><b>Dados e cobrança</b><small>Informações usadas no contato e na mensagem mensal.</small></div></div>
-        <div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15" placeholder="(00) 00000-0000"></label><label class="full">Observações<textarea id="manageNotes" rows="3" placeholder="Anotações internas sobre esta conta"></textarea></label></div>
-        <fieldset class="pricing-picker"><legend>Preço de compras futuras</legend><div><label><input type="radio" name="managePricing" value="launch_locked"><span><b>Lançamento protegido</b><small id="manageLaunchFeeLabel">Mantém R$ 39,90 mesmo quando o preço normal for ativado.</small></span></label><label><input type="radio" name="managePricing" value="global" checked><span><b>Preço global atual</b><small id="manageGlobalFeeLabel">Acompanha a fase e o valor configurados para novas contas.</small></span></label><label><input type="radio" name="managePricing" value="custom"><span><b>Desconto especial</b><small>Defina uma condição exclusiva somente para este usuário.</small></span></label></div><label id="manageFeeField" class="custom-price-field" hidden>Mensalidade personalizada<input id="manageFee" inputmode="decimal"><small>Este valor substitui os preços de lançamento e normal nesta conta.</small></label><div class="effective-price"><span>Próxima compra</span><b id="manageEffectiveFee">R$ 0,00 por mês</b></div></fieldset>
-        <button class="outline wide-action" type="submit">Salvar dados do usuário</button>
-      </section>
-      <section class="manage-section access-section" id="manageAccessSection">
-        <div class="manage-section-title"><div><b>Liberar ou renovar acesso</b><small>Escolha um período. Para colaboradores, use o acesso vitalício.</small></div></div>
-        <label>Período para liberar<select id="manageMonths"><option value="days:15">15 dias — teste rápido</option><option value="months:1" selected>1 mês</option><option value="months:2">2 meses</option><option value="months:3">3 meses</option><option value="months:6">6 meses</option><option value="months:12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">A validade começa hoje e substitui a data anterior.</small></label>
-        <fieldset class="grant-type-picker" id="grantTypeBlock"><legend>Esta liberação foi paga?</legend><div><label><input type="radio" name="manageGrantType" value="paid" checked><span><b>Pago</b><small>Dinheiro, PIX direto ou outro pagamento já recebido.</small></span></label><label><input type="radio" name="manageGrantType" value="free"><span><b>Gratuito / teste</b><small>Cortesia sem cobrança para a pessoa experimentar.</small></span></label></div><label class="grant-amount">Valor recebido<input id="manageGrantAmount" inputmode="decimal"><small id="manageGrantTypeHelp">O histórico registrará esta liberação como paga.</small></label></fieldset>
-        <button class="primary wide-action" id="grantAccess" type="button">Liberar acesso</button>
-      </section>
-      <section class="manage-section quick-actions">
-        <div class="manage-section-title"><div><b>Outras ações</b><small>Envie um lembrete pelo WhatsApp ou gerencie contas sem período pago ativo.</small></div></div>
-        <div class="secondary-actions"><button id="chargeAccount" type="button"><span>💎</span><b>Enviar lembrete</b></button><button id="copyUserPhone" type="button"><span>📋</span><b>Copiar WhatsApp</b></button><button class="danger-link" id="toggleBlock" type="button"><span>⊘</span><b>Bloquear acesso</b></button></div>
-      </section>
-      <section class="manage-section reset-access-section" id="resetAccessSection">
-        <div class="manage-section-title"><div><b>Ferramenta de teste</b><small>Zere o plano para testar uma nova compra e a liberação automática pelo Mercado Pago.</small></div></div>
-        <div class="reset-access-warning"><span aria-hidden="true">↺</span><p><b>Os dados financeiros do usuário serão preservados.</b><small>O reset remove somente a situação do plano e a data de validade. Clientes, empréstimos, histórico e preço especial não são apagados.</small></p></div>
-        <button class="reset-access-button" id="resetPlatformAccess" type="button">Resetar plano e validade</button>
-      </section>
-      <p class="feedback" id="manageFeedback" aria-live="polite"></p>
     </form>
+  </section>
+  <section class="modal account-detail-modal profile-modal" id="manageModal" hidden aria-labelledby="manageName" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="manage-hero"><span class="manage-avatar" id="manageAvatar">U</span><div><span class="eyebrow">PERFIL DO USUÁRIO</span><h2 id="manageName">Conta</h2><p id="manageEmail" class="muted"></p><span class="status pending" id="manageStatus">Pendente</span></div></header>
+    <section class="profile-access-card" aria-label="Estado atual do acesso"><small>ACESSO ATUAL</small><strong id="managePaidUntil">Não liberado</strong><p id="manageAccessDescription">Consulte a situação desta conta.</p></section>
+    <section class="billing-overview" aria-labelledby="billingOverviewTitle">
+      <div class="billing-overview-head"><div><span class="billing-icon">◆</span><div><small>PAGAMENTO REGISTRADO</small><b id="billingOverviewTitle">Situação financeira</b></div></div><span class="payment-origin-badge" id="managePaymentOrigin">Sem pagamento</span></div>
+      <p class="payment-current-status" id="managePaymentStatus">Aguardando informações</p>
+      <div class="billing-facts"><article class="payment-amount-fact"><small>Valor registrado</small><b id="managePaymentAmount">R$ 0,00</b></article><article><small>Como foi pago</small><b id="managePaymentMethod">Ainda não pagou</b></article><article><small>Plano</small><b id="managePaymentPlan">Nenhum plano pago</b></article><article><small>Confirmação</small><b id="managePaymentDate">Sem confirmação</b></article></div>
+    </section>
+    <section class="profile-next-price"><div><small>PREÇO DA PRÓXIMA COMPRA</small><b id="manageNextPrice">Não configurado</b></div><button id="openEditAccount" class="outline" type="button">Editar dados e preço</button></section>
+    <p class="paid-plan-protection" id="managePlanProtection" hidden></p>
+    <div class="profile-primary-actions"><button class="primary" id="openManageActions" type="button">Ações do usuário</button><button class="outline" id="viewAccountHistory" type="button">Ver histórico completo</button></div>
+    <section class="profile-recent"><div class="profile-recent-head"><b>Últimos acontecimentos</b><small>Liberações e pagamentos</small></div><div class="user-payment-history" id="managePaymentHistory"></div></section>
+    <div class="manage-summary profile-meta"><article><small>Último acesso</small><b id="manageLastSeen">Ainda não acessou</b></article><article><small>Solicitação</small><b id="manageRequestedAt">Não solicitou</b></article><article><small>Conta criada</small><b id="manageCreatedAt">Data indisponível</b></article></div>
+    <div class="profile-shortcuts" aria-label="Atalhos do usuário"><button id="copyUserEmail" type="button">✉️ Copiar e-mail</button><button id="copyUserPhone" type="button">📋 Copiar WhatsApp</button><button id="contactUser" type="button">💬 Abrir WhatsApp</button></div>
+    <p class="feedback profile-feedback" id="profileFeedback" aria-live="polite"></p>
+  </section>
+
+  <section class="modal action-list-modal" id="actionsModal" hidden aria-labelledby="actionsTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">GERENCIAR USUÁRIO</span><h2 id="actionsTitle">Escolha uma ação</h2><p>As informações do perfil ficam separadas das mudanças.</p></header>
+    <div class="action-choices"><button id="actionEdit" type="button"><span>✎</span><div><b>Editar dados e preço</b><small>WhatsApp, observações e valor para compras futuras</small></div><em>›</em></button><button id="actionGrant" type="button"><span>✓</span><div><b>Liberar ou renovar</b><small>Registre acesso gratuito ou pagamento recebido fora da plataforma</small></div><em>›</em></button><button id="chargeAccount" type="button"><span>💬</span><div><b>Mensagem de cobrança</b><small>Prepare e envie um lembrete pelo WhatsApp</small></div><em>›</em></button><button id="actionDanger" type="button" class="danger-choice"><span>⚠</span><div><b>Bloqueio e reset</b><small>Ações sensíveis para contas sem período automático ativo</small></div><em>›</em></button></div>
+    <button class="back-link" data-back-profile type="button">← Voltar ao perfil</button>
+  </section>
+
+  <section class="modal action-form-modal" id="editAccountModal" hidden aria-labelledby="editAccountTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">DADOS DO USUÁRIO</span><h2 id="editAccountTitle">Editar dados e preço futuro</h2><p>O período comprado permanece intacto.</p></header>
+    <form id="manageForm"><input id="manageUserId" type="hidden"><div class="form-grid"><label>WhatsApp<input id="managePhone" inputmode="tel" maxlength="15" placeholder="(00) 00000-0000"></label><label class="full">Observações<textarea id="manageNotes" rows="3" placeholder="Anotações internas sobre esta conta"></textarea></label></div>
+      <fieldset class="pricing-picker"><legend>Preço de compras futuras</legend><div><label><input type="radio" name="managePricing" value="launch_locked"><span><b>Lançamento protegido</b><small id="manageLaunchFeeLabel">Mantém R$ 39,90 mesmo quando o preço normal for ativado.</small></span></label><label><input type="radio" name="managePricing" value="global" checked><span><b>Preço global atual</b><small id="manageGlobalFeeLabel">Acompanha a fase e o valor configurados para novas contas.</small></span></label><label><input type="radio" name="managePricing" value="custom"><span><b>Desconto especial</b><small>Defina uma condição exclusiva somente para este usuário.</small></span></label></div><label id="manageFeeField" class="custom-price-field" hidden>Mensalidade personalizada<input id="manageFee" inputmode="decimal"><small>Este valor será usado apenas nas próximas compras.</small></label><div class="effective-price"><span>Próxima compra</span><b id="manageEffectiveFee">R$ 0,00 por mês</b></div></fieldset>
+      <p class="feedback" id="manageFeedback" aria-live="polite"></p><button class="primary wide-action" type="submit">Salvar alterações</button>
+    </form><button class="back-link" data-back-profile type="button">← Voltar ao perfil</button>
+  </section>
+
+  <section class="modal action-form-modal" id="accessModal" hidden aria-labelledby="accessModalTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">LIBERAÇÃO MANUAL</span><h2 id="accessModalTitle">Liberar ou renovar acesso</h2><p>Confirme o período e registre como recebeu o pagamento.</p></header>
+    <section class="manage-section access-section" id="manageAccessSection">
+      <label>Período para liberar<select id="manageMonths"><option value="days:15">15 dias — teste rápido</option><option value="months:1" selected>1 mês</option><option value="months:2">2 meses</option><option value="months:3">3 meses</option><option value="months:6">6 meses</option><option value="months:12">12 meses</option><option value="lifetime">Vitalício — colaborador</option></select><small id="managePeriodHelp">A validade começa hoje e substitui a data anterior.</small></label>
+      <fieldset class="grant-type-picker" id="grantTypeBlock"><legend>Esta liberação foi paga?</legend><div><label><input type="radio" name="manageGrantType" value="paid" checked><span><b>Pago</b><small>Pagamento já recebido fora do checkout.</small></span></label><label><input type="radio" name="manageGrantType" value="free"><span><b>Gratuito / teste</b><small>Cortesia sem cobrança.</small></span></label></div><label class="grant-amount">Valor recebido<input id="manageGrantAmount" inputmode="decimal"><small id="manageGrantTypeHelp">O histórico registrará esta liberação como paga.</small></label><label id="manualPaymentMethodField">Como recebeu<select id="manualPaymentMethod"><option value="">Selecione o meio de pagamento</option><option value="cash">Dinheiro em espécie</option><option value="pix_direct">Pix direto</option><option value="bank_transfer">Transferência bancária</option><option value="card_external">Cartão fora da plataforma</option><option value="other">Outro meio</option></select></label></fieldset>
+      <p class="feedback" id="grantFeedback" aria-live="polite"></p><button class="primary wide-action" id="grantAccess" type="button">Liberar acesso</button>
+    </section><button class="back-link" data-back-profile type="button">← Voltar ao perfil</button>
+  </section>
+
+  <section class="modal action-form-modal" id="dangerModal" hidden aria-labelledby="dangerModalTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">AÇÕES SENSÍVEIS</span><h2 id="dangerModalTitle">Bloqueio e reset</h2><p>Confira a conta antes de alterar o acesso.</p></header>
+    <button class="danger-action" id="toggleBlock" type="button">⊘ Bloquear acesso</button>
+    <section class="manage-section reset-access-section" id="resetAccessSection"><div class="manage-section-title"><div><b>Ferramenta de teste</b><small>Zere o plano para testar uma nova compra e a liberação automática pelo Mercado Pago.</small></div></div><div class="reset-access-warning"><span aria-hidden="true">↺</span><p><b>Os dados financeiros do usuário serão preservados.</b><small>O reset remove somente a situação do plano e a data de validade. Clientes, empréstimos, histórico e preço especial não são apagados.</small></p></div><button class="reset-access-button" id="resetPlatformAccess" type="button">Resetar plano e validade</button></section>
+    <p class="feedback" id="dangerFeedback" aria-live="polite"></p><button class="back-link" data-back-profile type="button">← Voltar ao perfil</button>
+  </section>
+
+  <section class="modal history-modal" id="historyModal" hidden aria-labelledby="historyTitle" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
+    <header class="action-modal-head"><span class="eyebrow">ACONTECIMENTOS</span><h2 id="historyTitle">Histórico do usuário</h2><p id="historySubtitle">Pagamentos e mudanças de acesso em ordem cronológica.</p></header>
+    <div class="history-full-list" id="historyList" aria-live="polite"></div>
+    <p class="feedback" id="historyFeedback" aria-live="polite"></p><button class="outline wide-action" id="historyLoadMore" type="button" hidden>Carregar anteriores</button><button class="back-link" id="historyBackProfile" data-back-profile type="button">← Voltar ao perfil</button>
   </section>
   <section class="modal charge-modal premium-charge-modal" id="chargeModal" hidden aria-labelledby="chargeName">
     <button class="modal-close" data-close-modal aria-label="Fechar">×</button>
