@@ -4509,9 +4509,11 @@ button.profile-menu-item:hover:not(:disabled) {
 #appView .donut b {
   font: 700 17px/1.2 Outfit;
 }
-#appView .loan-extra b,
-#appView .loan-value b {
+#appView .loan-extra b {
   font: 700 19px/1.2 Outfit;
+}
+#appView .loan-value b {
+  font: 700 17px/1.2 Outfit;
 }
 #appView .loan-value small,
 #appView .loan-extra p {
@@ -4702,10 +4704,50 @@ button.profile-menu-item:hover:not(:disabled) {
   }
   #appView .stats article:nth-child(n + 4) {
     grid-column: span 3;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-content: start;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+    min-height: 112px;
     padding: 12px;
   }
-  #appView .stats article:nth-child(n + 4) strong {
-    font-size: 20px;
+  #appView .stats article:nth-child(n + 4) p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  #appView .stats article:nth-child(n + 4) > strong,
+  #appView .stats article:nth-child(n + 4) .client-stat-values {
+    grid-column: 1 / -1;
+  }
+  #appView .stats article:nth-child(n + 4) > strong {
+    font: 700 18px/1.15 Outfit;
+  }
+  #appView .client-stat-values {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+  #appView .client-stat-values > span {
+    grid-template-columns: 25px minmax(0, 1fr);
+    align-items: baseline;
+    gap: 5px;
+  }
+  #appView .client-stat-values > span + span {
+    padding: 0;
+    border: 0;
+  }
+  #appView .client-stat-values strong {
+    font: 700 17px/1.15 Outfit;
+  }
+  #appView .client-stat-values small {
+    margin: 0;
+    overflow: visible;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
   }
   #appView .chart-wrap {
     flex-direction: column;
@@ -4729,7 +4771,7 @@ button.profile-menu-item:hover:not(:disabled) {
     border-top: 1px solid var(--line);
   }
   #appView .loan-row .loan-value b {
-    font-size: 22px;
+    font-size: 18px;
   }
   #appView .loan-row > button {
     grid-column: 2;

@@ -12,6 +12,10 @@ test("financial amounts are prominent and never intentionally ellipsized", async
   assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\)\s*\{[^}]*grid-column: span 2;/);
   assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\) strong\s*\{[^}]*font: 700 clamp\(17px, 4\.8vw, 19px\)/);
   assert.match(css, /#appView \.stats article:nth-child\(n \+ 4\)\s*\{[^}]*grid-column: span 3;/);
+  assert.match(css, /#appView \.client-stat-values\s*\{[^}]*grid-template-columns: 1fr;/);
+  assert.match(css, /#appView \.client-stat-values > span\s*\{[^}]*grid-template-columns: 25px minmax\(0, 1fr\);/);
+  assert.match(css, /#appView \.stats article:nth-child\(n \+ 4\) > strong\s*\{[^}]*font: 700 18px/);
+  assert.match(css, /#appView \.loan-row \.loan-value b\s*\{[^}]*font-size: 18px;/);
   assert.match(css, /\.installment-side strong\s*\{\s*font: 700 20px/);
   assert.match(css, /\.details-summary b\s*\{\s*font: 700 19px/);
   assert.match(css, /#appView \.loan-row \.loan-value\s*\{[^}]*grid-column: 1 \/ -1;/);
@@ -20,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v42/);
+  assert.match(sw, /credmais-shell-v43/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
