@@ -727,11 +727,17 @@ function openModal(id) {
   const modal = $(`#${id}`);
   modal.hidden = false;
   modal.scrollTop = 0;
+  modal.tabIndex = -1;
+  modal.focus({ preventScroll: true });
+  $("#authView").inert = true;
+  $("#adminView").inert = true;
   document.body.style.overflow = "hidden";
 }
 function closeModals() {
   document.querySelectorAll(".modal").forEach((modal) => (modal.hidden = true));
   $("#modalBackdrop").hidden = true;
+  $("#authView").inert = false;
+  $("#adminView").inert = false;
   document.body.style.overflow = "";
 }
 function renderHistoryEvent(event) {

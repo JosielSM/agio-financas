@@ -2251,6 +2251,25 @@ function keepFocusedModalFieldVisible() {
   else if (fieldBounds.top < modalBounds.top + 20)
     modal.scrollTop -= modalBounds.top + 20 - fieldBounds.top;
 }
+function syncModalLayers(activeModal = null) {
+  const modals = Array.from(document.querySelectorAll(".modal"));
+  const visible = modals.filter((modal) => !modal.hidden);
+  const top = activeModal && !activeModal.hidden ? activeModal : visible.at(-1);
+  if (top) {
+    top.tabIndex = -1;
+    top.focus({ preventScroll: true });
+  }
+  modals.forEach((modal) => {
+    const behind = !modal.hidden && modal !== top;
+    modal.classList.toggle("modal-underlay", behind);
+    if (behind) modal.setAttribute("aria-hidden", "true");
+    else modal.removeAttribute("aria-hidden");
+  });
+  ["authView", "appView", "accessView"].forEach((id) => {
+    const view = document.getElementById(id);
+    if (view) view.inert = Boolean(top);
+  });
+}
 function openModal(id) {
   if (id === "loanModal" && !state.clients.length) {
     toast("Cadastre um cliente antes de criar um empréstimo.");
@@ -2261,6 +2280,7 @@ function openModal(id) {
   const modal = $(`#${id}`);
   modal.hidden = false;
   modal.scrollTop = 0;
+  syncModalLayers(modal);
   syncModalViewport();
   rememberModalState(id);
 }
@@ -2268,6 +2288,7 @@ function closeModals() {
   document.querySelectorAll(".modal").forEach((modal) => {
     modal.hidden = true;
   });
+  syncModalLayers();
   $("#modalBackdrop").hidden = true;
   document.body.classList.remove("modal-open");
   clearModalViewport();
@@ -2289,17 +2310,20 @@ function requestClose() {
   ) {
     pendingModalId = modal.id;
     $("#discardModal").hidden = false;
+    syncModalLayers($("#discardModal"));
     return;
   }
   closeModals();
 }
 function keepEditing() {
   $("#discardModal").hidden = true;
+  syncModalLayers();
   pendingModalId = null;
 }
 function discardChanges() {
   if (pendingModalId) $(`#${pendingModalId}`).hidden = true;
   $("#discardModal").hidden = true;
+  syncModalLayers();
   $("#modalBackdrop").hidden = true;
   document.body.classList.remove("modal-open");
   clearModalViewport();
@@ -2312,11 +2336,13 @@ function askDelete({ title, message, action }) {
   document.body.classList.add("modal-open");
   $("#modalBackdrop").hidden = false;
   $("#confirmDeleteModal").hidden = false;
+  syncModalLayers($("#confirmDeleteModal"));
   syncModalViewport();
 }
 function cancelDelete() {
   pendingDelete = null;
   $("#confirmDeleteModal").hidden = true;
+  syncModalLayers();
   const anotherModal = Array.from(document.querySelectorAll(".modal")).some(
     (modal) => !modal.hidden && modal.id !== "confirmDeleteModal",
   );
@@ -2392,6 +2418,7 @@ function openLoan(id) {
   $("#modalBackdrop").hidden = false;
   $("#loanModal").hidden = false;
   $("#loanModal").scrollTop = 0;
+  syncModalLayers($("#loanModal"));
   syncModalViewport();
   prepareLoan(id);
   rememberModalState("loanModal");

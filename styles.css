@@ -1761,8 +1761,12 @@ textarea {
   position: fixed;
   z-index: 10;
   inset: 0;
-  background: #10241c91;
-  backdrop-filter: blur(3px);
+  background: #10241c8a;
+  -webkit-backdrop-filter: blur(8px) saturate(.8);
+  backdrop-filter: blur(8px) saturate(.8);
+}
+.dark .modal-backdrop {
+  background: #020b08a8;
 }
 .modal-backdrop {
   z-index: 200 !important;
@@ -1773,6 +1777,20 @@ textarea {
 .discard-modal,
 #confirmDeleteModal {
   z-index: 203 !important;
+}
+body.modal-open .modal.modal-underlay {
+  z-index: 201 !important;
+  filter: blur(5px);
+  opacity: .62;
+  pointer-events: none;
+  user-select: none;
+}
+body.modal-open .modal:not([hidden]):not(.modal-underlay) {
+  z-index: 204 !important;
+}
+body.modal-open #confirmDeleteModal:not(.modal-underlay),
+body.modal-open #discardModal:not(.modal-underlay) {
+  z-index: 204 !important;
 }
 .toast {
   z-index: 300 !important;
