@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v46/);
+  assert.match(sw, /credmais-shell-v47/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -32,4 +32,17 @@ test("the vector navigation and financial icons are available offline", async ()
   }
   assert.match(css, /\.bottom-link i\s*\{[^}]*width: 24px;/);
   assert.match(css, /\.stat-icon::before\s*\{[^}]*width: 24px;/);
+});
+
+test("dashboard money cards distinguish capital, receivables and monthly receipts in both themes", async () => {
+  const [css, html] = await Promise.all([read("styles.css"), read("index.html")]);
+  for (const id of ["statLent", "statReceivable", "statReceived"])
+    assert.match(html, new RegExp(`id="${id}"`));
+  for (const position of [1, 2, 3]) {
+    assert.match(css, new RegExp(`#appView \\.stats article:nth-child\\(${position}\\) \\{[^}]*--metric-number:`));
+    assert.match(css, new RegExp(`\\.dark #appView \\.stats article:nth-child\\(${position}\\) \\{[^}]*--metric-number:`));
+  }
+  assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\)\s*\{[^}]*border-top: 4px solid var\(--metric-accent\);[^}]*linear-gradient/);
+  assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\) > strong\s*\{[^}]*color: var\(--metric-number\);/);
+  assert.match(css, /@media \(max-width: 680px\)\s*\{\s*#appView \.stats article:nth-child\(-n \+ 3\)/);
 });

@@ -5394,3 +5394,91 @@ button.profile-menu-item:hover:not(:disabled) {
     min-height: 56px;
   }
 }
+
+/* Three financial totals use distinct, consistent meanings in both themes. */
+#appView .stats article:nth-child(1) {
+  --metric-accent: #3779b9;
+  --metric-number: #205b98;
+  --metric-icon: #245e9e;
+  --metric-icon-bg: #e2efff;
+  --metric-surface: #eef6ff;
+  --metric-surface-end: #f9fcff;
+  --metric-border: #c9def5;
+  --metric-shadow: #275f9d15;
+}
+#appView .stats article:nth-child(2) {
+  --metric-accent: #c48a30;
+  --metric-number: #936019;
+  --metric-icon: #9c671c;
+  --metric-icon-bg: #ffefd1;
+  --metric-surface: #fff6e8;
+  --metric-surface-end: #fffdf8;
+  --metric-border: #efd9b3;
+  --metric-shadow: #94611c15;
+}
+#appView .stats article:nth-child(3) {
+  --metric-accent: #2a9a6b;
+  --metric-number: #176f4d;
+  --metric-icon: #168052;
+  --metric-icon-bg: #ddf5e9;
+  --metric-surface: #eefaf3;
+  --metric-surface-end: #f9fefa;
+  --metric-border: #bfe7cf;
+  --metric-shadow: #11724615;
+}
+#appView .stats article:nth-child(-n + 3) {
+  border: 1px solid var(--metric-border);
+  border-top: 4px solid var(--metric-accent);
+  background: linear-gradient(150deg, var(--metric-surface-end), var(--metric-surface));
+  box-shadow: 0 8px 20px var(--metric-shadow), inset 0 1px #ffffff80;
+}
+#appView .stats article:nth-child(-n + 3) .stat-icon {
+  color: var(--metric-icon);
+  background: var(--metric-icon-bg);
+}
+#appView .stats article:nth-child(-n + 3) p {
+  color: var(--text);
+  font-weight: 700;
+}
+#appView .stats article:nth-child(-n + 3) > strong {
+  color: var(--metric-number);
+}
+.dark #appView .stats article:nth-child(1) {
+  --metric-accent: #68aaf0;
+  --metric-number: #a1d0ff;
+  --metric-icon: #a1d0ff;
+  --metric-icon-bg: #254660;
+  --metric-surface: #1d3548;
+  --metric-surface-end: #1b292f;
+  --metric-border: #3c6380;
+  --metric-shadow: #00000026;
+}
+.dark #appView .stats article:nth-child(2) {
+  --metric-accent: #edba6d;
+  --metric-number: #ffd997;
+  --metric-icon: #ffd997;
+  --metric-icon-bg: #554027;
+  --metric-surface: #3b3023;
+  --metric-surface-end: #272923;
+  --metric-border: #6b5636;
+  --metric-shadow: #00000026;
+}
+.dark #appView .stats article:nth-child(3) {
+  --metric-accent: #65d9a1;
+  --metric-number: #9aedbf;
+  --metric-icon: #9aedbf;
+  --metric-icon-bg: #24583e;
+  --metric-surface: #1c3c2d;
+  --metric-surface-end: #1b2c25;
+  --metric-border: #3a7453;
+  --metric-shadow: #00000026;
+}
+@media (max-width: 680px) {
+  #appView .stats article:nth-child(-n + 3) {
+    min-height: 132px;
+    padding: 11px 9px;
+  }
+  #appView .stats article:nth-child(-n + 3) > strong {
+    line-height: 1.18;
+  }
+}
