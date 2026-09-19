@@ -34,7 +34,7 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v51/);
+  assert.match(serviceWorker, /credmais-shell-v52/);
 });
 
 test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {

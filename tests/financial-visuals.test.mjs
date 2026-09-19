@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v51/);
+  assert.match(sw, /credmais-shell-v52/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -48,6 +48,15 @@ test("dashboard money cards distinguish capital, receivables and monthly receipt
   assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\)\s*\{[^}]*border-top: 4px solid var\(--metric-accent\);[^}]*linear-gradient/);
   assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\) > strong\s*\{[^}]*color: var\(--metric-number\);/);
   assert.match(css, /@media \(max-width: 680px\)\s*\{\s*#appView \.stats article:nth-child\(-n \+ 3\)/);
+});
+
+test("dark theme uses a blue-gray foundation while keeping the CredMais green identity", async () => {
+  const css = await read("styles.css");
+  assert.match(css, /body\.dark\s*\{[^}]*--bg: #101820;[^}]*--surface: #19242e;[^}]*--line: #334552;/);
+  assert.match(css, /body\.dark\s*\{[^}]*--brand: #48d9a6;[^}]*--soft: #173a34;/);
+  assert.match(css, /body\.dark\s*\{[^}]*radial-gradient\(circle at 92% -10%, #15504452 0, transparent 30rem\),[^}]*linear-gradient\(155deg, #101820 0%, #151e27 52%, #111a23 100%\);/);
+  assert.match(css, /\.dark \.stats article,[^}]*\.dark \.settlement-card\s*\{[^}]*border-color: var\(--line\);/);
+  assert.match(css, /\.dark \.modal-backdrop\s*\{[^}]*background: #050b12b8;/);
 });
 
 test("client and active-loan cards remain distinct and readable on mobile and in dark mode", async () => {
