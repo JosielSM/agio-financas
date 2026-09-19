@@ -2473,9 +2473,24 @@ body.dark {
   }
   .interest-mode-grid {
     grid-template-columns: 1fr;
+    align-items: start;
   }
   .interest-mode-card {
     min-height: 0;
+  }
+  .interest-mode-option > input:not(:checked) + .interest-mode-card {
+    min-height: 70px;
+    gap: 4px;
+    opacity: .68;
+    background: color-mix(in srgb, var(--surface) 82%, var(--soft));
+    box-shadow: none;
+  }
+  .interest-mode-option > input:not(:checked) + .interest-mode-card small,
+  .interest-mode-option > input:not(:checked) + .interest-mode-card em {
+    display: none;
+  }
+  .interest-mode-option > input:checked + .interest-mode-card {
+    animation: interestModeReveal .2s ease-out;
   }
   .calculation {
     grid-template-columns: 1fr;
@@ -2491,6 +2506,17 @@ body.dark {
   }
   .top-actions {
     gap: 0;
+  }
+}
+
+@keyframes interestModeReveal {
+  from {
+    opacity: .72;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

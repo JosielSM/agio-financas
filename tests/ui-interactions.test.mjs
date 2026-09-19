@@ -34,7 +34,17 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v59/);
+  assert.match(serviceWorker, /credmais-shell-v60/);
+});
+
+test("the loan form uses installment language and reveals only the selected interest explanation on mobile", async () => {
+  const [html, css] = await Promise.all([read("index.html"), read("styles.css")]);
+
+  assert.match(html, /Quantidade de parcelas<input id="loanInstallments"/);
+  assert.doesNotMatch(html, /Quantidade de pagamentos<input id="loanInstallments"/);
+  assert.match(css, /input:not\(:checked\) \+ \.interest-mode-card small/);
+  assert.match(css, /input:not\(:checked\) \+ \.interest-mode-card em/);
+  assert.match(css, /input:checked \+ \.interest-mode-card\s*\{[^}]*interestModeReveal/);
 });
 
 test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {
