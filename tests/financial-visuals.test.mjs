@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v66/);
+  assert.match(sw, /credmais-shell-v67/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -89,6 +89,7 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   for (const id of [
     "overdueTotal",
     "overdueCount",
+    "lateInterestReceived",
     "topOverdueClient",
     "viewOverdueButton",
     "forecastToday",
@@ -99,6 +100,10 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   ]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /function financialDashboardSummary\(loans, referenceDate = new Date\(\)\)/);
   assert.match(app, /function receivedBreakdownInMonth\(referenceDate = new Date\(\)\)/);
+  assert.match(app, /totals\.lateInterest \+= receipt\.lateInterestAmount/);
+  assert.match(app, /lateInterestAmount: lateInterestDue/);
+  assert.match(app, /lateInterestAmount: lateInterestReceived/);
+  assert.match(app, /receivedBreakdown\.lateInterest/);
   assert.match(app, /button\.id === "viewOverdueButton"[\s\S]*?renderDueLoans\(true\)/);
   assert.match(app, /principalAmount: roundCurrency\(principalBefore\.remaining\)/);
   assert.match(app, /interestAmount: Number\(infoBefore\.interestOnlyValue \|\| 0\)/);
@@ -111,6 +116,7 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   assert.match(css, /\.chart-panel\.financial-expanded\s*\{[^}]*border-color: #20e9a5;[^}]*box-shadow:/);
   assert.match(css, /\.financial-insights\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(css, /\.finance-overdue\s*\{\s*grid-column: 1 \/ -1;/);
+  assert.match(css, /\.finance-late-received\s*\{[^}]*border:/);
   assert.match(css, /\.donut\s*\{[^}]*width: 108px;[^}]*height: 108px;/);
   assert.match(css, /\.chart-panel\.financial-expanded \.donut\s*\{[^}]*width: 126px;[^}]*height: 126px;/);
   assert.match(css, /#appView \.chart-wrap\s*\{[^}]*flex-direction: row;[^}]*gap: 14px;/);

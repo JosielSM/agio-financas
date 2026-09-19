@@ -2488,6 +2488,7 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
           receipt.interestAmount == null
             ? null
             : Number(receipt.interestAmount || 0),
+        lateInterestAmount: Number(receipt.lateInterestAmount || 0),
       }))
       .filter((receipt) => receipt.amount > 0 && receipt.createdAt);
   const amount =
@@ -2507,6 +2508,7 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
         "payment",
       principalAmount: null,
       interestAmount: null,
+      lateInterestAmount: 0,
     },
   ];
 }
@@ -2589,14 +2591,16 @@ function receivedBreakdownInMonth(referenceDate = new Date()) {
             return;
           totals.principal += receipt.principalAmount;
           totals.interest += receipt.interestAmount;
+          totals.lateInterest += receipt.lateInterestAmount;
         });
       return totals;
     },
-    { principal: 0, interest: 0 },
+    { principal: 0, interest: 0, lateInterest: 0 },
   );
   return {
     principal: roundCurrency(result.principal),
     interest: roundCurrency(result.interest),
+    lateInterest: roundCurrency(result.lateInterest),
   };
 }
 const reportMonthValue = (date = new Date()) => monthKey(date);
@@ -3010,6 +3014,9 @@ function renderStats() {
   $("#legendInterest").textContent = money(interest);
   $("#overdueTotal").textContent = money(financialSummary.overdueTotal);
   $("#overdueCount").textContent = financialSummary.overdueCount;
+  $("#lateInterestReceived").textContent = money(
+    receivedBreakdown.lateInterest,
+  );
   $("#topOverdueClient").textContent = financialSummary.topOverdueClient
     ? `Maior atraso: ${financialSummary.topOverdueClient.name} · ${money(financialSummary.topOverdueClient.amount)}`
     : "Nenhum cliente em atraso";
@@ -3664,7 +3671,14 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
       installmentIndex,
       infoBefore,
     ),
-    paymentCreatedAt = new Date().toISOString();
+    paymentCreatedAt = new Date().toISOString(),
+    installmentDate = dateFor(loan, installmentIndex),
+    lateInterestDue =
+      previousStatus !== "partial" &&
+      previousStatus !== "interest" &&
+      (previousStatus === "missed" || dueStatus(installmentDate) === "Vencida")
+        ? roundCurrency(lateCharge(loan, installmentDate).value)
+        : 0;
   const isLastInterest =
     status === "interest" && installmentIndex === loan.installments - 1;
   if (previousStatus === status && !isLastInterest)
@@ -3693,7 +3707,7 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
         ? Number(previousPayment.adjustedRemaining || 0)
         : previousStatus === "interest"
           ? Number(infoBefore.deferred || 0)
-          : Number(infoBefore.due || 0);
+          : roundCurrency(Number(infoBefore.due || 0) + lateInterestDue);
     if (isLastInterest) {
       const renewedDate = addScheduleIntervals(
         dateFor(loan, installmentIndex),
@@ -3730,6 +3744,7 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
             interestAmount: roundCurrency(
               Math.max(0, remainingPayment - principalBefore.remaining),
             ),
+            lateInterestAmount: lateInterestDue,
           },
         ],
         createdAt: paymentCreatedAt,
@@ -3757,6 +3772,7 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
             type: "interest",
             principalAmount: 0,
             interestAmount: Number(infoBefore.interestOnlyValue || 0),
+            lateInterestAmount: 0,
           },
         ],
         renewals:
@@ -3933,13 +3949,26 @@ async function savePartialPayment(event) {
       previousReceipts = continuesPreviousPayment
         ? receiptEntriesFor(loan, installment, previousInfo)
         : [],
+      installmentDate = dateFor(loan, installment),
+      lateInterestDue =
+        !continuesPreviousPayment &&
+        (previousStatus === "missed" || dueStatus(installmentDate) === "Vencida")
+          ? roundCurrency(lateCharge(loan, installmentDate).value)
+          : 0,
+      lateInterestReceived = roundCurrency(
+        Math.min(calculation.paid, lateInterestDue),
+      ),
       receivedTotal = roundCurrency(previousReceived + calculation.paid),
       principalPaidNow = roundCurrency(
         Math.min(
           principalBefore.remaining,
-          calculation.due
+          calculation.due - lateInterestDue
             ? principalBefore.remaining *
-                Math.min(1, calculation.paid / calculation.due)
+                Math.min(
+                  1,
+                  Math.max(0, calculation.paid - lateInterestReceived) /
+                    Math.max(0, calculation.due - lateInterestDue),
+                )
             : 0,
         ),
       ),
@@ -3965,6 +3994,7 @@ async function savePartialPayment(event) {
           interestAmount: roundCurrency(
             Math.max(0, calculation.paid - principalPaidNow),
           ),
+          lateInterestAmount: lateInterestReceived,
         },
       ],
       originalDue: Number(previousPayment?.originalDue ?? previousInfo.due),

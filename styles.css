@@ -2995,19 +2995,22 @@ body.dark {
   margin: 0;
 }
 .finance-forecast dl div,
-.finance-capital-row {
+.finance-capital-row,
+.finance-late-received {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
 }
 .finance-forecast dt,
-.finance-capital-row span {
+.finance-capital-row span,
+.finance-late-received span {
   color: var(--muted);
   font-size: 10px;
 }
 .finance-forecast dd,
-.finance-capital-row b {
+.finance-capital-row b,
+.finance-late-received b {
   margin: 0;
   color: var(--text);
   font: 700 12px/1.2 Outfit, sans-serif;
@@ -3018,6 +3021,16 @@ body.dark {
   margin-top: 14px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+.finance-late-received {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--insight-accent) 25%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--insight-accent) 7%, var(--surface));
+}
+.finance-late-received b {
+  color: var(--insight-accent);
 }
 .dark .finance-insight {
   background: linear-gradient(
