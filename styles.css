@@ -5568,6 +5568,71 @@ button.profile-menu-item:hover:not(:disabled) {
   --metric-border: #d9c9ef;
   --metric-shadow: #6749a215;
 }
+.active-loan-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+#appView .active-loan-total strong {
+  color: var(--metric-number);
+  font: 700 24px/1 Outfit;
+}
+.active-loan-total span,
+.active-loans-stat > small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.active-loan-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 10px;
+}
+.active-loan-details > span {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 700;
+}
+.active-loan-details b {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+}
+.active-loan-details b.healthy {
+  color: #087451;
+  background: #dff5e9;
+}
+.active-loan-details b.overdue {
+  color: #aa3935;
+  background: #fee6e3;
+}
+.active-loan-progress {
+  height: 5px;
+  margin: 8px 0 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--metric-accent) 16%, var(--surface));
+}
+.active-loan-progress span {
+  display: block;
+  width: var(--active-progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--metric-accent);
+  transition: width .25s ease;
+}
+.dark .active-loan-details b.healthy {
+  color: #9aefc0;
+  background: #1d4935;
+}
+.dark .active-loan-details b.overdue {
+  color: #ffc1bc;
+  background: #512b2a;
+}
 #appView .stats article:nth-child(n + 4) {
   border: 1px solid var(--metric-border);
   border-top: 4px solid var(--metric-accent);
@@ -5649,8 +5714,17 @@ button.profile-menu-item:hover:not(:disabled) {
   #appView .stats article:nth-child(4) .client-stat-values strong {
     font-size: 18px;
   }
-  #appView .stats article:nth-child(5) > strong {
-    font: 700 28px/1 Outfit, sans-serif;
+  #appView .active-loans-stat .active-loan-total,
+  #appView .active-loans-stat .active-loan-details,
+  #appView .active-loans-stat .active-loan-progress,
+  #appView .active-loans-stat > small {
+    grid-column: 1 / -1;
+  }
+  #appView .active-loans-stat .active-loan-details {
+    margin-top: 0;
+  }
+  #appView .active-loan-total strong {
+    font-size: 20px;
   }
 }
 

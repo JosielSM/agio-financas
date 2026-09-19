@@ -2772,6 +2772,30 @@ function financialsForLoan(loan) {
   );
   return { lent, receivable, received };
 }
+function activeLoanOperationalSummary(loans) {
+  const summary = { total: 0, paid: 0, open: 0, overdue: 0, progress: 0 };
+  loans.forEach((loan) => {
+    const installments = Math.max(0, Number(loan.installments) || 0);
+    for (let index = 0; index < installments; index += 1) {
+      const paymentState = paymentStateFor(loan, index);
+      summary.total += 1;
+      if (paymentState === "paid") {
+        summary.paid += 1;
+        continue;
+      }
+      summary.open += 1;
+      if (
+        paymentState === "missed" ||
+        dueStatus(dateFor(loan, index)) === "Vencida"
+      )
+        summary.overdue += 1;
+    }
+  });
+  summary.progress = summary.total
+    ? Math.round((summary.paid / summary.total) * 100)
+    : 0;
+  return summary;
+}
 function renderStats() {
   const now = new Date();
   renderedMonthKey = monthKey(now);
@@ -2781,7 +2805,8 @@ function renderStats() {
     activeClientIds = new Set(activeLoans.map((loan) => loan.clientId)),
     activeClients = state.clients.filter((client) =>
       activeClientIds.has(client.id),
-    ).length;
+    ).length,
+    loanOperations = activeLoanOperationalSummary(activeLoans);
   const totals = state.loans
     .filter((loan) => !loan.archived)
     .reduce(
@@ -2804,6 +2829,19 @@ function renderStats() {
   $("#statClients").textContent = state.clients.length;
   $("#statActiveClients").textContent = activeClients;
   $("#statLoans").textContent = activeLoans.length;
+  $("#statOpenInstallments").textContent = `${loanOperations.open} parcela${loanOperations.open === 1 ? "" : "s"} em aberto`;
+  const loanAlert = $("#statLoanAlert");
+  loanAlert.textContent = loanOperations.overdue
+    ? `${loanOperations.overdue} vencida${loanOperations.overdue === 1 ? "" : "s"}`
+    : "Tudo em dia";
+  loanAlert.classList.toggle("overdue", loanOperations.overdue > 0);
+  loanAlert.classList.toggle("healthy", loanOperations.overdue === 0);
+  const loanProgress = $("#activeLoanProgress");
+  loanProgress.style.setProperty("--active-progress", `${loanOperations.progress}%`);
+  loanProgress.setAttribute("aria-valuenow", String(loanOperations.progress));
+  $("#statLoanProgressText").textContent = loanOperations.total
+    ? `${loanOperations.progress}% das parcelas quitadas`
+    : "Sem parcelas cadastradas";
   $("#chartTotal").textContent = money(receivable);
   $("#legendLent").textContent = money(lent);
   $("#legendInterest").textContent = money(interest);
