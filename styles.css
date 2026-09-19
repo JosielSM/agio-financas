@@ -1550,6 +1550,100 @@ textarea {
   display: grid;
   gap: 10px;
 }
+.recent-loan-list {
+  display: grid;
+  gap: 8px;
+}
+.recent-loan-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.recent-loan-card.expanded {
+  border-color: color-mix(in srgb, var(--brand) 68%, var(--line));
+  box-shadow: 0 0 0 1px #07966824;
+}
+.recent-loan-summary {
+  width: 100%;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.recent-loan-main,
+.recent-loan-balance {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.recent-loan-main b {
+  overflow: hidden;
+  font: 700 14px/1.2 Outfit, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-loan-main small,
+.recent-loan-balance small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.recent-loan-balance {
+  text-align: right;
+}
+.recent-loan-balance b {
+  color: var(--brand);
+  font: 700 14px/1.2 Outfit, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.recent-loan-summary > i {
+  color: var(--brand);
+  font-size: 16px;
+  font-style: normal;
+}
+.recent-loan-details {
+  padding: 0 12px 12px;
+  animation: financialDetailsReveal .2s ease-out;
+}
+.recent-loan-details dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+.recent-loan-details dl div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.recent-loan-details dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+.recent-loan-details dd {
+  margin: 0;
+  font: 700 12px/1.25 Outfit, sans-serif;
+  overflow-wrap: anywhere;
+}
+.recent-loan-open {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid color-mix(in srgb, var(--brand) 48%, var(--line));
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--brand);
+  font-weight: 800;
+}
 .history-panel {
   margin-bottom: 28px;
 }
@@ -2717,8 +2811,8 @@ body.dark {
 }
 .donut {
   --lent-percent: 100%;
-  width: 92px;
-  height: 92px;
+  width: 108px;
+  height: 108px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: conic-gradient(
@@ -2727,16 +2821,18 @@ body.dark {
   );
   display: grid;
   place-items: center;
+  transition: width .22s ease, height .22s ease;
 }
 .donut > span {
-  width: 64px;
-  height: 64px;
+  width: 74px;
+  height: 74px;
   border-radius: 50%;
   background: var(--surface);
   display: grid;
   place-content: center;
   text-align: center;
   padding: 8px;
+  transition: width .22s ease, height .22s ease;
 }
 .donut b {
   font: 600 14px Outfit;
@@ -2768,6 +2864,14 @@ body.dark {
 }
 .financial-summary-toggle[aria-expanded="true"] .financial-toggle-icon {
   transform: rotate(180deg);
+}
+.chart-panel.financial-expanded .donut {
+  width: 126px;
+  height: 126px;
+}
+.chart-panel.financial-expanded .donut > span {
+  width: 86px;
+  height: 86px;
 }
 .chart-legend {
   display: grid;
@@ -5084,14 +5188,22 @@ button.profile-menu-item:hover:not(:disabled) {
     gap: 14px;
   }
   #appView .donut {
-    width: 82px;
-    height: 82px;
+    width: 96px;
+    height: 96px;
     align-self: auto;
   }
   #appView .donut > span {
-    width: 58px;
-    height: 58px;
+    width: 66px;
+    height: 66px;
     padding: 5px;
+  }
+  #appView .chart-panel.financial-expanded .donut {
+    width: 116px;
+    height: 116px;
+  }
+  #appView .chart-panel.financial-expanded .donut > span {
+    width: 80px;
+    height: 80px;
   }
   #appView .donut b {
     font-size: 14px;
@@ -5120,6 +5232,9 @@ button.profile-menu-item:hover:not(:disabled) {
   #appView .loan-row > button {
     grid-column: 2;
     grid-row: 1;
+  }
+  .recent-loan-details dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .paid-switcher {
     gap: 8px;

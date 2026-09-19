@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v63/);
+  assert.match(sw, /credmais-shell-v64/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -111,7 +111,21 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   assert.match(css, /\.chart-panel\.financial-expanded\s*\{[^}]*border-color: #20e9a5;[^}]*box-shadow:/);
   assert.match(css, /\.financial-insights\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(css, /\.finance-overdue\s*\{\s*grid-column: 1 \/ -1;/);
-  assert.match(css, /\.donut\s*\{[^}]*width: 92px;[^}]*height: 92px;/);
+  assert.match(css, /\.donut\s*\{[^}]*width: 108px;[^}]*height: 108px;/);
+  assert.match(css, /\.chart-panel\.financial-expanded \.donut\s*\{[^}]*width: 126px;[^}]*height: 126px;/);
   assert.match(css, /#appView \.chart-wrap\s*\{[^}]*flex-direction: row;[^}]*gap: 14px;/);
-  assert.match(css, /#appView \.donut\s*\{[^}]*width: 82px;[^}]*height: 82px;/);
+  assert.match(css, /#appView \.donut\s*\{[^}]*width: 96px;[^}]*height: 96px;/);
+  assert.match(css, /#appView \.chart-panel\.financial-expanded \.donut\s*\{[^}]*width: 116px;[^}]*height: 116px;/);
+});
+
+test("recent loans stay compact and reveal operational details on demand", async () => {
+  const [app, css] = await Promise.all([read("app.js"), read("styles.css")]);
+
+  assert.match(app, /let expandedRecentLoanId = null/);
+  assert.match(app, /function recentLoanRow\(loan\)/);
+  assert.match(app, /class="recent-loan-summary"[^>]*data-toggle-recent-loan/);
+  assert.match(app, /class="recent-loan-details"/);
+  assert.match(app, /button\.dataset\.toggleRecentLoan[\s\S]*?renderDashboard\(\)/);
+  assert.match(css, /\.recent-loan-summary\s*\{[^}]*min-height: 62px;/);
+  assert.match(css, /\.recent-loan-details dl\s*\{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 });

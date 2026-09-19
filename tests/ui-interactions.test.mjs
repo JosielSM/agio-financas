@@ -34,7 +34,7 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v63/);
+  assert.match(serviceWorker, /credmais-shell-v64/);
 });
 
 test("the loan form uses installment language and reveals only the selected interest explanation", async () => {

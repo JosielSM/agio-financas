@@ -30,6 +30,7 @@ if (state.user?.id && !localStorage.getItem("credmais_cache_owner"))
 let pendingModalId = null;
 const modalStack = [];
 let expandedInstallment = null;
+let expandedRecentLoanId = null;
 let selectedClientProfileId = null;
 let clientProfileTab = "loans";
 let returnToClientId = null;
@@ -3028,8 +3029,12 @@ function renderStats() {
     recent.innerHTML =
       '<span>◫</span><h4>Nenhum empréstimo ainda</h4><p>Comece cadastrando um novo empréstimo.</p><button class="outline add-loan">Criar empréstimo</button>';
   } else {
-    recent.className = "loan-list";
-    recent.innerHTML = activeLoans.slice(-4).reverse().map(loanRow).join("");
+    recent.className = "recent-loan-list";
+    recent.innerHTML = activeLoans
+      .slice(-4)
+      .reverse()
+      .map(recentLoanRow)
+      .join("");
   }
   renderDueLoans();
 }
@@ -3195,6 +3200,15 @@ function loanRow(loan) {
         ? `${loan.installments} pagamentos de ${money(firstInstallment)}`
         : `${loan.installments} pagamentos de ${money(firstInstallment)} · último de ${money(lastInstallment)}`;
   return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${paymentSummary} · ${formatFrequency(loan.frequency || 30, loan.businessDays)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
+}
+function recentLoanRow(loan) {
+  const client = state.clients.find((item) => item.id === loan.clientId) || {
+      name: "Cliente removido",
+    },
+    financials = financialsForLoan(loan),
+    expanded = expandedRecentLoanId === loan.id,
+    bodyId = `recent-loan-${loan.id}`;
+  return `<article class="recent-loan-card${expanded ? " expanded" : ""}"><button class="recent-loan-summary" type="button" data-toggle-recent-loan="${escapeHtml(loan.id)}" aria-expanded="${expanded}" aria-controls="${escapeHtml(bodyId)}"><span class="recent-loan-main"><b>${escapeHtml(client.name)}</b><small>${escapeHtml(loan.contract || "Empréstimo")} · ${formatFrequency(loan.frequency || 30, loan.businessDays)}</small></span><span class="recent-loan-balance"><small>Saldo</small><b>${money(financials.receivable)}</b></span><i aria-hidden="true">${expanded ? "⌃" : "⌄"}</i></button>${expanded ? `<div class="recent-loan-details" id="${escapeHtml(bodyId)}"><dl><div><dt>Emprestado</dt><dd>${money(loan.amount)}</dd></div><div><dt>Parcelas</dt><dd>${loan.installments}</dd></div><div><dt>1º vencimento</dt><dd>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</dd></div><div><dt>Total do contrato</dt><dd>${money(loan.total)}</dd></div></dl><button class="recent-loan-open" type="button" data-details="${escapeHtml(loan.id)}">Abrir empréstimo completo →</button></div>` : ""}</article>`;
 }
 function renderLoans() {
   const term = searchableText($("#loanSearch")?.value || "");
@@ -4540,6 +4554,12 @@ $(".logo").onclick = (event) => {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.dataset.toggleRecentLoan) {
+    const loanId = button.dataset.toggleRecentLoan;
+    expandedRecentLoanId = expandedRecentLoanId === loanId ? null : loanId;
+    renderDashboard();
+    return;
+  }
   if (button.id === "financialSummaryToggle") {
     const details = $("#financialSummaryDetails"),
       panel = $("#financialSummaryPanel"),
