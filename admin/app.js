@@ -629,9 +629,11 @@ function renderSettings() {
     currentFee = phase === "launch" ? launchFee : standardFee;
   setMoneyInput($("#standardMonthlyFee"), standardFee);
   $("#pricingPhase").value = phase;
+  $("#trialDays").value = Number(state.settings?.trial_days || 15);
   $("#launchPricePreview").textContent = `${money(launchFee)}/mês`;
   $("#standardPricePreview").textContent = `${money(standardFee)}/mês`;
-  $("#trialDaysPreview").textContent = `${Number(state.settings?.trial_days || 15)} dias`;
+  const trialDays = Number(state.settings?.trial_days || 15);
+  $("#trialDaysPreview").textContent = `${trialDays} ${trialDays === 1 ? "dia" : "dias"}`;
   $("#globalPricePreview").textContent = `${money(currentFee)} por mês`;
   $("#pricingPhaseBadge").textContent =
     phase === "launch" ? "FASE DE LANÇAMENTO" : "PREÇO NORMAL ATIVO";
@@ -1322,16 +1324,20 @@ async function saveSettings(event) {
     try {
       const standardMonthlyFee = readMoneyInput($("#standardMonthlyFee")),
         pricingPhase = $("#pricingPhase").value,
+        trialDays = Number($("#trialDays").value),
         supportPhone = formatPhone($("#supportPhone").value);
       if (!Number.isFinite(standardMonthlyFee) || standardMonthlyFee < 39.9)
         throw new Error("O preço normal deve ser igual ou maior que R$ 39,90.");
       if (!["launch", "standard"].includes(pricingPhase))
         throw new Error("Escolha uma fase de preço válida.");
+      if (!Number.isInteger(trialDays) || trialDays < 1 || trialDays > 90)
+        throw new Error("O teste gratuito deve ter entre 1 e 90 dias.");
       if (supportPhone && ![10, 11].includes(digits(supportPhone).length))
         throw new Error("Informe um WhatsApp de suporte válido com DDD.");
       state.settings = await bridge.savePlatformSettings({
         standardMonthlyFee,
         pricingPhase,
+        trialDays,
         supportPhone,
         billingMessage: $("#billingMessage").value.trim(),
       });
@@ -1467,6 +1473,10 @@ $("#pricingPhase").addEventListener("change", () => {
     phase === "launch"
       ? "O CredMais continuará oferecendo R$ 39,90 às novas contas."
       : "Ao salvar, o preço normal valerá para novas contas e usuários no valor global. Os primeiros usuários não serão alterados.";
+});
+$("#trialDays").addEventListener("input", (event) => {
+  const days = Math.max(1, Math.min(90, Number(event.currentTarget.value) || 1));
+  $("#trialDaysPreview").textContent = `${days} ${days === 1 ? "dia" : "dias"}`;
 });
 $("#manageFee").addEventListener("input", (event) => {
   maskMoney(event);

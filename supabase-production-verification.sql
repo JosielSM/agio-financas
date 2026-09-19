@@ -52,7 +52,7 @@ begin
       and launch_monthly_fee = 39.90
       and standard_monthly_fee >= 39.90
       and pricing_phase in ('launch', 'standard')
-      and trial_days = 15
+      and trial_days between 1 and 90
       and default_monthly_fee = case
         when pricing_phase = 'launch' then launch_monthly_fee
         else standard_monthly_fee
@@ -109,7 +109,7 @@ begin
   end if;
 
   if to_regprocedure('public.sync_my_workspace_v1(jsonb,jsonb,jsonb,jsonb)') is null
-    or to_regprocedure('public.admin_update_platform_settings_v3(numeric,text,text,text)') is null
+    or to_regprocedure('public.admin_update_platform_settings_v4(numeric,text,integer,text,text)') is null
     or to_regprocedure('public.admin_update_platform_account_v3(text,text,text,text,numeric)') is null
     or to_regprocedure('public.admin_grant_platform_access_v5(text,integer,text,text,numeric,text,numeric,text,text)') is null
     or to_regprocedure('public.delete_my_account_data()') is null then
@@ -133,6 +133,7 @@ begin
         'delete_my_loan_v1', 'delete_my_client_v1',
         'admin_update_platform_account_v1', 'admin_update_platform_account_v3',
         'admin_update_platform_settings_v1', 'admin_update_platform_settings_v3',
+        'admin_update_platform_settings_v4',
         'admin_grant_platform_access_v3', 'admin_grant_platform_access_v5',
         'admin_grant_platform_lifetime_v2',
         'admin_set_platform_status', 'admin_sync_expired_platform_accounts',

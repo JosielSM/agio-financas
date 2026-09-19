@@ -18,7 +18,7 @@ test("browser mutations use validated database functions", async () => {
     "delete_my_loan_v1",
     "delete_my_client_v1",
     "admin_update_platform_account_v3",
-    "admin_update_platform_settings_v3",
+    "admin_update_platform_settings_v4",
   ]) {
     assert.match(bridge, new RegExp(`\\b${rpc}\\b`));
   }
@@ -48,6 +48,8 @@ test("production verification independently checks every database boundary", asy
   assert.match(sql, /privilege_type in \('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'\)/i);
   assert.match(sql, /cmd <> 'SELECT'/i);
   assert.match(sql, /bootstrap_platform_admin\(text\)/i);
+  assert.match(sql, /admin_update_platform_settings_v4\(numeric,text,integer,text,text\)/i);
+  assert.match(sql, /trial_days between 1 and 90/i);
   assert.match(sql, /search_path=%/i);
 });
 
@@ -66,6 +68,32 @@ test("authenticated production probe deletes its temporary accounts", async () =
   assert.match(probe, /finally\s*{/i);
   assert.match(probe, /rpc\/delete_my_account_data/i);
   assert.match(probe, /firebase\("delete", \{ idToken \}\)/i);
+});
+
+test("free backup includes operational data and stays outside the repository", async () => {
+  const [query, script] = await Promise.all([
+    read("scripts/backup-query.sql"),
+    read("scripts/backup-credmais.ps1"),
+  ]);
+  for (const table of [
+    "platform_settings",
+    "platform_accounts",
+    "platform_admins",
+    "clients",
+    "loans",
+    "activity_history",
+    "profiles",
+    "platform_access_log",
+    "workspace_audit_log",
+  ]) {
+    assert.match(query, new RegExp(`public\\.${table}\\b`));
+  }
+  assert.doesNotMatch(query, /platform_admin_bootstrap/i);
+  assert.match(script, /CredMais Backups/);
+  assert.match(script, /A pasta de backup deve ficar fora do repositório Git/);
+  assert.match(script, /Get-FileHash[\s\S]*SHA256/i);
+  assert.match(script, /RetentionDays/);
+  assert.match(script, /expectedTemporaryPrefix/);
 });
 
 test("production builds do not publish SQL or the other application", async () => {

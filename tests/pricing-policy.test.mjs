@@ -14,14 +14,15 @@ test("admin exposes launch, standard, lifetime and per-user pricing choices", as
 
   assert.match(html, /R\$ 39,90\/mês/);
   assert.match(html, /R\$ 59,90\/mês/);
-  assert.match(html, /15 dias/);
+  assert.match(html, /id="trialDays"[^>]*min="1"[^>]*max="90"/);
   assert.match(html, /name="managePricing" value="launch_locked"/);
   assert.match(html, /name="managePricing" value="global"/);
   assert.match(html, /name="managePricing" value="custom"/);
   assert.match(html, /id="standardMonthlyFee"/);
   assert.match(html, /Vitalício — colaborador/);
   assert.match(app, /account\.monthly_fee \?\? state\.settings\?\.default_monthly_fee/);
-  assert.match(bridge, /admin_update_platform_settings_v3/);
+  assert.match(bridge, /admin_update_platform_settings_v4/);
+  assert.match(bridge, /p_trial_days: Number\(settings\.trialDays\)/);
   assert.match(bridge, /admin_update_platform_account_v3/);
   assert.match(bridge, /admin_grant_platform_access_v6/);
   assert.match(bridge, /p_pricing_tier/);
@@ -53,11 +54,33 @@ test("main app explains the active trial and lets the user subscribe early", asy
 
   assert.match(html, /id="trialBanner"/);
   assert.match(html, /id="trialUpgradeButton"/);
-  assert.match(html, /Teste gratuitamente por 15 dias/);
+  assert.match(html, /Teste gratuito para novas contas/);
   assert.match(app, /function activeFreeTrial/);
   assert.match(app, /TESTE GRATUITO ENCERRADO/);
   assert.match(app, /Seu preço de lançamento está protegido/);
   assert.match(app, /renderTrialBanner\(access\)/);
+  assert.match(app, /trialDays = Math\.max\(1, Number\(access\?\.trialDays \|\| 15\)\)/);
+});
+
+test("admin configures future trial length without changing trials already started", async () => {
+  const [html, app, bridge, sql] = await Promise.all([
+    read("admin/index.html"),
+    read("admin/app.js"),
+    read("supabase-bridge.js"),
+    read("supabase/migrations/20260919150000_configurable_trial_days.sql"),
+  ]);
+
+  assert.match(html, /id="trialDays"[^>]*min="1"[^>]*max="90"/);
+  assert.match(app, /trialDays = Number\(\$\("#trialDays"\)\.value\)/);
+  assert.match(app, /O teste gratuito deve ter entre 1 e 90 dias/);
+  assert.match(bridge, /admin_update_platform_settings_v4/);
+  assert.match(sql, /check \(trial_days between 1 and 90\)/i);
+  assert.match(sql, /trial_days = p_trial_days/i);
+  assert.match(sql, /current_date \+ \(setting_row\.trial_days - 1\)/i);
+  assert.match(sql, /existingTrialsPreserved', true/i);
+  assert.match(sql, /create or replace function public\.admin_update_platform_settings_v3[\s\S]*?current_trial_days/i);
+  assert.match(sql, /security definer\s+set search_path = ''/i);
+  assert.match(sql, /commit;\s*$/i);
 });
 
 test("billing exposes only the one-time Mercado Pago checkout", async () => {

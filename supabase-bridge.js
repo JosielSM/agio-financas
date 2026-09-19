@@ -330,12 +330,13 @@
       return data;
     },
     async savePlatformSettings(settings) {
-      // v3 mantém a coorte de lançamento protegida ao ativar o preço normal.
+      // v4 mantém a coorte de lançamento e permite configurar o teste no servidor.
       const { data, error } = await client.rpc(
-        "admin_update_platform_settings_v3",
+        "admin_update_platform_settings_v4",
         {
           p_standard_monthly_fee: Number(settings.standardMonthlyFee),
           p_pricing_phase: settings.pricingPhase,
+          p_trial_days: Number(settings.trialDays),
           p_billing_message: settings.billingMessage || "",
           p_support_phone: settings.supportPhone || "",
         },

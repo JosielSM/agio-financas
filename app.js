@@ -1224,14 +1224,16 @@ function activeFreeTrial(access = state.platformAccess) {
   );
 }
 function accessContent(access) {
-  const status = access?.status || "pending";
+  const status = access?.status || "pending",
+    trialDays = Math.max(1, Number(access?.trialDays || 15)),
+    trialPeriod = `${trialDays} ${trialDays === 1 ? "dia" : "dias"}`;
   if (status === "active" && access?.accessType === "free") {
     return {
       status: "active",
       content: {
         badge: "TESTE GRATUITO ATIVO",
         icon: "🎁",
-        title: "Aproveite seus 15 dias gratuitos",
+        title: `Aproveite seus ${trialPeriod} gratuitos`,
         message:
           "Todas as funções estão disponíveis. Você pode assinar agora e o período pago começará depois do fim do teste.",
       },
@@ -1255,7 +1257,7 @@ function accessContent(access) {
       content: {
         badge: "TESTE GRATUITO ENCERRADO",
         icon: "◷",
-        title: "Seus 15 dias gratuitos terminaram",
+        title: `Seus ${trialPeriod} gratuitos terminaram`,
         message:
           "Seus dados continuam protegidos e disponíveis para consulta. Escolha um plano para voltar a cadastrar e alterar informações.",
       },
