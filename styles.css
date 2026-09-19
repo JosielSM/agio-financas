@@ -3233,9 +3233,20 @@ body.dark {
 .bottom-link {
   padding: 5px;
   border-radius: 9px;
+  -webkit-tap-highlight-color: transparent;
 }
-.bottom-link:hover {
-  background: var(--soft);
+.bottom-link.active {
+  background: transparent;
+  box-shadow: none;
+}
+.bottom-link.active i {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--brand) 72%, transparent))
+    drop-shadow(0 0 9px color-mix(in srgb, var(--brand) 42%, transparent));
+}
+@media (hover: hover) {
+  .bottom-link:hover:not(.active) {
+    background: var(--soft);
+  }
 }
 .password-field {
   position: relative;
