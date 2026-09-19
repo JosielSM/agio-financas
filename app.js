@@ -120,6 +120,14 @@ const escapeHtml = (value) =>
         character
       ],
   );
+const searchableText = (...values) =>
+  values
+    .flat()
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 const initials = (name) =>
   name
     .split(" ")
@@ -2844,12 +2852,9 @@ function renderDueLoans() {
     : '<div class="empty compact"><span>✓</span><h4>Tudo em dia</h4><p>Não há cobranças vencidas ou para hoje.</p></div>';
 }
 function renderClients() {
-  const term = ($("#clientSearch")?.value || "").toLowerCase();
+  const term = searchableText($("#clientSearch")?.value || "");
   const clients = state.clients.filter((client) =>
-    [client.name, client.cpf, client.phone]
-      .join(" ")
-      .toLowerCase()
-      .includes(term),
+    searchableText(client.name, client.cpf, client.phone).includes(term),
   );
   $("#clientCount").textContent =
     `${clients.length} cliente${clients.length === 1 ? "" : "s"}`;
@@ -2859,7 +2864,7 @@ function renderClients() {
           const count = state.loans.filter(
             (loan) => loan.clientId === client.id,
           ).length;
-          return `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><div class="card-actions"><button class="edit-button" type="button" data-edit-client="${escapeHtml(client.id)}" aria-label="Editar ${escapeHtml(client.name)}">✎</button><button class="edit-button delete-button" type="button" data-delete-client="${escapeHtml(client.id)}" aria-label="Excluir ${escapeHtml(client.name)}">⌫</button></div></div><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || client.email || "Sem contato informado")}</span><span class="client-card-meta"><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span><span class="client-card-arrow" aria-hidden="true">›</span></span></button></article>`;
+          return `<article class="client-card"><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-avatar">${escapeHtml(initials(client.name))}</span><span class="client-card-body"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || client.email || "Sem contato informado")}</span><span class="client-card-meta"><span>${count} empréstimo${count === 1 ? "" : "s"}</span><span class="badge ${client.blacklisted ? "danger" : ""}">${client.blacklisted ? "Lista negra" : "Ativo"}</span><span class="client-card-arrow" aria-hidden="true">›</span></span></span></button><div class="card-actions"><button class="edit-button" type="button" data-edit-client="${escapeHtml(client.id)}" aria-label="Editar ${escapeHtml(client.name)}">✎</button><button class="edit-button delete-button" type="button" data-delete-client="${escapeHtml(client.id)}" aria-label="Excluir ${escapeHtml(client.name)}">⌫</button></div></article>`;
         })
         .join("")
     : '<div class="empty"><span>♙</span><h4>Nenhum cliente encontrado</h4><p>Cadastre seu primeiro cliente para começar.</p><button class="outline" data-open-client>Novo cliente</button></div>';
@@ -2946,7 +2951,7 @@ function renderBlacklist() {
     ? clients
         .map(
           (client) =>
-            `<article class="client-card"><div class="client-card-head"><div class="client-avatar">${escapeHtml(initials(client.name))}</div><button class="edit-button" type="button" data-toggle-blacklist="${escapeHtml(client.id)}" aria-label="Remover ${escapeHtml(client.name)} da lista negra">✓</button></div><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || "Sem telefone")}</span><span class="client-card-meta"><span>Marcado para atenção</span><span class="badge danger">Lista negra</span><span class="client-card-arrow" aria-hidden="true">›</span></span></button></article>`,
+            `<article class="client-card"><button class="client-card-open" type="button" data-client-profile="${escapeHtml(client.id)}" aria-label="Ver perfil e empréstimos de ${escapeHtml(client.name)}"><span class="client-avatar">${escapeHtml(initials(client.name))}</span><span class="client-card-body"><span class="client-card-name">${escapeHtml(client.name)}</span><span class="client-card-contact">${escapeHtml(client.phone || "Sem telefone")}</span><span class="client-card-meta"><span>Marcado para atenção</span><span class="badge danger">Lista negra</span><span class="client-card-arrow" aria-hidden="true">›</span></span></span></button><div class="card-actions"><button class="edit-button" type="button" data-toggle-blacklist="${escapeHtml(client.id)}" aria-label="Remover ${escapeHtml(client.name)} da lista negra">✓</button></div></article>`,
         )
         .join("")
     : '<div class="empty"><span>✓</span><h4>Nenhum cliente na lista</h4><p>Clientes marcados aparecem aqui.</p></div>';
@@ -2968,12 +2973,32 @@ function loanRow(loan) {
   return `<article class="loan-row"><div><h3>${escapeHtml(client.name)}</h3><p>${paymentSummary} · ${formatFrequency(loan.frequency || 30, loan.businessDays)}</p></div><div class="loan-extra"><p>Emprestado</p><b>${money(loan.amount)}</b></div><div class="loan-extra"><p>1º vencimento</p><b>${dateFor(loan, 0).toLocaleDateString("pt-BR")}</b></div><div class="loan-value"><small>Saldo a receber</small><b>${money(financials.receivable)}</b></div><button data-details="${escapeHtml(loan.id)}">Detalhes →</button></article>`;
 }
 function renderLoans() {
-  const activeLoans = state.loans.filter(
-    (loan) => !loan.archived && !isLoanFullyPaid(loan),
-  );
+  const term = searchableText($("#loanSearch")?.value || "");
+  const activeLoans = state.loans
+    .filter((loan) => !loan.archived && !isLoanFullyPaid(loan))
+    .filter((loan) => {
+      const client = state.clients.find((item) => item.id === loan.clientId),
+        financials = financialsForLoan(loan);
+      return searchableText(
+        client?.name,
+        client?.phone,
+        client?.cpf,
+        loan.contract,
+        loan.amount,
+        money(loan.amount),
+        financials.receivable,
+        money(financials.receivable),
+        formatFrequency(loan.frequency || 30, loan.businessDays),
+      ).includes(term);
+    });
+  const loanCount = $("#loanCount");
+  if (loanCount)
+    loanCount.textContent = `${activeLoans.length} empréstimo${activeLoans.length === 1 ? "" : "s"}`;
   $("#loansList").innerHTML = activeLoans.length
     ? activeLoans.slice().reverse().map(loanRow).join("")
-    : '<div class="empty"><span>◫</span><h4>Nenhum empréstimo ativo</h4><p>Crie uma operação quando estiver pronto.</p><button class="outline add-loan">Criar empréstimo</button></div>';
+    : term
+      ? '<div class="empty"><span>⌕</span><h4>Nenhum empréstimo encontrado</h4><p>Tente buscar por outro nome, contrato ou valor.</p></div>'
+      : '<div class="empty"><span>◫</span><h4>Nenhum empréstimo ativo</h4><p>Crie uma operação quando estiver pronto.</p><button class="outline add-loan">Criar empréstimo</button></div>';
 }
 function renderPaid() {
   const paidLoans = state.loans
@@ -4191,6 +4216,7 @@ $("#loanCustomFrequency").addEventListener("input", () => {
 $("#loanDueDate").addEventListener("input", updateLoanDuePreview);
 $("#reportMonth").addEventListener("input", updateReportPreview);
 $("#clientSearch").addEventListener("input", renderClients);
+$("#loanSearch").addEventListener("input", renderLoans);
 $("#addClientBtn").onclick = () => openClient();
 document
   .querySelectorAll(".nav-link i, .bottom-link i, .stat-icon")

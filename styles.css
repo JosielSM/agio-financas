@@ -1498,15 +1498,18 @@ textarea {
 }
 .client-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
 }
 .client-card {
-  padding: 18px;
+  position: relative;
+  min-width: 0;
+  padding: 12px;
 }
 .client-avatar {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   border-radius: 50%;
   background: var(--soft);
   color: var(--brand);
@@ -4880,13 +4883,26 @@ button.profile-menu-item:hover:not(:disabled) {
 
 /* Client cards lead to one readable profile; editing remains a separate action. */
 .client-card-open {
-  display: block;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
   width: 100%;
-  padding: 0;
+  min-height: 76px;
+  padding: 0 74px 0 0;
   background: transparent;
   color: var(--text);
   text-align: left;
   border-radius: 8px;
+}
+.client-card > .card-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.client-card-body {
+  display: block;
+  min-width: 0;
 }
 .client-card-open:hover .client-card-name,
 .client-card-open:focus-visible .client-card-name {
@@ -4900,34 +4916,34 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 .client-card-name {
   display: block;
-  margin: 14px 0 4px;
-  font: 600 17px Outfit;
+  margin: 0 0 2px;
+  font: 600 16px Outfit;
   overflow-wrap: anywhere;
 }
 .client-card-contact {
   display: block;
   overflow: hidden;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .client-card-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 20px;
-  padding-top: 14px;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 7px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.35;
 }
 .client-card-meta > span:first-child { flex: 1; min-width: 0; }
 .client-card-arrow {
   color: var(--brand);
-  font-size: 25px;
+  font-size: 20px;
   line-height: 1;
 }
 .client-profile-modal {
