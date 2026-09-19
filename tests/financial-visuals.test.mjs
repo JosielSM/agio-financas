@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v64/);
+  assert.match(sw, /credmais-shell-v65/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -125,7 +125,8 @@ test("recent loans stay compact and reveal operational details on demand", async
   assert.match(app, /function recentLoanRow\(loan\)/);
   assert.match(app, /class="recent-loan-summary"[^>]*data-toggle-recent-loan/);
   assert.match(app, /class="recent-loan-details"/);
-  assert.match(app, /button\.dataset\.toggleRecentLoan[\s\S]*?renderDashboard\(\)/);
+  assert.match(app, /button\.dataset\.toggleRecentLoan[\s\S]*?renderStats\(\)/);
+  assert.doesNotMatch(app, /renderDashboard\(\)/);
   assert.match(css, /\.recent-loan-summary\s*\{[^}]*min-height: 62px;/);
   assert.match(css, /\.recent-loan-details dl\s*\{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
 });

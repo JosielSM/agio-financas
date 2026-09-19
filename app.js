@@ -4557,7 +4557,7 @@ document.addEventListener("click", (event) => {
   if (button.dataset.toggleRecentLoan) {
     const loanId = button.dataset.toggleRecentLoan;
     expandedRecentLoanId = expandedRecentLoanId === loanId ? null : loanId;
-    renderDashboard();
+    renderStats();
     return;
   }
   if (button.id === "financialSummaryToggle") {
