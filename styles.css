@@ -5563,6 +5563,13 @@ button.profile-menu-item:hover:not(:disabled) {
   --metric-border: #665486;
   --metric-shadow: #00000026;
 }
+.dark #appView .stats article:nth-child(-n + 3),
+.dark #appView .stats article:nth-child(n + 4) {
+  --metric-surface: color-mix(in srgb, var(--metric-accent) 9%, var(--surface));
+  --metric-surface-end: color-mix(in srgb, var(--metric-accent) 3%, var(--surface));
+  --metric-border: color-mix(in srgb, var(--metric-accent) 28%, var(--line));
+  --metric-icon-bg: color-mix(in srgb, var(--metric-accent) 16%, var(--surface));
+}
 @media (max-width: 680px) {
   #appView .stats article:nth-child(n + 4) {
     min-height: 132px;
