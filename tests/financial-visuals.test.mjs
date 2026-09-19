@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v61/);
+  assert.match(sw, /credmais-shell-v62/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -103,10 +103,15 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   assert.match(app, /principalAmount: roundCurrency\(principalBefore\.remaining\)/);
   assert.match(app, /interestAmount: Number\(infoBefore\.interestOnlyValue \|\| 0\)/);
   assert.match(app, /principalAmount: principalPaidNow/);
-  assert.match(css, /\.financial-overview\s*\{[^}]*grid-template-columns: minmax\(270px, \.7fr\) minmax\(0, 1\.8fr\);/);
+  assert.match(html, /id="financialSummaryToggle"[^>]*aria-expanded="false"[^>]*aria-controls="financialSummaryDetails"/);
+  assert.match(html, /id="financialSummaryHint">Toque para ver mais detalhes/);
+  assert.match(html, /id="financialSummaryDetails" hidden/);
+  assert.match(app, /button\.id === "financialSummaryToggle"[\s\S]*?panel\.classList\.toggle\("financial-expanded", expanded\)/);
+  assert.match(css, /\.financial-summary-details\s*\{[^}]*grid-template-columns: minmax\(190px, \.55fr\) minmax\(0, 1\.8fr\);/);
+  assert.match(css, /\.chart-panel\.financial-expanded\s*\{[^}]*border-color: #20e9a5;[^}]*box-shadow:/);
   assert.match(css, /\.financial-insights\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(css, /\.finance-overdue\s*\{\s*grid-column: 1 \/ -1;/);
-  assert.match(css, /\.donut\s*\{[^}]*width: 118px;[^}]*height: 118px;/);
+  assert.match(css, /\.donut\s*\{[^}]*width: 92px;[^}]*height: 92px;/);
   assert.match(css, /#appView \.chart-wrap\s*\{[^}]*flex-direction: row;[^}]*gap: 14px;/);
-  assert.match(css, /#appView \.donut\s*\{[^}]*width: 96px;[^}]*height: 96px;/);
+  assert.match(css, /#appView \.donut\s*\{[^}]*width: 82px;[^}]*height: 82px;/);
 });

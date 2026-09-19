@@ -2664,17 +2664,49 @@ body.dark {
 .due-panel {
   min-height: 250px;
 }
+.chart-panel {
+  transition: border-color .22s ease, box-shadow .22s ease;
+}
+.chart-panel.financial-expanded {
+  border-color: #20e9a5;
+  box-shadow: 0 0 0 1px #20e9a566, 0 0 22px #20e9a533;
+}
+.dark .chart-panel.financial-expanded {
+  border-color: #42ffc0;
+  box-shadow: 0 0 0 1px #42ffc080, 0 0 26px #18d8954d;
+}
+.financial-summary-toggle {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--brand) 7%, var(--surface)), var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.financial-summary-toggle:hover {
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
+}
+.financial-summary-toggle:active {
+  transform: scale(.995);
+}
+.financial-summary-toggle:focus-visible {
+  outline: 3px solid #20e9a53d;
+  outline-offset: 3px;
+}
 .chart-wrap {
   display: flex;
   align-items: center;
-  gap: 20px;
-  justify-content: center;
-  padding: 10px 0;
+  gap: 14px;
+  justify-content: flex-start;
+  padding: 0;
 }
 .donut {
   --lent-percent: 100%;
-  width: 118px;
-  height: 118px;
+  width: 92px;
+  height: 92px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: conic-gradient(
@@ -2684,9 +2716,9 @@ body.dark {
   display: grid;
   place-items: center;
 }
-.donut > div {
-  width: 82px;
-  height: 82px;
+.donut > span {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--surface);
   display: grid;
@@ -2697,15 +2729,43 @@ body.dark {
 .donut b {
   font: 600 14px Outfit;
 }
-.donut span {
+.donut > span > span {
   font-size: 10px;
   color: var(--muted);
   margin-top: 4px;
+}
+.financial-compact-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.financial-compact-copy b {
+  font: 700 15px Outfit, sans-serif;
+}
+.financial-compact-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.financial-toggle-icon {
+  margin-left: auto;
+  color: var(--brand);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform .2s ease;
+}
+.financial-summary-toggle[aria-expanded="true"] .financial-toggle-icon {
+  transform: rotate(180deg);
 }
 .chart-legend {
   display: grid;
   gap: 14px;
   min-width: 170px;
+  align-content: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--soft));
 }
 .chart-legend p {
   display: grid;
@@ -2734,10 +2794,22 @@ body.dark {
   grid-column: 1 / -1;
 }
 .financial-overview {
+  display: block;
+}
+.financial-summary-details {
   display: grid;
-  grid-template-columns: minmax(270px, .7fr) minmax(0, 1.8fr);
+  grid-template-columns: minmax(190px, .55fr) minmax(0, 1.8fr);
   align-items: stretch;
-  gap: 20px;
+  gap: 12px;
+  margin-top: 12px;
+  animation: financialDetailsReveal .22s ease-out;
+}
+.financial-summary-details[hidden] {
+  display: none;
+}
+@keyframes financialDetailsReveal {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .financial-insights {
   display: grid;
@@ -2927,11 +2999,14 @@ body.dark {
   }
   .chart-wrap {
     justify-content: flex-start;
-    padding: 10px 0;
+    padding: 0;
   }
   .financial-overview {
+    display: block;
+  }
+  .financial-summary-details {
     grid-template-columns: 1fr;
-    gap: 4px;
+    gap: 10px;
   }
   .financial-insights {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4997,19 +5072,19 @@ button.profile-menu-item:hover:not(:disabled) {
     gap: 14px;
   }
   #appView .donut {
-    width: 96px;
-    height: 96px;
+    width: 82px;
+    height: 82px;
     align-self: auto;
   }
-  #appView .donut > div {
-    width: 68px;
-    height: 68px;
+  #appView .donut > span {
+    width: 58px;
+    height: 58px;
     padding: 5px;
   }
   #appView .donut b {
     font-size: 14px;
   }
-  #appView .donut span {
+  #appView .donut > span > span {
     font-size: 9px;
   }
   #appView .chart-legend {

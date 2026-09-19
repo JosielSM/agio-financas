@@ -4539,6 +4539,19 @@ $(".logo").onclick = (event) => {
 document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.id === "financialSummaryToggle") {
+    const details = $("#financialSummaryDetails"),
+      panel = $("#financialSummaryPanel"),
+      hint = $("#financialSummaryHint"),
+      expanded = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(expanded));
+    details.hidden = !expanded;
+    panel.classList.toggle("financial-expanded", expanded);
+    hint.textContent = expanded
+      ? "Toque para ocultar os detalhes"
+      : "Toque para ver mais detalhes";
+    return;
+  }
   if (button.dataset.clientProfile) {
     openClientProfile(button.dataset.clientProfile);
     return;
