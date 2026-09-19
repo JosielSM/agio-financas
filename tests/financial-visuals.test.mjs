@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v58/);
+  assert.match(sw, /credmais-shell-v59/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -106,4 +106,7 @@ test("financial summary combines arrears, forecasts and realized monthly profit 
   assert.match(css, /\.financial-overview\s*\{[^}]*grid-template-columns: minmax\(270px, \.7fr\) minmax\(0, 1\.8fr\);/);
   assert.match(css, /\.financial-insights\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(css, /\.finance-overdue\s*\{\s*grid-column: 1 \/ -1;/);
+  assert.match(css, /\.donut\s*\{[^}]*width: 118px;[^}]*height: 118px;/);
+  assert.match(css, /#appView \.chart-wrap\s*\{[^}]*flex-direction: row;[^}]*gap: 14px;/);
+  assert.match(css, /#appView \.donut\s*\{[^}]*width: 96px;[^}]*height: 96px;/);
 });
