@@ -28,3 +28,11 @@ test("installment actions keep their routes and have recognizable buttons", asyn
   assert.match(css, /#loanDetails \.details-actions-menu button span\s*\{[^}]*font-size: 19px;/);
   assert.match(css, /\.dark #loanDetails \.payment-actions button\[data-payment="missed"\]/);
 });
+
+test("only the expanded installment gets a green outline in both themes", async () => {
+  const [app, css] = await Promise.all([read("app.js"), read("styles.css")]);
+  assert.match(app, /installment-card \$\{visualStatus\} \$\{expanded \? "expanded" : ""\}/);
+  assert.match(app, /aria-expanded="\$\{expanded\}"/);
+  assert.match(css, /#loanDetails \.installment-card\.expanded\s*\{[^}]*border: 2px solid #079668;[^}]*box-shadow:/);
+  assert.match(css, /\.dark #loanDetails \.installment-card\.expanded\s*\{[^}]*border-color: #5ce3a8;/);
+});

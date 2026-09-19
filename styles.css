@@ -5582,3 +5582,13 @@ button.profile-menu-item:hover:not(:disabled) {
     font: 700 28px/1 Outfit, sans-serif;
   }
 }
+
+/* The expanded installment is the active work area, regardless of payment status. */
+#loanDetails .installment-card.expanded {
+  border: 2px solid #079668;
+  box-shadow: 0 0 0 3px #0b9c6c24, 0 8px 20px #0b644520;
+}
+.dark #loanDetails .installment-card.expanded {
+  border-color: #5ce3a8;
+  box-shadow: 0 0 0 3px #5ce3a832, 0 8px 24px #0005;
+}
