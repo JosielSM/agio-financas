@@ -4690,9 +4690,12 @@ button.profile-menu-item:hover:not(:disabled) {
 
 /* Consistent vector pictograms keep navigation recognizable at a glance. */
 .stat-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 13px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   font-size: 0;
 }
 .stat-icon::before {
@@ -4773,7 +4776,7 @@ button.profile-menu-item:hover:not(:disabled) {
   #appView .stats article:nth-child(-n + 3) .stat-icon {
     width: 30px;
     height: 30px;
-    border-radius: 9px;
+    border-radius: 0;
   }
   #appView .stats article:nth-child(-n + 3) .stat-icon::before {
     width: 17px;
@@ -5498,7 +5501,7 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 #appView .stats article:nth-child(-n + 3) .stat-icon {
   color: var(--metric-icon);
-  background: var(--metric-icon-bg);
+  background: transparent;
 }
 #appView .stats article:nth-child(-n + 3) p {
   color: var(--text);
@@ -5641,7 +5644,7 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 #appView .stats article:nth-child(n + 4) .stat-icon {
   color: var(--metric-icon);
-  background: var(--metric-icon-bg);
+  background: transparent;
 }
 #appView .stats article:nth-child(n + 4) p {
   color: var(--text);
