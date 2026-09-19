@@ -2705,6 +2705,115 @@ body.dark {
   grid-column: 2;
   font: 600 15px Outfit;
 }
+.chart-panel,
+.due-panel {
+  grid-column: 1 / -1;
+}
+.financial-overview {
+  display: grid;
+  grid-template-columns: minmax(270px, .7fr) minmax(0, 1.8fr);
+  align-items: stretch;
+  gap: 20px;
+}
+.financial-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 0;
+}
+.finance-insight {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--insight-accent);
+  border-radius: 13px;
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--insight-accent) 7%, var(--surface)),
+    var(--surface)
+  );
+}
+.finance-overdue { --insight-accent: #cf5d52; }
+.finance-forecast { --insight-accent: #357fbd; }
+.finance-profit { --insight-accent: #168a61; }
+.finance-insight-head span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--insight-accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+.finance-insight h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.finance-insight > strong {
+  display: block;
+  color: var(--insight-accent);
+  font: 700 20px/1.2 Outfit, sans-serif;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.finance-insight > p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.finance-insight > small {
+  display: block;
+  min-height: 30px;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.finance-insight .text-button {
+  margin-top: 8px;
+  padding: 0;
+  font-size: 11px;
+}
+.finance-insight .text-button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+.finance-forecast dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.finance-forecast dl div,
+.finance-capital-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.finance-forecast dt,
+.finance-capital-row span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.finance-forecast dd,
+.finance-capital-row b {
+  margin: 0;
+  color: var(--text);
+  font: 700 12px/1.2 Outfit, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.finance-capital-row {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.dark .finance-insight {
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--insight-accent) 10%, var(--surface)),
+    var(--surface)
+  );
+}
 .due-list {
   display: grid;
 }
@@ -2795,6 +2904,23 @@ body.dark {
   .chart-wrap {
     justify-content: flex-start;
     padding: 10px 0;
+  }
+  .financial-overview {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .financial-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 4px 0 0;
+  }
+  .finance-overdue {
+    grid-column: 1 / -1;
+  }
+  .finance-insight {
+    padding: 12px;
+  }
+  .finance-insight > strong {
+    font-size: 18px;
   }
   .bottom-nav {
     position: fixed;

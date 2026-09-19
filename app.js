@@ -2478,6 +2478,14 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
         amount: Number(receipt.amount || 0),
         createdAt: receipt.createdAt,
         type: receipt.type || payment.status || "payment",
+        principalAmount:
+          receipt.principalAmount == null
+            ? null
+            : Number(receipt.principalAmount || 0),
+        interestAmount:
+          receipt.interestAmount == null
+            ? null
+            : Number(receipt.interestAmount || 0),
       }))
       .filter((receipt) => receipt.amount > 0 && receipt.createdAt);
   const amount =
@@ -2495,8 +2503,58 @@ function receiptEntriesFor(loan, index, info = installmentInfo(loan, index)) {
         (typeof payment === "object" && payment.status) ||
         paymentStateFor(loan, index) ||
         "payment",
+      principalAmount: null,
+      interestAmount: null,
     },
   ];
+}
+function receiptBreakdownFor(loan, index) {
+  const receipts = receiptEntriesFor(loan, index),
+    payment = loan.paymentStates?.[index],
+    explicitPrincipal = receipts.reduce(
+      (sum, receipt) => sum + Number(receipt.principalAmount || 0),
+      0,
+    ),
+    principalRecorded =
+      typeof payment === "object" && payment.principalPaid != null
+        ? Number(payment.principalPaid || 0)
+        : principalPositionFor(loan, index).paid,
+    unclassified = receipts.filter(
+      (receipt) =>
+        receipt.type !== "interest" && receipt.principalAmount == null,
+    ),
+    unclassifiedTotal = unclassified.reduce(
+      (sum, receipt) => sum + receipt.amount,
+      0,
+    ),
+    principalToAllocate = Math.max(
+      0,
+      Math.min(unclassifiedTotal, principalRecorded - explicitPrincipal),
+    );
+  return receipts.map((receipt) => {
+    const principal =
+      receipt.principalAmount != null
+        ? receipt.principalAmount
+        : receipt.type === "interest"
+          ? 0
+          : unclassifiedTotal
+            ? Math.min(
+                receipt.amount,
+                roundCurrency(
+                  principalToAllocate * (receipt.amount / unclassifiedTotal),
+                ),
+              )
+            : 0;
+    return {
+      ...receipt,
+      principalAmount: roundCurrency(principal),
+      interestAmount: roundCurrency(
+        receipt.interestAmount != null
+          ? receipt.interestAmount
+          : Math.max(0, receipt.amount - principal),
+      ),
+    };
+  });
 }
 function receivedInMonth(referenceDate = new Date()) {
   const selectedMonth = monthKey(referenceDate);
@@ -2514,6 +2572,30 @@ function receivedInMonth(referenceDate = new Date()) {
         .reduce((sum, receipt) => sum + receipt.amount, 0),
     0,
   );
+}
+function receivedBreakdownInMonth(referenceDate = new Date()) {
+  const selectedMonth = monthKey(referenceDate);
+  const result = state.loans.reduce(
+    (totals, loan) => {
+      Array.from({ length: loan.installments }, (_, index) =>
+        receiptBreakdownFor(loan, index),
+      )
+        .flat()
+        .forEach((receipt) => {
+          const date = new Date(receipt.createdAt);
+          if (Number.isNaN(date.getTime()) || monthKey(date) !== selectedMonth)
+            return;
+          totals.principal += receipt.principalAmount;
+          totals.interest += receipt.interestAmount;
+        });
+      return totals;
+    },
+    { principal: 0, interest: 0 },
+  );
+  return {
+    principal: roundCurrency(result.principal),
+    interest: roundCurrency(result.interest),
+  };
 }
 const reportMonthValue = (date = new Date()) => monthKey(date);
 function reportPeriod(value) {
@@ -2772,6 +2854,83 @@ function financialsForLoan(loan) {
   );
   return { lent, receivable, received };
 }
+function outstandingInstallmentAmount(loan, index, date, includeLate = false) {
+  const status = paymentStateFor(loan, index),
+    info = installmentInfo(loan, index),
+    isLast = index === Number(loan.installments) - 1;
+  if (status === "paid") return 0;
+  if (status === "interest")
+    return isLast ? roundCurrency(Number(info.deferred || 0)) : 0;
+  if (status === "partial")
+    return isLast
+      ? roundCurrency(Number(info.partial?.adjustedRemaining || 0))
+      : 0;
+  const late = includeLate ? lateCharge(loan, date).value : 0;
+  return roundCurrency(Number(info.due || 0) + Number(late || 0));
+}
+function financialDashboardSummary(loans, referenceDate = new Date()) {
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(today);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+  const endOf7Days = new Date(today);
+  endOf7Days.setDate(endOf7Days.getDate() + 8);
+  const endOf30Days = new Date(today);
+  endOf30Days.setDate(endOf30Days.getDate() + 31);
+  const clientOverdue = new Map();
+  const summary = {
+    overdueTotal: 0,
+    overdueCount: 0,
+    topOverdueClient: null,
+    today: 0,
+    sevenDays: 0,
+    thirtyDays: 0,
+  };
+  loans.forEach((loan) => {
+    Array.from({ length: Number(loan.installments) || 0 }, (_, index) => {
+      const date = dateFor(loan, index),
+        status = paymentStateFor(loan, index),
+        isOverdue = status === "missed" || dueStatus(date) === "Vencida",
+        baseAmount = outstandingInstallmentAmount(loan, index, date);
+      if (isOverdue) {
+        const overdueAmount = outstandingInstallmentAmount(
+          loan,
+          index,
+          date,
+          true,
+        );
+        if (overdueAmount > 0) {
+          summary.overdueTotal += overdueAmount;
+          summary.overdueCount += 1;
+          clientOverdue.set(
+            loan.clientId,
+            (clientOverdue.get(loan.clientId) || 0) + overdueAmount,
+          );
+        }
+        return;
+      }
+      if (baseAmount <= 0 || date < today || date >= endOf30Days) return;
+      if (date < endOfToday) summary.today += baseAmount;
+      if (date < endOf7Days) summary.sevenDays += baseAmount;
+      summary.thirtyDays += baseAmount;
+    });
+  });
+  const topEntry = Array.from(clientOverdue.entries()).sort(
+    (first, second) => second[1] - first[1],
+  )[0];
+  if (topEntry) {
+    const client = state.clients.find((item) => item.id === topEntry[0]);
+    summary.topOverdueClient = {
+      name: client?.name || "Cliente removido",
+      amount: roundCurrency(topEntry[1]),
+    };
+  }
+  summary.overdueTotal = roundCurrency(summary.overdueTotal);
+  summary.today = roundCurrency(summary.today);
+  summary.sevenDays = roundCurrency(summary.sevenDays);
+  summary.thirtyDays = roundCurrency(summary.thirtyDays);
+  return summary;
+}
 function activeLoanOperationalSummary(loans) {
   const summary = { total: 0, paid: 0, open: 0, overdue: 0, progress: 0 };
   loans.forEach((loan) => {
@@ -2819,7 +2978,9 @@ function renderStats() {
       { lent: 0, receivable: 0 },
     );
   const { lent, receivable } = totals,
-    received = receivedInMonth(now);
+    received = receivedInMonth(now),
+    receivedBreakdown = receivedBreakdownInMonth(now),
+    financialSummary = financialDashboardSummary(activeLoans, now);
   const interest = Math.max(0, receivable - lent);
   $("#statLent").textContent = money(lent);
   $("#statReceivable").textContent = money(receivable);
@@ -2845,6 +3006,17 @@ function renderStats() {
   $("#chartTotal").textContent = money(receivable);
   $("#legendLent").textContent = money(lent);
   $("#legendInterest").textContent = money(interest);
+  $("#overdueTotal").textContent = money(financialSummary.overdueTotal);
+  $("#overdueCount").textContent = financialSummary.overdueCount;
+  $("#topOverdueClient").textContent = financialSummary.topOverdueClient
+    ? `Maior atraso: ${financialSummary.topOverdueClient.name} · ${money(financialSummary.topOverdueClient.amount)}`
+    : "Nenhum cliente em atraso";
+  $("#forecastToday").textContent = money(financialSummary.today);
+  $("#forecast7Days").textContent = money(financialSummary.sevenDays);
+  $("#forecast30Days").textContent = money(financialSummary.thirtyDays);
+  $("#realInterestReceived").textContent = money(receivedBreakdown.interest);
+  $("#capitalRecovered").textContent = money(receivedBreakdown.principal);
+  $("#viewOverdueButton").disabled = financialSummary.overdueCount === 0;
   $("#financeChart").style.setProperty(
     "--lent-percent",
     `${receivable ? Math.round((lent / receivable) * 100) : 100}%`,
@@ -2860,7 +3032,7 @@ function renderStats() {
   }
   renderDueLoans();
 }
-function renderDueLoans() {
+function renderDueLoans(overdueOnly = false) {
   const pending = state.loans
     .filter((loan) => !loan.archived)
     .flatMap((loan) =>
@@ -2870,15 +3042,28 @@ function renderDueLoans() {
         date: dateFor(loan, index),
       })),
     )
-    .filter(
-      (item) =>
-        installmentStatus(item.loan, item.index, item.date) !== "Quitada" &&
-        dueStatus(item.date) !== "A vencer",
-    )
-    .sort((a, b) => b.date - a.date)
-    .slice(0, 4);
-  $("#dueLoans").innerHTML = pending.length
-    ? pending
+    .filter((item) => {
+      const status = installmentStatus(item.loan, item.index, item.date);
+      if (status === "Quitada") return false;
+      if (overdueOnly)
+        return (
+          (paymentStateFor(item.loan, item.index) === "missed" ||
+            dueStatus(item.date) === "Vencida") &&
+          outstandingInstallmentAmount(item.loan, item.index, item.date, true) >
+            0
+        );
+      return dueStatus(item.date) !== "A vencer";
+    })
+    .sort((a, b) => b.date - a.date),
+    visible = overdueOnly ? pending : pending.slice(0, 4);
+  $("#duePanelTitle").textContent = overdueOnly
+    ? "Parcelas atrasadas"
+    : "Cobranças para hoje";
+  $("#duePanelDescription").textContent = overdueOnly
+    ? "Lista completa das cobranças que já venceram."
+    : "Parcelas que exigem atenção.";
+  $("#dueLoans").innerHTML = visible.length
+    ? visible
         .map(({ loan, index, date }) => {
           const client = state.clients.find(
               (item) => item.id === loan.clientId,
@@ -3522,7 +3707,15 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
           ...(previousStatus === "partial" || previousStatus === "interest"
             ? previousReceipts
             : []),
-          { amount: remainingPayment, createdAt: paymentCreatedAt, type: "paid" },
+          {
+            amount: remainingPayment,
+            createdAt: paymentCreatedAt,
+            type: "paid",
+            principalAmount: roundCurrency(principalBefore.remaining),
+            interestAmount: roundCurrency(
+              Math.max(0, remainingPayment - principalBefore.remaining),
+            ),
+          },
         ],
         createdAt: paymentCreatedAt,
       };
@@ -3547,6 +3740,8 @@ async function updatePayment(loanId, installment, status, triggerButton = null) 
             amount: Number(infoBefore.interestOnlyValue || 0),
             createdAt: paymentCreatedAt,
             type: "interest",
+            principalAmount: 0,
+            interestAmount: Number(infoBefore.interestOnlyValue || 0),
           },
         ],
         renewals:
@@ -3751,6 +3946,10 @@ async function savePartialPayment(event) {
           amount: calculation.paid,
           createdAt: paymentCreatedAt,
           type: "partial",
+          principalAmount: principalPaidNow,
+          interestAmount: roundCurrency(
+            Math.max(0, calculation.paid - principalPaidNow),
+          ),
         },
       ],
       originalDue: Number(previousPayment?.originalDue ?? previousInfo.due),
@@ -4369,6 +4568,13 @@ document.addEventListener("click", (event) => {
   if (button.dataset.page) {
     event.preventDefault();
     setPage(button.dataset.page);
+    return;
+  }
+  if (button.id === "viewOverdueButton") {
+    renderDueLoans(true);
+    requestAnimationFrame(() =>
+      $("#duePanel")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
     return;
   }
   if (button.dataset.paidView) {

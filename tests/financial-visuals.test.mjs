@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v57/);
+  assert.match(sw, /credmais-shell-v58/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -78,4 +78,32 @@ test("client and active-loan cards remain distinct and readable on mobile and in
   assert.match(css, /#appView \.stats article:nth-child\(4\) \.client-stat-values > span\s*\{[^}]*grid-template-columns: 29px minmax\(0, 1fr\);/);
   assert.match(css, /\.dark #appView \.stats article:nth-child\(-n \+ 3\),\s*\.dark #appView \.stats article:nth-child\(n \+ 4\)\s*\{[^}]*--metric-surface: color-mix\(in srgb, var\(--metric-accent\) 9%, var\(--surface\)\);[^}]*--metric-surface-end: color-mix\(in srgb, var\(--metric-accent\) 3%, var\(--surface\)\);/);
   assert.match(css, /\.active-loan-progress span\s*\{[^}]*width: var\(--active-progress, 0%\);[^}]*transition: width \.25s ease;/);
+});
+
+test("financial summary combines arrears, forecasts and realized monthly profit without extra top cards", async () => {
+  const [html, app, css] = await Promise.all([
+    read("index.html"),
+    read("app.js"),
+    read("styles.css"),
+  ]);
+  for (const id of [
+    "overdueTotal",
+    "overdueCount",
+    "topOverdueClient",
+    "viewOverdueButton",
+    "forecastToday",
+    "forecast7Days",
+    "forecast30Days",
+    "realInterestReceived",
+    "capitalRecovered",
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(app, /function financialDashboardSummary\(loans, referenceDate = new Date\(\)\)/);
+  assert.match(app, /function receivedBreakdownInMonth\(referenceDate = new Date\(\)\)/);
+  assert.match(app, /button\.id === "viewOverdueButton"[\s\S]*?renderDueLoans\(true\)/);
+  assert.match(app, /principalAmount: roundCurrency\(principalBefore\.remaining\)/);
+  assert.match(app, /interestAmount: Number\(infoBefore\.interestOnlyValue \|\| 0\)/);
+  assert.match(app, /principalAmount: principalPaidNow/);
+  assert.match(css, /\.financial-overview\s*\{[^}]*grid-template-columns: minmax\(270px, \.7fr\) minmax\(0, 1\.8fr\);/);
+  assert.match(css, /\.financial-insights\s*\{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.finance-overdue\s*\{\s*grid-column: 1 \/ -1;/);
 });
