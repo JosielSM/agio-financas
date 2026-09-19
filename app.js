@@ -2205,11 +2205,12 @@ function resetLoanForm() {
   $("#loanForm").reset();
   $("#loanId").value = "";
   setCurrencyInput($("#loanAmount"), 0, false);
-  $("#loanInterest").value = "10";
+  $("#loanInterest").value = "";
   setLoanInterestMode("flat");
-  setLoanFrequency(30, false);
-  setCurrencyInput($("#loanLateFee"), 0);
-  $("#loanInstallments").value = "6";
+  $("#loanFrequency").value = "";
+  syncCustomFrequencyField();
+  setCurrencyInput($("#loanLateFee"), 0, false);
+  $("#loanInstallments").value = "";
   suggestFirstDueDate();
   $("#loanModalEyebrow").textContent = "NOVA OPERAÇÃO";
   $("#loanModalTitle").textContent = "Novo empréstimo";

@@ -34,7 +34,7 @@ test("hidden feedback never intercepts the mobile navigation", async () => {
 
 test("the PWA cache changes with the interaction repair", async () => {
   const serviceWorker = await read("sw.js");
-  assert.match(serviceWorker, /credmais-shell-v62/);
+  assert.match(serviceWorker, /credmais-shell-v63/);
 });
 
 test("the loan form uses installment language and reveals only the selected interest explanation", async () => {
@@ -45,6 +45,24 @@ test("the loan form uses installment language and reveals only the selected inte
   assert.match(css, /input:not\(:checked\) \+ \.interest-mode-card small/);
   assert.match(css, /input:not\(:checked\) \+ \.interest-mode-card em/);
   assert.match(css, /input:checked \+ \.interest-mode-card\s*\{[^}]*interestModeReveal/);
+});
+
+test("a new loan starts with neutral placeholders instead of suggested financial values", async () => {
+  const [html, app, css] = await Promise.all([
+    read("index.html"),
+    read("app.js"),
+    read("styles.css"),
+  ]);
+
+  assert.match(html, /id="loanInterest"[^>]*placeholder="0,00"[^>]*required/);
+  assert.doesNotMatch(html, /id="loanInterest"[^>]*value="10"/);
+  assert.match(html, /id="loanInstallments"[^>]*placeholder="0"[^>]*required/);
+  assert.doesNotMatch(html, /id="loanInstallments"[^>]*value="6"/);
+  assert.match(html, /id="loanFrequency" required><option value="" selected disabled>Selecione a frequência/);
+  assert.match(app, /setCurrencyInput\(\$\("#loanLateFee"\), 0, false\)/);
+  assert.match(app, /\$\("#loanFrequency"\)\.value = ""/);
+  assert.match(css, /\.loan-modal input::placeholder/);
+  assert.match(css, /\.loan-modal select:required:invalid/);
 });
 
 test("the payment dialog keeps only payment choices and non-overlapping controls", async () => {

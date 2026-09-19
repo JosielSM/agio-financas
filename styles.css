@@ -1898,6 +1898,18 @@ body.modal-open #discardModal:not(.modal-underlay) {
   font-size: 11px;
   font-weight: 400;
 }
+.loan-modal input::placeholder,
+.loan-modal textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  opacity: 1;
+}
+.loan-modal select:required:invalid {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+.loan-modal select option {
+  color: var(--text);
+  background: var(--surface);
+}
 .interest-mode-field {
   min-width: 0;
   margin: 2px 0 0;
