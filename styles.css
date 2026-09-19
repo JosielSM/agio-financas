@@ -1768,6 +1768,9 @@ textarea {
   -webkit-backdrop-filter: blur(8px) saturate(.8);
   backdrop-filter: blur(8px) saturate(.8);
 }
+.modal-backdrop:not([hidden]) {
+  animation: modal-backdrop-enter .2s ease-out both;
+}
 .dark .modal-backdrop {
   background: #050b12b8;
 }
@@ -1787,9 +1790,12 @@ body.modal-open .modal.modal-underlay {
   opacity: .62;
   pointer-events: none;
   user-select: none;
+  transition: filter .18s ease, opacity .18s ease;
 }
 body.modal-open .modal:not([hidden]):not(.modal-underlay) {
   z-index: 204 !important;
+  transform-origin: center;
+  animation: modal-surface-enter .24s cubic-bezier(.22, 1, .36, 1) both;
 }
 body.modal-open #confirmDeleteModal:not(.modal-underlay),
 body.modal-open #discardModal:not(.modal-underlay) {
@@ -1816,6 +1822,33 @@ body.modal-open #discardModal:not(.modal-underlay) {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
+}
+@keyframes modal-backdrop-enter {
+  from {
+    opacity: 0;
+    -webkit-backdrop-filter: blur(0) saturate(1);
+    backdrop-filter: blur(0) saturate(1);
+  }
+  to { opacity: 1; }
+}
+@keyframes modal-surface-enter {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+    scale: .975;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop:not([hidden]),
+  body.modal-open .modal:not([hidden]):not(.modal-underlay) {
+    animation: none;
+  }
+  body.modal-open .modal.modal-underlay { transition: none; }
 }
 .loan-modal {
   width: min(760px, calc(100% - 28px));

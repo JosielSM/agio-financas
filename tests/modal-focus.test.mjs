@@ -20,6 +20,21 @@ test("both apps blur the background behind every dialog", async () => {
   assert.match(mainCss, /\.modal\.modal-underlay\s*\{[^}]*filter: blur\(5px\);[^}]*pointer-events: none;/);
 });
 
+test("dialogs enter smoothly and honor reduced-motion preferences", async () => {
+  const [mainCss, adminCss] = await Promise.all([
+    read("styles.css"),
+    read("admin/styles.css"),
+  ]);
+  assert.match(mainCss, /\.modal-backdrop:not\(\[hidden\]\)\s*\{[^}]*animation: modal-backdrop-enter \.2s ease-out both;/);
+  assert.match(mainCss, /body\.modal-open \.modal:not\(\[hidden\]\):not\(\.modal-underlay\)\s*\{[^}]*animation: modal-surface-enter \.24s cubic-bezier\(\.22, 1, \.36, 1\) both;/);
+  assert.match(mainCss, /@keyframes modal-surface-enter\s*\{[\s\S]*?translate: 0 14px;[\s\S]*?scale: \.975;/);
+  assert.match(adminCss, /\.modal:not\(\[hidden\]\)\s*\{[^}]*animation: admin-modal-enter \.24s cubic-bezier\(\.22, 1, \.36, 1\) both;/);
+  for (const css of [mainCss, adminCss]) {
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+    assert.match(css, /animation: none;/);
+  }
+});
+
 test("a second dialog blurs the previous one and restores it when closed", async () => {
   const app = await read("app.js");
   const source = app.match(/function syncModalLayers\(activeModal = null\) \{[\s\S]*?\n\}\nfunction openModal/)?.[0]

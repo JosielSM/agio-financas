@@ -24,7 +24,7 @@ test("admin user profile exposes a confirmed plan reset with feedback", async ()
   assert.match(app, /await loadDashboard\(\)/);
   assert.match(app, /Plano resetado/);
   assert.match(bridge, /admin_reset_platform_access_v1/);
-  assert.match(serviceWorker, /credmais-admin-v22/);
+  assert.match(serviceWorker, /credmais-admin-v23/);
 });
 
 test("plan reset is admin-only, audit logged and preserves user business data", async () => {
