@@ -24,7 +24,7 @@ test("financial amounts are prominent and never intentionally ellipsized", async
 
 test("the vector navigation and financial icons are available offline", async () => {
   const [css, sw] = await Promise.all([read("styles.css"), read("sw.js")]);
-  assert.match(sw, /credmais-shell-v56/);
+  assert.match(sw, /credmais-shell-v57/);
   for (const icon of ["home", "users", "wallet", "chart-up", "circle-check", "file-text", "history", "alert", "plus", "pencil", "trash"]) {
     await read(`icons/${icon}.svg`);
     assert.ok(css.includes(`icons/${icon}.svg`), `${icon} is not used in the interface`);
@@ -34,7 +34,8 @@ test("the vector navigation and financial icons are available offline", async ()
   assert.match(css, /\.bottom-link\.active\s*\{[^}]*background: transparent;[^}]*box-shadow: none;/);
   assert.match(css, /\.bottom-link\.active i\s*\{[^}]*filter: drop-shadow\(0 0 4px/);
   assert.match(css, /@media \(hover: hover\)\s*\{\s*\.bottom-link:hover:not\(\.active\)/);
-  assert.match(css, /\.stat-icon::before\s*\{[^}]*width: 24px;/);
+  assert.match(css, /\.stat-icon::before\s*\{[^}]*width: 26px;/);
+  assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\) \.stat-icon::before\s*\{[^}]*width: 22px;/);
   assert.match(css, /\.stat-icon\s*\{[^}]*border: 0;[^}]*border-radius: 0;[^}]*background: transparent;[^}]*box-shadow: none;/);
   assert.match(css, /#appView \.stats article:nth-child\(-n \+ 3\) \.stat-icon\s*\{[^}]*background: transparent;/);
   assert.match(css, /#appView \.stats article:nth-child\(n \+ 4\) \.stat-icon\s*\{[^}]*background: transparent;/);

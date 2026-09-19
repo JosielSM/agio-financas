@@ -4690,8 +4690,8 @@ button.profile-menu-item:hover:not(:disabled) {
 
 /* Consistent vector pictograms keep navigation recognizable at a glance. */
 .stat-icon {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -4700,8 +4700,8 @@ button.profile-menu-item:hover:not(:disabled) {
 }
 .stat-icon::before {
   content: "";
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   background: currentColor;
   -webkit-mask: var(--stat-icon) center / contain no-repeat;
   mask: var(--stat-icon) center / contain no-repeat;
@@ -4774,13 +4774,13 @@ button.profile-menu-item:hover:not(:disabled) {
     border-radius: 12px;
   }
   #appView .stats article:nth-child(-n + 3) .stat-icon {
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
     border-radius: 0;
   }
   #appView .stats article:nth-child(-n + 3) .stat-icon::before {
-    width: 17px;
-    height: 17px;
+    width: 22px;
+    height: 22px;
   }
   #appView .stats article:nth-child(-n + 3) p {
     min-height: 26px;
@@ -4797,7 +4797,7 @@ button.profile-menu-item:hover:not(:disabled) {
   #appView .stats article:nth-child(n + 4) {
     grid-column: span 3;
     display: grid;
-    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
     align-content: start;
     align-items: center;
     column-gap: 8px;
