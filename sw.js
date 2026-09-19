@@ -1,4 +1,4 @@
-const CACHE_NAME = "credmais-shell-v60";
+const CACHE_NAME = "credmais-shell-v61";
 const APP_SHELL = [
   "/",
   "/index.html",

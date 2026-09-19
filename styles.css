@@ -1919,6 +1919,7 @@ body.modal-open #discardModal:not(.modal-underlay) {
 .interest-mode-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 9px;
 }
 .interest-mode-option {
@@ -1997,10 +1998,22 @@ body.modal-open #discardModal:not(.modal-underlay) {
   font-weight: 700;
   line-height: 1.35;
 }
+.interest-mode-option > input:not(:checked) + .interest-mode-card {
+  min-height: 70px;
+  gap: 4px;
+  opacity: .68;
+  background: color-mix(in srgb, var(--surface) 82%, var(--soft));
+  box-shadow: none;
+}
+.interest-mode-option > input:not(:checked) + .interest-mode-card small,
+.interest-mode-option > input:not(:checked) + .interest-mode-card em {
+  display: none;
+}
 .interest-mode-option > input:checked + .interest-mode-card {
   border-color: var(--brand);
   background: linear-gradient(160deg, var(--surface), var(--soft));
   box-shadow: 0 8px 20px #0796681c;
+  animation: interestModeReveal .2s ease-out;
 }
 .interest-mode-option > input:checked + .interest-mode-card .interest-mode-check {
   border-color: var(--brand);
@@ -2473,24 +2486,9 @@ body.dark {
   }
   .interest-mode-grid {
     grid-template-columns: 1fr;
-    align-items: start;
   }
   .interest-mode-card {
     min-height: 0;
-  }
-  .interest-mode-option > input:not(:checked) + .interest-mode-card {
-    min-height: 70px;
-    gap: 4px;
-    opacity: .68;
-    background: color-mix(in srgb, var(--surface) 82%, var(--soft));
-    box-shadow: none;
-  }
-  .interest-mode-option > input:not(:checked) + .interest-mode-card small,
-  .interest-mode-option > input:not(:checked) + .interest-mode-card em {
-    display: none;
-  }
-  .interest-mode-option > input:checked + .interest-mode-card {
-    animation: interestModeReveal .2s ease-out;
   }
   .calculation {
     grid-template-columns: 1fr;
